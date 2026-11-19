@@ -70,6 +70,57 @@ def test_fixture_traceability_and_class_results():
     assert metric.evidence_refs[0].run_id == analysis.run_id
 
 
+def test_recommendation_states_are_diverse_and_grounded():
+    sample = json.loads(FIXTURE.read_text(encoding="utf-8"))
+    prepared = PreparedDataset.model_validate(sample["prepared_dataset"])
+    catalog = Catalog.model_validate(sample["catalog"])
+    analysis = AnalysisBundle.model_validate(sample["analysis_bundle"])
+    bundle = RecommendationBundle.model_validate(sample["recommendation_bundle"])
+
+    findings = {
+        finding.finding_id: finding
+        for result in analysis.student_results
+        for finding in result.findings
+    }
+    metrics = {
+        metric.metric_id: metric
+        for result in analysis.student_results
+        for metric in result.metrics
+    }
+    records = {record.record_id for record in prepared.raw_records}
+    materials = {material.material_id for material in catalog.materials}
+    recommendations = {item.recommendation_id: item for item in bundle.recommendations}
+
+    assert {item.review_status for item in bundle.recommendations} == {
+        "draft",
+        "validated",
+        "needs_review",
+    }
+    assert {item.generation_method for item in bundle.recommendations} == {"rule", "model"}
+    assert len(recommendations) == 4
+
+    for recommendation in bundle.recommendations:
+        assert set(recommendation.finding_ids) <= findings.keys()
+        assert {activity.material_id for activity in recommendation.activities} <= materials
+
+    for issue in bundle.validation_issues:
+        assert issue.recommendation_id in recommendations
+
+    finding = findings["F02"]
+    assert finding.performance == "needs_practice"
+    assert finding.evidence_status == "sufficient"
+    record_refs = {ref.id for ref in finding.evidence_refs if ref.kind == "record"}
+    metric_refs = {ref.id for ref in finding.evidence_refs if ref.kind == "metric"}
+    assert record_refs == {"R01", "R02"}
+    assert record_refs <= records
+    assert metric_refs == {"M_S01"}
+    assert metric_refs <= metrics.keys()
+
+    assert recommendations["REC02"].activities[0].previously_attempted is False
+    assert bundle.validation_issues[0].code == "WEAK_EVIDENCE_BASIS"
+    assert bundle.validation_issues[0].recommendation_id == "REC04"
+
+
 def test_student_result_requires_run_identity():
     with pytest.raises(ValidationError):
         StudentResult.model_validate({"student_id": "S01", "node_id": "N01", "metrics": [], "findings": [], "limitations": []})

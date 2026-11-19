@@ -69,12 +69,63 @@
               "仅一题"
             ],
             "performance": "undetermined"
+          },
+          {
+            "description": "首次作答失分、修订后得满分，说明步骤能走通但一次性正确率不稳",
+            "evidence_refs": [
+              {
+                "id": "R01",
+                "kind": "record",
+                "run_id": "synthetic-run"
+              },
+              {
+                "id": "R02",
+                "kind": "record",
+                "run_id": "synthetic-run"
+              },
+              {
+                "id": "M_S01",
+                "kind": "metric",
+                "run_id": "synthetic-run"
+              }
+            ],
+            "evidence_status": "sufficient",
+            "finding_id": "F02",
+            "indicator_id": "I01",
+            "limitations": [
+              "结论仅适用于本次修订链，不外推到其他指标"
+            ],
+            "performance": "needs_practice"
           }
         ],
         "limitations": [
           "合成样例，不能用于实际诊断"
         ],
-        "metrics": [],
+        "metrics": [
+          {
+            "denominator": 2,
+            "evidence_refs": [
+              {
+                "id": "R02",
+                "kind": "record",
+                "run_id": "synthetic-run"
+              }
+            ],
+            "limitations": [
+              "仅反映修订后选中记录"
+            ],
+            "metric_id": "M_S01",
+            "name": "valid_score_ratio",
+            "numerator": 2,
+            "scope": {
+              "indicator_id": "I01",
+              "node_id": "N01",
+              "student_id": "S01"
+            },
+            "unit": "ratio",
+            "value": 1
+          }
+        ],
         "node_id": "N01",
         "run_id": "synthetic-run",
         "student_id": "S01"
@@ -100,6 +151,24 @@
         "material_type": "question",
         "max_score": 2,
         "reviewed_variant_tag": null,
+        "rubric_points": [],
+        "source_locator": {
+          "source_file": "tests/fixtures/synthetic_contracts.json",
+          "verification_status": "verified"
+        },
+        "topic_ids": [
+          "T01"
+        ]
+      },
+      {
+        "content": "合成巩固题目",
+        "indicator_ids": [
+          "I01"
+        ],
+        "material_id": "Q02",
+        "material_type": "question",
+        "max_score": 2,
+        "reviewed_variant_tag": "direct-calculation",
         "rubric_points": [],
         "source_locator": {
           "source_file": "tests/fixtures/synthetic_contracts.json",
@@ -313,7 +382,7 @@
       "synthetic": true,
       "table_row_counts": {
         "dictionary": 1,
-        "materials": 1,
+        "materials": 2,
         "nodes": 2,
         "records": 7,
         "requirements": 1,
@@ -352,6 +421,11 @@
         "source_row_number": "1",
         "指标编号": "I01",
         "材料编号": "Q01"
+      },
+      {
+        "source_row_number": "2",
+        "指标编号": "I01",
+        "材料编号": "Q02"
       }
     ],
     "nodes": [
@@ -494,10 +568,116 @@
         "reason": "现有证据不足",
         "recommendation_id": "REC01",
         "review_status": "draft"
+      },
+      {
+        "activities": [
+          {
+            "hint_levels": [
+              "先独立完成并写出关键步骤",
+              "完成后再对照检查计算"
+            ],
+            "material_id": "Q02",
+            "observation_points": [
+              "首次作答是否完整",
+              "是否主动检查关键步骤"
+            ],
+            "order": 1,
+            "previously_attempted": false,
+            "purpose": "用未作答过的同指标题检验一次性正确率"
+          }
+        ],
+        "adjustment_conditions": [
+          {
+            "next_action": "减少同类巩固题，转入综合应用",
+            "observable_condition": "新题首次作答正确且步骤完整"
+          },
+          {
+            "next_action": "增加一步一检的过程提示",
+            "observable_condition": "新题仍需修订才能完成"
+          }
+        ],
+        "finding_ids": [
+          "F02"
+        ],
+        "generation_method": "rule",
+        "goal": "提升首次作答的稳定性",
+        "indicator_id": "I01",
+        "reason": "修订后能够得到满分，但首次作答仍有失分",
+        "recommendation_id": "REC02",
+        "review_status": "validated"
+      },
+      {
+        "activities": [
+          {
+            "hint_levels": [
+              "先说明准备检查哪一步"
+            ],
+            "material_id": "Q02",
+            "observation_points": [
+              "能否发现首次作答中的疏漏"
+            ],
+            "order": 1,
+            "previously_attempted": false,
+            "purpose": "练习完成后用逆向检查验证结果"
+          }
+        ],
+        "adjustment_conditions": [
+          {
+            "next_action": "保留自检要求并降低提示强度",
+            "observable_condition": "能够独立发现并修正疏漏"
+          }
+        ],
+        "finding_ids": [
+          "F02"
+        ],
+        "generation_method": "model",
+        "goal": "形成作答后的自检习惯",
+        "indicator_id": "I01",
+        "reason": "模型根据修订前后表现提出自检活动，等待教师复核",
+        "recommendation_id": "REC03",
+        "review_status": "needs_review"
+      },
+      {
+        "activities": [
+          {
+            "hint_levels": [
+              "先复述原有解题思路"
+            ],
+            "material_id": "Q01",
+            "observation_points": [
+              "能否解释修订原因"
+            ],
+            "order": 1,
+            "previously_attempted": true,
+            "purpose": "复核原有步骤并收集补充证据"
+          }
+        ],
+        "adjustment_conditions": [
+          {
+            "next_action": "拆分为单独的观察任务",
+            "observable_condition": "教师确认F01仍需补充观察"
+          }
+        ],
+        "finding_ids": [
+          "F01",
+          "F02"
+        ],
+        "generation_method": "model",
+        "goal": "同时补充观察并巩固已有步骤",
+        "indicator_id": "I01",
+        "reason": "模型合并了证据充分与证据不足的结论，暂不直接下发",
+        "recommendation_id": "REC04",
+        "review_status": "draft"
       }
     ],
     "run_id": "synthetic-run",
     "student_id": "S01",
-    "validation_issues": []
+    "validation_issues": [
+      {
+        "code": "WEAK_EVIDENCE_BASIS",
+        "message": "该建议引用了证据不足的结论，需教师确认后再下发",
+        "recommendation_id": "REC04"
+      }
+    ]
   }
 }
