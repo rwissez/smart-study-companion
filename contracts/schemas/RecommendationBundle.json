@@ -1,0 +1,220 @@
+{
+  "$defs": {
+    "Activity": {
+      "additionalProperties": false,
+      "properties": {
+        "hint_levels": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Hint Levels",
+          "type": "array"
+        },
+        "material_id": {
+          "title": "Material Id",
+          "type": "string"
+        },
+        "observation_points": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Observation Points",
+          "type": "array"
+        },
+        "order": {
+          "minimum": 1,
+          "title": "Order",
+          "type": "integer"
+        },
+        "previously_attempted": {
+          "title": "Previously Attempted",
+          "type": "boolean"
+        },
+        "purpose": {
+          "title": "Purpose",
+          "type": "string"
+        }
+      },
+      "required": [
+        "order",
+        "material_id",
+        "purpose",
+        "hint_levels",
+        "observation_points",
+        "previously_attempted"
+      ],
+      "title": "Activity",
+      "type": "object"
+    },
+    "AdjustmentCondition": {
+      "additionalProperties": false,
+      "properties": {
+        "next_action": {
+          "title": "Next Action",
+          "type": "string"
+        },
+        "observable_condition": {
+          "title": "Observable Condition",
+          "type": "string"
+        }
+      },
+      "required": [
+        "observable_condition",
+        "next_action"
+      ],
+      "title": "AdjustmentCondition",
+      "type": "object"
+    },
+    "Recommendation": {
+      "additionalProperties": false,
+      "properties": {
+        "activities": {
+          "items": {
+            "$ref": "#/$defs/Activity"
+          },
+          "title": "Activities",
+          "type": "array"
+        },
+        "adjustment_conditions": {
+          "items": {
+            "$ref": "#/$defs/AdjustmentCondition"
+          },
+          "title": "Adjustment Conditions",
+          "type": "array"
+        },
+        "finding_ids": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Finding Ids",
+          "type": "array"
+        },
+        "generation_method": {
+          "enum": [
+            "rule",
+            "model"
+          ],
+          "title": "Generation Method",
+          "type": "string"
+        },
+        "goal": {
+          "title": "Goal",
+          "type": "string"
+        },
+        "indicator_id": {
+          "title": "Indicator Id",
+          "type": "string"
+        },
+        "reason": {
+          "title": "Reason",
+          "type": "string"
+        },
+        "recommendation_id": {
+          "title": "Recommendation Id",
+          "type": "string"
+        },
+        "review_status": {
+          "enum": [
+            "draft",
+            "validated",
+            "needs_review"
+          ],
+          "title": "Review Status",
+          "type": "string"
+        }
+      },
+      "required": [
+        "recommendation_id",
+        "indicator_id",
+        "finding_ids",
+        "goal",
+        "reason",
+        "activities",
+        "adjustment_conditions",
+        "review_status",
+        "generation_method"
+      ],
+      "title": "Recommendation",
+      "type": "object"
+    },
+    "ValidationIssue": {
+      "additionalProperties": false,
+      "properties": {
+        "code": {
+          "title": "Code",
+          "type": "string"
+        },
+        "message": {
+          "title": "Message",
+          "type": "string"
+        },
+        "recommendation_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Recommendation Id"
+        }
+      },
+      "required": [
+        "code",
+        "message"
+      ],
+      "title": "ValidationIssue",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "catalog_version": {
+      "title": "Catalog Version",
+      "type": "string"
+    },
+    "dataset_id": {
+      "title": "Dataset Id",
+      "type": "string"
+    },
+    "node_id": {
+      "title": "Node Id",
+      "type": "string"
+    },
+    "recommendations": {
+      "items": {
+        "$ref": "#/$defs/Recommendation"
+      },
+      "title": "Recommendations",
+      "type": "array"
+    },
+    "run_id": {
+      "title": "Run Id",
+      "type": "string"
+    },
+    "student_id": {
+      "title": "Student Id",
+      "type": "string"
+    },
+    "validation_issues": {
+      "items": {
+        "$ref": "#/$defs/ValidationIssue"
+      },
+      "title": "Validation Issues",
+      "type": "array"
+    }
+  },
+  "required": [
+    "run_id",
+    "dataset_id",
+    "catalog_version",
+    "student_id",
+    "node_id",
+    "recommendations",
+    "validation_issues"
+  ],
+  "title": "RecommendationBundle",
+  "type": "object"
+}

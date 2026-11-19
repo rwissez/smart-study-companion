@@ -1,0 +1,309 @@
+{
+  "$defs": {
+    "CatalogLink": {
+      "additionalProperties": false,
+      "properties": {
+        "basis": {
+          "enum": [
+            "standard",
+            "textbook",
+            "team_inference"
+          ],
+          "title": "Basis",
+          "type": "string"
+        },
+        "description": {
+          "title": "Description",
+          "type": "string"
+        },
+        "relation": {
+          "enum": [
+            "supports",
+            "prerequisite"
+          ],
+          "title": "Relation",
+          "type": "string"
+        },
+        "source_id": {
+          "title": "Source Id",
+          "type": "string"
+        },
+        "target_id": {
+          "title": "Target Id",
+          "type": "string"
+        }
+      },
+      "required": [
+        "source_id",
+        "target_id",
+        "relation",
+        "basis",
+        "description"
+      ],
+      "title": "CatalogLink",
+      "type": "object"
+    },
+    "Indicator": {
+      "additionalProperties": false,
+      "properties": {
+        "description": {
+          "title": "Description",
+          "type": "string"
+        },
+        "indicator_id": {
+          "title": "Indicator Id",
+          "type": "string"
+        },
+        "topic_id": {
+          "title": "Topic Id",
+          "type": "string"
+        }
+      },
+      "required": [
+        "indicator_id",
+        "topic_id",
+        "description"
+      ],
+      "title": "Indicator",
+      "type": "object"
+    },
+    "Material": {
+      "additionalProperties": false,
+      "properties": {
+        "content": {
+          "title": "Content",
+          "type": "string"
+        },
+        "indicator_ids": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Indicator Ids",
+          "type": "array"
+        },
+        "material_id": {
+          "title": "Material Id",
+          "type": "string"
+        },
+        "material_type": {
+          "enum": [
+            "question",
+            "card",
+            "textbook"
+          ],
+          "title": "Material Type",
+          "type": "string"
+        },
+        "max_score": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Max Score"
+        },
+        "reference_answer": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Reference Answer"
+        },
+        "reference_explanation": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Reference Explanation"
+        },
+        "reviewed_variant_tag": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Reviewed Variant Tag"
+        },
+        "rubric_points": {
+          "items": {
+            "$ref": "#/$defs/RubricPoint"
+          },
+          "title": "Rubric Points",
+          "type": "array"
+        },
+        "source_locator": {
+          "$ref": "#/$defs/SourceLocator"
+        },
+        "topic_ids": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Topic Ids",
+          "type": "array"
+        }
+      },
+      "required": [
+        "material_id",
+        "material_type",
+        "topic_ids",
+        "indicator_ids",
+        "content",
+        "source_locator"
+      ],
+      "title": "Material",
+      "type": "object"
+    },
+    "RubricPoint": {
+      "additionalProperties": false,
+      "properties": {
+        "description": {
+          "title": "Description",
+          "type": "string"
+        },
+        "max_score": {
+          "title": "Max Score",
+          "type": "integer"
+        },
+        "point_id": {
+          "title": "Point Id",
+          "type": "string"
+        }
+      },
+      "required": [
+        "point_id",
+        "description",
+        "max_score"
+      ],
+      "title": "RubricPoint",
+      "type": "object"
+    },
+    "SourceLocator": {
+      "additionalProperties": false,
+      "properties": {
+        "pdf_page": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Pdf Page"
+        },
+        "printed_page": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Printed Page"
+        },
+        "source_file": {
+          "title": "Source File",
+          "type": "string"
+        },
+        "verification_status": {
+          "enum": [
+            "verified",
+            "unverified"
+          ],
+          "title": "Verification Status",
+          "type": "string"
+        }
+      },
+      "required": [
+        "source_file",
+        "verification_status"
+      ],
+      "title": "SourceLocator",
+      "type": "object"
+    },
+    "Topic": {
+      "additionalProperties": false,
+      "properties": {
+        "title": {
+          "title": "Title",
+          "type": "string"
+        },
+        "topic_id": {
+          "title": "Topic Id",
+          "type": "string"
+        }
+      },
+      "required": [
+        "topic_id",
+        "title"
+      ],
+      "title": "Topic",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "indicators": {
+      "items": {
+        "$ref": "#/$defs/Indicator"
+      },
+      "title": "Indicators",
+      "type": "array"
+    },
+    "links": {
+      "items": {
+        "$ref": "#/$defs/CatalogLink"
+      },
+      "title": "Links",
+      "type": "array"
+    },
+    "materials": {
+      "items": {
+        "$ref": "#/$defs/Material"
+      },
+      "title": "Materials",
+      "type": "array"
+    },
+    "topics": {
+      "items": {
+        "$ref": "#/$defs/Topic"
+      },
+      "title": "Topics",
+      "type": "array"
+    },
+    "version": {
+      "title": "Version",
+      "type": "string"
+    }
+  },
+  "required": [
+    "version",
+    "topics",
+    "indicators",
+    "materials",
+    "links"
+  ],
+  "title": "Catalog",
+  "type": "object"
+}

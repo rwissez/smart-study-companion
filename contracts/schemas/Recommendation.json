@@ -1,0 +1,139 @@
+{
+  "$defs": {
+    "Activity": {
+      "additionalProperties": false,
+      "properties": {
+        "hint_levels": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Hint Levels",
+          "type": "array"
+        },
+        "material_id": {
+          "title": "Material Id",
+          "type": "string"
+        },
+        "observation_points": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Observation Points",
+          "type": "array"
+        },
+        "order": {
+          "minimum": 1,
+          "title": "Order",
+          "type": "integer"
+        },
+        "previously_attempted": {
+          "title": "Previously Attempted",
+          "type": "boolean"
+        },
+        "purpose": {
+          "title": "Purpose",
+          "type": "string"
+        }
+      },
+      "required": [
+        "order",
+        "material_id",
+        "purpose",
+        "hint_levels",
+        "observation_points",
+        "previously_attempted"
+      ],
+      "title": "Activity",
+      "type": "object"
+    },
+    "AdjustmentCondition": {
+      "additionalProperties": false,
+      "properties": {
+        "next_action": {
+          "title": "Next Action",
+          "type": "string"
+        },
+        "observable_condition": {
+          "title": "Observable Condition",
+          "type": "string"
+        }
+      },
+      "required": [
+        "observable_condition",
+        "next_action"
+      ],
+      "title": "AdjustmentCondition",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "activities": {
+      "items": {
+        "$ref": "#/$defs/Activity"
+      },
+      "title": "Activities",
+      "type": "array"
+    },
+    "adjustment_conditions": {
+      "items": {
+        "$ref": "#/$defs/AdjustmentCondition"
+      },
+      "title": "Adjustment Conditions",
+      "type": "array"
+    },
+    "finding_ids": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Finding Ids",
+      "type": "array"
+    },
+    "generation_method": {
+      "enum": [
+        "rule",
+        "model"
+      ],
+      "title": "Generation Method",
+      "type": "string"
+    },
+    "goal": {
+      "title": "Goal",
+      "type": "string"
+    },
+    "indicator_id": {
+      "title": "Indicator Id",
+      "type": "string"
+    },
+    "reason": {
+      "title": "Reason",
+      "type": "string"
+    },
+    "recommendation_id": {
+      "title": "Recommendation Id",
+      "type": "string"
+    },
+    "review_status": {
+      "enum": [
+        "draft",
+        "validated",
+        "needs_review"
+      ],
+      "title": "Review Status",
+      "type": "string"
+    }
+  },
+  "required": [
+    "recommendation_id",
+    "indicator_id",
+    "finding_ids",
+    "goal",
+    "reason",
+    "activities",
+    "adjustment_conditions",
+    "review_status",
+    "generation_method"
+  ],
+  "title": "Recommendation",
+  "type": "object"
+}

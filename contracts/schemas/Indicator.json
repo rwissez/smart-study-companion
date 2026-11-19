@@ -1,0 +1,24 @@
+{
+  "additionalProperties": false,
+  "properties": {
+    "description": {
+      "title": "Description",
+      "type": "string"
+    },
+    "indicator_id": {
+      "title": "Indicator Id",
+      "type": "string"
+    },
+    "topic_id": {
+      "title": "Topic Id",
+      "type": "string"
+    }
+  },
+  "required": [
+    "indicator_id",
+    "topic_id",
+    "description"
+  ],
+  "title": "Indicator",
+  "type": "object"
+}

@@ -1,0 +1,19 @@
+{
+  "additionalProperties": false,
+  "properties": {
+    "min_reviewed_item_variants": {
+      "default": 2,
+      "minimum": 1,
+      "title": "Min Reviewed Item Variants",
+      "type": "integer"
+    },
+    "min_valid_distinct_items": {
+      "default": 3,
+      "minimum": 1,
+      "title": "Min Valid Distinct Items",
+      "type": "integer"
+    }
+  },
+  "title": "AnalysisConfig",
+  "type": "object"
+}

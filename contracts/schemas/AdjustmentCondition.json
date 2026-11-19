@@ -1,0 +1,19 @@
+{
+  "additionalProperties": false,
+  "properties": {
+    "next_action": {
+      "title": "Next Action",
+      "type": "string"
+    },
+    "observable_condition": {
+      "title": "Observable Condition",
+      "type": "string"
+    }
+  },
+  "required": [
+    "observable_condition",
+    "next_action"
+  ],
+  "title": "AdjustmentCondition",
+  "type": "object"
+}

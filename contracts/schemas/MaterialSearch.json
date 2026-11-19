@@ -1,0 +1,32 @@
+{
+  "additionalProperties": false,
+  "properties": {
+    "indicator_ids": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Indicator Ids",
+      "type": "array"
+    },
+    "limit": {
+      "default": 20,
+      "minimum": 1,
+      "title": "Limit",
+      "type": "integer"
+    },
+    "material_types": {
+      "items": {
+        "enum": [
+          "question",
+          "card",
+          "textbook"
+        ],
+        "type": "string"
+      },
+      "title": "Material Types",
+      "type": "array"
+    }
+  },
+  "title": "MaterialSearch",
+  "type": "object"
+}

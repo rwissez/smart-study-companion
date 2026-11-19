@@ -1,0 +1,317 @@
+{
+  "$defs": {
+    "EvidenceRef": {
+      "additionalProperties": false,
+      "properties": {
+        "catalog_version": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Catalog Version"
+        },
+        "id": {
+          "title": "Id",
+          "type": "string"
+        },
+        "kind": {
+          "enum": [
+            "record",
+            "metric",
+            "material",
+            "curriculum"
+          ],
+          "title": "Kind",
+          "type": "string"
+        },
+        "run_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Run Id"
+        }
+      },
+      "required": [
+        "kind",
+        "id"
+      ],
+      "title": "EvidenceRef",
+      "type": "object"
+    },
+    "Finding": {
+      "additionalProperties": false,
+      "properties": {
+        "description": {
+          "title": "Description",
+          "type": "string"
+        },
+        "evidence_refs": {
+          "items": {
+            "$ref": "#/$defs/EvidenceRef"
+          },
+          "title": "Evidence Refs",
+          "type": "array"
+        },
+        "evidence_status": {
+          "enum": [
+            "sufficient",
+            "insufficient",
+            "conflicting"
+          ],
+          "title": "Evidence Status",
+          "type": "string"
+        },
+        "finding_id": {
+          "title": "Finding Id",
+          "type": "string"
+        },
+        "indicator_id": {
+          "title": "Indicator Id",
+          "type": "string"
+        },
+        "limitations": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Limitations",
+          "type": "array"
+        },
+        "performance": {
+          "enum": [
+            "observed_strength",
+            "needs_practice",
+            "undetermined"
+          ],
+          "title": "Performance",
+          "type": "string"
+        }
+      },
+      "required": [
+        "finding_id",
+        "indicator_id",
+        "description",
+        "evidence_status",
+        "performance",
+        "evidence_refs"
+      ],
+      "title": "Finding",
+      "type": "object"
+    },
+    "Metric": {
+      "additionalProperties": false,
+      "properties": {
+        "denominator": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Denominator"
+        },
+        "evidence_refs": {
+          "items": {
+            "$ref": "#/$defs/EvidenceRef"
+          },
+          "title": "Evidence Refs",
+          "type": "array"
+        },
+        "excluded_event_count": {
+          "default": 0,
+          "title": "Excluded Event Count",
+          "type": "integer"
+        },
+        "limitations": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Limitations",
+          "type": "array"
+        },
+        "metric_id": {
+          "title": "Metric Id",
+          "type": "string"
+        },
+        "name": {
+          "title": "Name",
+          "type": "string"
+        },
+        "numerator": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Numerator"
+        },
+        "scope": {
+          "$ref": "#/$defs/MetricScope"
+        },
+        "unit": {
+          "enum": [
+            "ratio",
+            "count",
+            "score"
+          ],
+          "title": "Unit",
+          "type": "string"
+        },
+        "value": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Value"
+        }
+      },
+      "required": [
+        "metric_id",
+        "name",
+        "value",
+        "numerator",
+        "denominator",
+        "unit",
+        "scope",
+        "evidence_refs"
+      ],
+      "title": "Metric",
+      "type": "object"
+    },
+    "MetricScope": {
+      "additionalProperties": false,
+      "properties": {
+        "class_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Class Id"
+        },
+        "indicator_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Indicator Id"
+        },
+        "node_id": {
+          "title": "Node Id",
+          "type": "string"
+        },
+        "student_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Student Id"
+        }
+      },
+      "required": [
+        "node_id"
+      ],
+      "title": "MetricScope",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "catalog_version": {
+      "title": "Catalog Version",
+      "type": "string"
+    },
+    "class_id": {
+      "title": "Class Id",
+      "type": "string"
+    },
+    "dataset_id": {
+      "title": "Dataset Id",
+      "type": "string"
+    },
+    "findings": {
+      "items": {
+        "$ref": "#/$defs/Finding"
+      },
+      "title": "Findings",
+      "type": "array"
+    },
+    "limitations": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Limitations",
+      "type": "array"
+    },
+    "metrics": {
+      "items": {
+        "$ref": "#/$defs/Metric"
+      },
+      "title": "Metrics",
+      "type": "array"
+    },
+    "node_id": {
+      "title": "Node Id",
+      "type": "string"
+    },
+    "observed_student_count": {
+      "title": "Observed Student Count",
+      "type": "integer"
+    },
+    "roster_count": {
+      "title": "Roster Count",
+      "type": "integer"
+    },
+    "run_id": {
+      "title": "Run Id",
+      "type": "string"
+    }
+  },
+  "required": [
+    "run_id",
+    "dataset_id",
+    "catalog_version",
+    "class_id",
+    "node_id",
+    "roster_count",
+    "observed_student_count",
+    "metrics",
+    "findings",
+    "limitations"
+  ],
+  "title": "ClassResult",
+  "type": "object"
+}

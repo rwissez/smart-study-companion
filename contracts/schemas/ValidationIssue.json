@@ -1,0 +1,31 @@
+{
+  "additionalProperties": false,
+  "properties": {
+    "code": {
+      "title": "Code",
+      "type": "string"
+    },
+    "message": {
+      "title": "Message",
+      "type": "string"
+    },
+    "recommendation_id": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Recommendation Id"
+    }
+  },
+  "required": [
+    "code",
+    "message"
+  ],
+  "title": "ValidationIssue",
+  "type": "object"
+}

@@ -1,0 +1,49 @@
+{
+  "additionalProperties": false,
+  "properties": {
+    "catalog_version": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Catalog Version"
+    },
+    "id": {
+      "title": "Id",
+      "type": "string"
+    },
+    "kind": {
+      "enum": [
+        "record",
+        "metric",
+        "material",
+        "curriculum"
+      ],
+      "title": "Kind",
+      "type": "string"
+    },
+    "run_id": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Run Id"
+    }
+  },
+  "required": [
+    "kind",
+    "id"
+  ],
+  "title": "EvidenceRef",
+  "type": "object"
+}

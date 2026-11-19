@@ -1,0 +1,333 @@
+{
+  "$defs": {
+    "AnswerEvent": {
+      "additionalProperties": false,
+      "properties": {
+        "disposition": {
+          "default": "include",
+          "enum": [
+            "include",
+            "exclude_score",
+            "quarantine_event"
+          ],
+          "title": "Disposition",
+          "type": "string"
+        },
+        "event_id": {
+          "title": "Event Id",
+          "type": "string"
+        },
+        "material_id": {
+          "title": "Material Id",
+          "type": "string"
+        },
+        "max_score": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Max Score"
+        },
+        "node_id": {
+          "title": "Node Id",
+          "type": "string"
+        },
+        "score": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Score"
+        },
+        "selected_record_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Selected Record Id"
+        },
+        "status": {
+          "enum": [
+            "graded",
+            "pending",
+            "unanswered"
+          ],
+          "title": "Status",
+          "type": "string"
+        },
+        "student_id": {
+          "title": "Student Id",
+          "type": "string"
+        }
+      },
+      "required": [
+        "event_id",
+        "student_id",
+        "node_id",
+        "material_id",
+        "status"
+      ],
+      "title": "AnswerEvent",
+      "type": "object"
+    },
+    "Node": {
+      "additionalProperties": false,
+      "properties": {
+        "label": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Label"
+        },
+        "node_id": {
+          "title": "Node Id",
+          "type": "string"
+        }
+      },
+      "required": [
+        "node_id"
+      ],
+      "title": "Node",
+      "type": "object"
+    },
+    "QualityIssue": {
+      "additionalProperties": false,
+      "properties": {
+        "action": {
+          "enum": [
+            "retain",
+            "exclude_score",
+            "quarantine_event",
+            "block_import"
+          ],
+          "title": "Action",
+          "type": "string"
+        },
+        "code": {
+          "title": "Code",
+          "type": "string"
+        },
+        "event_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Event Id"
+        },
+        "issue_id": {
+          "title": "Issue Id",
+          "type": "string"
+        },
+        "message": {
+          "title": "Message",
+          "type": "string"
+        },
+        "record_ids": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Record Ids",
+          "type": "array"
+        },
+        "rule_version": {
+          "title": "Rule Version",
+          "type": "string"
+        },
+        "severity": {
+          "enum": [
+            "info",
+            "warning",
+            "error"
+          ],
+          "title": "Severity",
+          "type": "string"
+        }
+      },
+      "required": [
+        "issue_id",
+        "code",
+        "severity",
+        "message",
+        "action",
+        "rule_version"
+      ],
+      "title": "QualityIssue",
+      "type": "object"
+    },
+    "SourceManifest": {
+      "additionalProperties": false,
+      "properties": {
+        "dataset_id": {
+          "title": "Dataset Id",
+          "type": "string"
+        },
+        "synthetic": {
+          "title": "Synthetic",
+          "type": "boolean"
+        },
+        "table_row_counts": {
+          "additionalProperties": {
+            "type": "integer"
+          },
+          "title": "Table Row Counts",
+          "type": "object"
+        }
+      },
+      "required": [
+        "dataset_id",
+        "table_row_counts",
+        "synthetic"
+      ],
+      "title": "SourceManifest",
+      "type": "object"
+    },
+    "SourceRecord": {
+      "additionalProperties": false,
+      "properties": {
+        "payload": {
+          "additionalProperties": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "title": "Payload",
+          "type": "object"
+        },
+        "record_id": {
+          "title": "Record Id",
+          "type": "string"
+        },
+        "source_row_number": {
+          "minimum": 1,
+          "title": "Source Row Number",
+          "type": "integer"
+        },
+        "table_name": {
+          "title": "Table Name",
+          "type": "string"
+        }
+      },
+      "required": [
+        "record_id",
+        "table_name",
+        "source_row_number",
+        "payload"
+      ],
+      "title": "SourceRecord",
+      "type": "object"
+    },
+    "Student": {
+      "additionalProperties": false,
+      "properties": {
+        "class_id": {
+          "title": "Class Id",
+          "type": "string"
+        },
+        "grade": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Grade"
+        },
+        "student_id": {
+          "title": "Student Id",
+          "type": "string"
+        }
+      },
+      "required": [
+        "student_id",
+        "class_id"
+      ],
+      "title": "Student",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "nodes": {
+      "items": {
+        "$ref": "#/$defs/Node"
+      },
+      "title": "Nodes",
+      "type": "array"
+    },
+    "quality_issues": {
+      "items": {
+        "$ref": "#/$defs/QualityIssue"
+      },
+      "title": "Quality Issues",
+      "type": "array"
+    },
+    "raw_records": {
+      "items": {
+        "$ref": "#/$defs/SourceRecord"
+      },
+      "title": "Raw Records",
+      "type": "array"
+    },
+    "selected_events": {
+      "items": {
+        "$ref": "#/$defs/AnswerEvent"
+      },
+      "title": "Selected Events",
+      "type": "array"
+    },
+    "source_manifest": {
+      "$ref": "#/$defs/SourceManifest"
+    },
+    "students": {
+      "items": {
+        "$ref": "#/$defs/Student"
+      },
+      "title": "Students",
+      "type": "array"
+    }
+  },
+  "required": [
+    "students",
+    "nodes",
+    "raw_records",
+    "selected_events",
+    "quality_issues",
+    "source_manifest"
+  ],
+  "title": "PreparedDataset",
+  "type": "object"
+}

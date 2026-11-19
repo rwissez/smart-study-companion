@@ -1,0 +1,47 @@
+{
+  "additionalProperties": false,
+  "properties": {
+    "pdf_page": {
+      "anyOf": [
+        {
+          "type": "integer"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Pdf Page"
+    },
+    "printed_page": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Printed Page"
+    },
+    "source_file": {
+      "title": "Source File",
+      "type": "string"
+    },
+    "verification_status": {
+      "enum": [
+        "verified",
+        "unverified"
+      ],
+      "title": "Verification Status",
+      "type": "string"
+    }
+  },
+  "required": [
+    "source_file",
+    "verification_status"
+  ],
+  "title": "SourceLocator",
+  "type": "object"
+}

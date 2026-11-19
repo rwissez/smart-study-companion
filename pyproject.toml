@@ -2,10 +2,22 @@
 name = "smart-study-companion"
 version = "0.1.0"
 requires-python = ">=3.12,<3.13"
-dependencies = ["pydantic>=2.10,<3"]
+dependencies = [
+    "pydantic>=2.10,<3",
+    "pydantic-settings>=2.6,<3",
+    "fastapi>=0.115,<1",
+    "uvicorn[standard]>=0.32,<1",
+    "sqlalchemy>=2.0,<3",
+    "alembic>=1.14,<2",
+    "httpx>=0.27,<1",
+    "pandas>=2.2,<3",
+]
 
 [dependency-groups]
 dev = ["pytest>=8,<10"]
+
+[project.scripts]
+study-companion = "study_companion.cli:main"
 
 [build-system]
 requires = ["hatchling"]

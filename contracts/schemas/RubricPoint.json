@@ -1,0 +1,24 @@
+{
+  "additionalProperties": false,
+  "properties": {
+    "description": {
+      "title": "Description",
+      "type": "string"
+    },
+    "max_score": {
+      "title": "Max Score",
+      "type": "integer"
+    },
+    "point_id": {
+      "title": "Point Id",
+      "type": "string"
+    }
+  },
+  "required": [
+    "point_id",
+    "description",
+    "max_score"
+  ],
+  "title": "RubricPoint",
+  "type": "object"
+}

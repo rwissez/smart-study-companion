@@ -1,0 +1,26 @@
+{
+  "additionalProperties": false,
+  "properties": {
+    "label": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Label"
+    },
+    "node_id": {
+      "title": "Node Id",
+      "type": "string"
+    }
+  },
+  "required": [
+    "node_id"
+  ],
+  "title": "Node",
+  "type": "object"
+}

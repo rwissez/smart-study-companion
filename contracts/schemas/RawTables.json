@@ -1,0 +1,117 @@
+{
+  "additionalProperties": false,
+  "properties": {
+    "dictionary": {
+      "items": {
+        "additionalProperties": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "type": "object"
+      },
+      "title": "Dictionary",
+      "type": "array"
+    },
+    "materials": {
+      "items": {
+        "additionalProperties": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "type": "object"
+      },
+      "title": "Materials",
+      "type": "array"
+    },
+    "nodes": {
+      "items": {
+        "additionalProperties": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "type": "object"
+      },
+      "title": "Nodes",
+      "type": "array"
+    },
+    "records": {
+      "items": {
+        "additionalProperties": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "type": "object"
+      },
+      "title": "Records",
+      "type": "array"
+    },
+    "requirements": {
+      "items": {
+        "additionalProperties": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "type": "object"
+      },
+      "title": "Requirements",
+      "type": "array"
+    },
+    "students": {
+      "items": {
+        "additionalProperties": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "type": "object"
+      },
+      "title": "Students",
+      "type": "array"
+    }
+  },
+  "required": [
+    "requirements",
+    "materials",
+    "students",
+    "nodes",
+    "records",
+    "dictionary"
+  ],
+  "title": "RawTables",
+  "type": "object"
+}

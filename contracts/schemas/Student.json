@@ -1,0 +1,31 @@
+{
+  "additionalProperties": false,
+  "properties": {
+    "class_id": {
+      "title": "Class Id",
+      "type": "string"
+    },
+    "grade": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Grade"
+    },
+    "student_id": {
+      "title": "Student Id",
+      "type": "string"
+    }
+  },
+  "required": [
+    "student_id",
+    "class_id"
+  ],
+  "title": "Student",
+  "type": "object"
+}

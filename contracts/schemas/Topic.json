@@ -1,0 +1,19 @@
+{
+  "additionalProperties": false,
+  "properties": {
+    "title": {
+      "title": "Title",
+      "type": "string"
+    },
+    "topic_id": {
+      "title": "Topic Id",
+      "type": "string"
+    }
+  },
+  "required": [
+    "topic_id",
+    "title"
+  ],
+  "title": "Topic",
+  "type": "object"
+}
