@@ -1,0 +1,43 @@
+{
+  "additionalProperties": false,
+  "properties": {
+    "basis": {
+      "enum": [
+        "standard",
+        "textbook",
+        "team_inference"
+      ],
+      "title": "Basis",
+      "type": "string"
+    },
+    "description": {
+      "title": "Description",
+      "type": "string"
+    },
+    "relation": {
+      "enum": [
+        "supports",
+        "prerequisite"
+      ],
+      "title": "Relation",
+      "type": "string"
+    },
+    "source_id": {
+      "title": "Source Id",
+      "type": "string"
+    },
+    "target_id": {
+      "title": "Target Id",
+      "type": "string"
+    }
+  },
+  "required": [
+    "source_id",
+    "target_id",
+    "relation",
+    "basis",
+    "description"
+  ],
+  "title": "CatalogLink",
+  "type": "object"
+}

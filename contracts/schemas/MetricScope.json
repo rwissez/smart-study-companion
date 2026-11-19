@@ -1,0 +1,50 @@
+{
+  "additionalProperties": false,
+  "properties": {
+    "class_id": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Class Id"
+    },
+    "indicator_id": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Indicator Id"
+    },
+    "node_id": {
+      "title": "Node Id",
+      "type": "string"
+    },
+    "student_id": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Student Id"
+    }
+  },
+  "required": [
+    "node_id"
+  ],
+  "title": "MetricScope",
+  "type": "object"
+}

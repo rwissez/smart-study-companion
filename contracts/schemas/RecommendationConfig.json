@@ -1,0 +1,13 @@
+{
+  "additionalProperties": false,
+  "properties": {
+    "max_activities": {
+      "default": 3,
+      "minimum": 1,
+      "title": "Max Activities",
+      "type": "integer"
+    }
+  },
+  "title": "RecommendationConfig",
+  "type": "object"
+}

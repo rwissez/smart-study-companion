@@ -4,7 +4,31 @@
 
 ## 当前状态
 
-当前处于团队文档初始化阶段，尚未交付可运行应用。手册中的目录、接口和命令是后续实现约定，不代表已经实现或验证。模型供应商、地址、模型名称和密钥暂不配置。
+A0-a（共享契约）与A0-b（后端骨架）已实现：可迁移数据库、载入合成样例、启动HTTP服务并通过测试。前端初始化（A0-b前端部分）由D并行进行，尚未并入。模型供应商、地址、模型名称和密钥默认未配置，可选接入；未配置时对话接口返回503 `MODEL_NOT_CONFIGURED`，不产生假模型回复，其余分析与材料功能照常工作。
+
+## 本地运行
+
+需要 Python 3.12 与 [uv](https://docs.astral.sh/uv/)。在仓库根目录执行：
+
+```bash
+uv sync                                   # 安装依赖（已锁定）
+cp .env.example .env                      # 可选，缺省值即可运行
+uv run alembic upgrade head               # 建库，默认 data/app.sqlite3
+uv run study-companion seed-demo          # 载入合成演示数据，可重复执行
+uv run uvicorn study_companion.main:app --reload --port 8000
+```
+
+验证：`curl http://127.0.0.1:8000/api/v1/health` 应返回 `"status":"ok"`；接口文档在 http://127.0.0.1:8000/api/docs 。
+
+| 命令 | 作用 |
+| --- | --- |
+| `uv run pytest -q` | 运行全部测试 |
+| `uv run study-companion seed-demo [--force]` | 载入合成演示数据；已存在时跳过，`--force` 先清空该数据集 |
+| `uv run study-companion export-contracts` | 导出 `contracts/` 下的 JSON Schema、OpenAPI 与样例，输出逐字节可复现 |
+
+`seed-demo` 只接受标记为 `synthetic` 的样例文件，不会导入赛题原始数据。
+
+实测版本：Python 3.12.14、fastapi 0.165.0、uvicorn 0.54.0、sqlalchemy 2.1.9、alembic 1.20.1、pydantic 2.14.3、pydantic-settings 2.16.3、pandas 2.3.3、httpx 0.28.1、pytest 9.2.0。以 `uv.lock` 为准。
 
 ## 从哪里开始
 
@@ -21,9 +45,15 @@ A需阅读全部手册。完整导览见[阅读顺序与决策](docs/team/00_阅
 
 ## 下一阶段：A0项目骨架
 
+### A0-a：B、C先行所需的共享契约
+
+已提供 Python 3.12、Pydantic v2 的 `study_companion.contracts` 共享类型，以及完全合成的 `tests/fixtures/synthetic_contracts.json`。B 使用 `RawTables`、`PreparedDataset`、`Catalog`、`RunContext` 实现导入和分析；C 使用 `StudentResult`、`Catalog`、`RunContext` 实现选材、建议与验证。函数签名以[统一实施规范](docs/team/11_统一实施规范.md)第四节为准。样例仅用于接口验证，不代表对真实赛题数据的计算结果。
+
+在仓库根目录运行 `uv sync --python 3.12`，再运行 `uv run pytest -q`。B、C开始工作前应核对共享字段；字段变更由A统一维护。全量字段的 JSON Schema 与 OpenAPI 见 `contracts/`，由 `export-contracts` 生成，提交后可离线比对。
+
 A负责共享数据模型与合成示例、后端入口、数据库迁移、健康检查、模拟会话、未配置模型适配器，以及启动和测试入口；D协作初始化前端。技术基线采用Python 3.12、uv、FastAPI、Pydantic v2、SQLite、SQLAlchemy 2.x、Alembic，以及React、TypeScript、Vite和npm。
 
-A0验收要求：在全新克隆目录中，按届时补齐的README安装依赖、迁移数据库、载入合成样例并启动前后端。实际版本、锁文件及验证过的命令随A0交付。A0合入main后，B/C/D再从main创建各自功能分支。
+A0验收要求：在全新克隆目录中，按README安装依赖、迁移数据库、载入合成样例并启动前后端。A0合入main后，B/C/D再从main创建各自功能分支。A0-b已创造这一条件，B（导入与分析）、C（选材与建议）、D（前端）不必等整个后端完成，可先在 8000 端口对着合成数据开工。
 
 ## 协作与文件管理
 

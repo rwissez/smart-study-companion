@@ -1,0 +1,27 @@
+{
+  "additionalProperties": false,
+  "properties": {
+    "dataset_id": {
+      "title": "Dataset Id",
+      "type": "string"
+    },
+    "synthetic": {
+      "title": "Synthetic",
+      "type": "boolean"
+    },
+    "table_row_counts": {
+      "additionalProperties": {
+        "type": "integer"
+      },
+      "title": "Table Row Counts",
+      "type": "object"
+    }
+  },
+  "required": [
+    "dataset_id",
+    "table_row_counts",
+    "synthetic"
+  ],
+  "title": "SourceManifest",
+  "type": "object"
+}

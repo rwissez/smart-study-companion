@@ -1,0 +1,40 @@
+{
+  "additionalProperties": false,
+  "properties": {
+    "payload": {
+      "additionalProperties": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ]
+      },
+      "title": "Payload",
+      "type": "object"
+    },
+    "record_id": {
+      "title": "Record Id",
+      "type": "string"
+    },
+    "source_row_number": {
+      "minimum": 1,
+      "title": "Source Row Number",
+      "type": "integer"
+    },
+    "table_name": {
+      "title": "Table Name",
+      "type": "string"
+    }
+  },
+  "required": [
+    "record_id",
+    "table_name",
+    "source_row_number",
+    "payload"
+  ],
+  "title": "SourceRecord",
+  "type": "object"
+}

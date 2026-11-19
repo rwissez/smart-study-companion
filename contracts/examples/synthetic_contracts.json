@@ -1,0 +1,683 @@
+{
+  "analysis_bundle": {
+    "catalog_version": "synthetic-v1",
+    "class_results": [
+      {
+        "catalog_version": "synthetic-v1",
+        "class_id": "C01",
+        "dataset_id": "synthetic-ds",
+        "findings": [],
+        "limitations": [
+          "样本量不足，不能推断班级整体表现"
+        ],
+        "metrics": [
+          {
+            "denominator": 2,
+            "evidence_refs": [
+              {
+                "id": "R02",
+                "kind": "record",
+                "run_id": "synthetic-run"
+              }
+            ],
+            "limitations": [
+              "仅一名学生有有效分数"
+            ],
+            "metric_id": "M01",
+            "name": "valid_score_ratio",
+            "numerator": 2,
+            "scope": {
+              "class_id": "C01",
+              "indicator_id": "I01",
+              "node_id": "N01"
+            },
+            "unit": "ratio",
+            "value": 1
+          }
+        ],
+        "node_id": "N01",
+        "observed_student_count": 1,
+        "roster_count": 2,
+        "run_id": "synthetic-run"
+      }
+    ],
+    "config": {
+      "min_reviewed_item_variants": 2,
+      "min_valid_distinct_items": 3
+    },
+    "dataset_id": "synthetic-ds",
+    "quality_summary": {
+      "excluded_scores": 1,
+      "quarantined_events": 1,
+      "selected_events": 5
+    },
+    "rule_version": "synthetic-rules-v1",
+    "run_id": "synthetic-run",
+    "student_results": [
+      {
+        "catalog_version": "synthetic-v1",
+        "class_id": "C01",
+        "dataset_id": "synthetic-ds",
+        "findings": [
+          {
+            "description": "样例题量不足",
+            "evidence_refs": [],
+            "evidence_status": "insufficient",
+            "finding_id": "F01",
+            "indicator_id": "I01",
+            "limitations": [
+              "仅一题"
+            ],
+            "performance": "undetermined"
+          },
+          {
+            "description": "首次作答失分、修订后得满分，说明步骤能走通但一次性正确率不稳",
+            "evidence_refs": [
+              {
+                "id": "R01",
+                "kind": "record",
+                "run_id": "synthetic-run"
+              },
+              {
+                "id": "R02",
+                "kind": "record",
+                "run_id": "synthetic-run"
+              },
+              {
+                "id": "M_S01",
+                "kind": "metric",
+                "run_id": "synthetic-run"
+              }
+            ],
+            "evidence_status": "sufficient",
+            "finding_id": "F02",
+            "indicator_id": "I01",
+            "limitations": [
+              "结论仅适用于本次修订链，不外推到其他指标"
+            ],
+            "performance": "needs_practice"
+          }
+        ],
+        "limitations": [
+          "合成样例，不能用于实际诊断"
+        ],
+        "metrics": [
+          {
+            "denominator": 2,
+            "evidence_refs": [
+              {
+                "id": "R02",
+                "kind": "record",
+                "run_id": "synthetic-run"
+              }
+            ],
+            "limitations": [
+              "仅反映修订后选中记录"
+            ],
+            "metric_id": "M_S01",
+            "name": "valid_score_ratio",
+            "numerator": 2,
+            "scope": {
+              "indicator_id": "I01",
+              "node_id": "N01",
+              "student_id": "S01"
+            },
+            "unit": "ratio",
+            "value": 1
+          }
+        ],
+        "node_id": "N01",
+        "run_id": "synthetic-run",
+        "student_id": "S01"
+      }
+    ]
+  },
+  "catalog": {
+    "indicators": [
+      {
+        "description": "合成指标",
+        "indicator_id": "I01",
+        "topic_id": "T01"
+      }
+    ],
+    "links": [],
+    "materials": [
+      {
+        "content": "合成题目",
+        "indicator_ids": [
+          "I01"
+        ],
+        "material_id": "Q01",
+        "material_type": "question",
+        "max_score": 2,
+        "reviewed_variant_tag": null,
+        "rubric_points": [],
+        "source_locator": {
+          "source_file": "tests/fixtures/synthetic_contracts.json",
+          "verification_status": "verified"
+        },
+        "topic_ids": [
+          "T01"
+        ]
+      },
+      {
+        "content": "合成巩固题目",
+        "indicator_ids": [
+          "I01"
+        ],
+        "material_id": "Q02",
+        "material_type": "question",
+        "max_score": 2,
+        "reviewed_variant_tag": "direct-calculation",
+        "rubric_points": [],
+        "source_locator": {
+          "source_file": "tests/fixtures/synthetic_contracts.json",
+          "verification_status": "verified"
+        },
+        "topic_ids": [
+          "T01"
+        ]
+      }
+    ],
+    "topics": [
+      {
+        "title": "合成主题",
+        "topic_id": "T01"
+      }
+    ],
+    "version": "synthetic-v1"
+  },
+  "notice": "全部为自建合成数据，不含赛事原始资料或真实学生信息。",
+  "prepared_dataset": {
+    "nodes": [
+      {
+        "node_id": "N01"
+      },
+      {
+        "node_id": "N02"
+      }
+    ],
+    "quality_issues": [
+      {
+        "action": "exclude_score",
+        "code": "SCORE_EXCEEDS_MAX",
+        "event_id": "E02",
+        "issue_id": "QI01",
+        "message": "合成超满分样例",
+        "record_ids": [
+          "R03"
+        ],
+        "rule_version": "synthetic-rules-v1",
+        "severity": "error"
+      },
+      {
+        "action": "quarantine_event",
+        "code": "CONFLICTING_RECORDS",
+        "event_id": "E05",
+        "issue_id": "QI02",
+        "message": "同一版本分数冲突，等待复核",
+        "record_ids": [
+          "R06",
+          "R07"
+        ],
+        "rule_version": "synthetic-rules-v1",
+        "severity": "error"
+      },
+      {
+        "action": "retain",
+        "code": "SUPERSEDED_REVISION",
+        "event_id": "E01",
+        "issue_id": "QI03",
+        "message": "保留最新修订记录",
+        "record_ids": [
+          "R01",
+          "R02"
+        ],
+        "rule_version": "synthetic-rules-v1",
+        "severity": "info"
+      }
+    ],
+    "raw_records": [
+      {
+        "payload": {
+          "修订版本": "1",
+          "分数": "1",
+          "学号": "S01",
+          "材料编号": "Q01",
+          "节点编号": "N01",
+          "记录编号": "R01"
+        },
+        "record_id": "R01",
+        "source_row_number": 1,
+        "table_name": "records"
+      },
+      {
+        "payload": {
+          "修订版本": "2",
+          "分数": "2",
+          "学号": "S01",
+          "材料编号": "Q01",
+          "节点编号": "N01",
+          "记录编号": "R02"
+        },
+        "record_id": "R02",
+        "source_row_number": 2,
+        "table_name": "records"
+      },
+      {
+        "payload": {
+          "修订版本": "1",
+          "分数": "3",
+          "学号": "S01",
+          "材料编号": "Q01",
+          "节点编号": "N02",
+          "记录编号": "R03"
+        },
+        "record_id": "R03",
+        "source_row_number": 3,
+        "table_name": "records"
+      },
+      {
+        "payload": {
+          "修订版本": "1",
+          "分数": "",
+          "学号": "S02",
+          "材料编号": "Q01",
+          "节点编号": "N01",
+          "记录编号": "R04"
+        },
+        "record_id": "R04",
+        "source_row_number": 4,
+        "table_name": "records"
+      },
+      {
+        "payload": {
+          "修订版本": "1",
+          "分数": "",
+          "学号": "S03",
+          "材料编号": "Q01",
+          "节点编号": "N02",
+          "记录编号": "R05"
+        },
+        "record_id": "R05",
+        "source_row_number": 5,
+        "table_name": "records"
+      },
+      {
+        "payload": {
+          "修订版本": "1",
+          "分数": "0",
+          "学号": "S04",
+          "材料编号": "Q01",
+          "节点编号": "N01",
+          "记录编号": "R06"
+        },
+        "record_id": "R06",
+        "source_row_number": 6,
+        "table_name": "records"
+      },
+      {
+        "payload": {
+          "修订版本": "1",
+          "分数": "2",
+          "学号": "S04",
+          "材料编号": "Q01",
+          "节点编号": "N01",
+          "记录编号": "R07"
+        },
+        "record_id": "R07",
+        "source_row_number": 7,
+        "table_name": "records"
+      }
+    ],
+    "selected_events": [
+      {
+        "event_id": "E01",
+        "material_id": "Q01",
+        "max_score": 2,
+        "node_id": "N01",
+        "score": 2,
+        "selected_record_id": "R02",
+        "status": "graded",
+        "student_id": "S01"
+      },
+      {
+        "disposition": "exclude_score",
+        "event_id": "E02",
+        "material_id": "Q01",
+        "max_score": 2,
+        "node_id": "N02",
+        "score": 3,
+        "selected_record_id": "R03",
+        "status": "graded",
+        "student_id": "S01"
+      },
+      {
+        "event_id": "E03",
+        "material_id": "Q01",
+        "node_id": "N01",
+        "selected_record_id": "R04",
+        "status": "pending",
+        "student_id": "S02"
+      },
+      {
+        "event_id": "E04",
+        "material_id": "Q01",
+        "node_id": "N02",
+        "selected_record_id": "R05",
+        "status": "unanswered",
+        "student_id": "S03"
+      },
+      {
+        "disposition": "quarantine_event",
+        "event_id": "E05",
+        "material_id": "Q01",
+        "node_id": "N01",
+        "status": "graded",
+        "student_id": "S04"
+      }
+    ],
+    "source_manifest": {
+      "dataset_id": "synthetic-ds",
+      "synthetic": true,
+      "table_row_counts": {
+        "dictionary": 1,
+        "materials": 2,
+        "nodes": 2,
+        "records": 7,
+        "requirements": 1,
+        "students": 4
+      }
+    },
+    "students": [
+      {
+        "class_id": "C01",
+        "student_id": "S01"
+      },
+      {
+        "class_id": "C01",
+        "student_id": "S02"
+      },
+      {
+        "class_id": "C02",
+        "student_id": "S03"
+      },
+      {
+        "class_id": "C02",
+        "student_id": "S04"
+      }
+    ]
+  },
+  "raw_tables": {
+    "dictionary": [
+      {
+        "source_row_number": "1",
+        "含义": "合成记录编号",
+        "字段": "记录编号"
+      }
+    ],
+    "materials": [
+      {
+        "source_row_number": "1",
+        "指标编号": "I01",
+        "材料编号": "Q01"
+      },
+      {
+        "source_row_number": "2",
+        "指标编号": "I01",
+        "材料编号": "Q02"
+      }
+    ],
+    "nodes": [
+      {
+        "source_row_number": "1",
+        "节点编号": "N01"
+      },
+      {
+        "source_row_number": "2",
+        "节点编号": "N02"
+      }
+    ],
+    "records": [
+      {
+        "source_row_number": "1",
+        "修订版本": "1",
+        "分数": "1",
+        "学号": "S01",
+        "材料编号": "Q01",
+        "节点编号": "N01",
+        "记录编号": "R01"
+      },
+      {
+        "source_row_number": "2",
+        "修订版本": "2",
+        "分数": "2",
+        "学号": "S01",
+        "材料编号": "Q01",
+        "节点编号": "N01",
+        "记录编号": "R02"
+      },
+      {
+        "source_row_number": "3",
+        "修订版本": "1",
+        "分数": "3",
+        "学号": "S01",
+        "材料编号": "Q01",
+        "节点编号": "N02",
+        "记录编号": "R03"
+      },
+      {
+        "source_row_number": "4",
+        "修订版本": "1",
+        "分数": "",
+        "学号": "S02",
+        "材料编号": "Q01",
+        "节点编号": "N01",
+        "记录编号": "R04"
+      },
+      {
+        "source_row_number": "5",
+        "修订版本": "1",
+        "分数": "",
+        "学号": "S03",
+        "材料编号": "Q01",
+        "节点编号": "N02",
+        "记录编号": "R05"
+      },
+      {
+        "source_row_number": "6",
+        "修订版本": "1",
+        "分数": "0",
+        "学号": "S04",
+        "材料编号": "Q01",
+        "节点编号": "N01",
+        "记录编号": "R06"
+      },
+      {
+        "source_row_number": "7",
+        "修订版本": "1",
+        "分数": "2",
+        "学号": "S04",
+        "材料编号": "Q01",
+        "节点编号": "N01",
+        "记录编号": "R07"
+      }
+    ],
+    "requirements": [
+      {
+        "source_row_number": "1",
+        "主题编号": "T01",
+        "指标编号": "I01"
+      }
+    ],
+    "students": [
+      {
+        "source_row_number": "1",
+        "学号": "S01",
+        "班级": "C01"
+      },
+      {
+        "source_row_number": "2",
+        "学号": "S02",
+        "班级": "C01"
+      },
+      {
+        "source_row_number": "3",
+        "学号": "S03",
+        "班级": "C02"
+      },
+      {
+        "source_row_number": "4",
+        "学号": "S04",
+        "班级": "C02"
+      }
+    ]
+  },
+  "recommendation_bundle": {
+    "catalog_version": "synthetic-v1",
+    "dataset_id": "synthetic-ds",
+    "node_id": "N01",
+    "recommendations": [
+      {
+        "activities": [
+          {
+            "hint_levels": [
+              "先说明思路"
+            ],
+            "material_id": "Q01",
+            "observation_points": [
+              "记录解题过程"
+            ],
+            "order": 1,
+            "previously_attempted": true,
+            "purpose": "收集补充证据"
+          }
+        ],
+        "adjustment_conditions": [
+          {
+            "next_action": "重新分析",
+            "observable_condition": "完成补充题"
+          }
+        ],
+        "finding_ids": [
+          "F01"
+        ],
+        "generation_method": "rule",
+        "goal": "补充观察",
+        "indicator_id": "I01",
+        "reason": "现有证据不足",
+        "recommendation_id": "REC01",
+        "review_status": "draft"
+      },
+      {
+        "activities": [
+          {
+            "hint_levels": [
+              "先独立完成并写出关键步骤",
+              "完成后再对照检查计算"
+            ],
+            "material_id": "Q02",
+            "observation_points": [
+              "首次作答是否完整",
+              "是否主动检查关键步骤"
+            ],
+            "order": 1,
+            "previously_attempted": false,
+            "purpose": "用未作答过的同指标题检验一次性正确率"
+          }
+        ],
+        "adjustment_conditions": [
+          {
+            "next_action": "减少同类巩固题，转入综合应用",
+            "observable_condition": "新题首次作答正确且步骤完整"
+          },
+          {
+            "next_action": "增加一步一检的过程提示",
+            "observable_condition": "新题仍需修订才能完成"
+          }
+        ],
+        "finding_ids": [
+          "F02"
+        ],
+        "generation_method": "rule",
+        "goal": "提升首次作答的稳定性",
+        "indicator_id": "I01",
+        "reason": "修订后能够得到满分，但首次作答仍有失分",
+        "recommendation_id": "REC02",
+        "review_status": "validated"
+      },
+      {
+        "activities": [
+          {
+            "hint_levels": [
+              "先说明准备检查哪一步"
+            ],
+            "material_id": "Q02",
+            "observation_points": [
+              "能否发现首次作答中的疏漏"
+            ],
+            "order": 1,
+            "previously_attempted": false,
+            "purpose": "练习完成后用逆向检查验证结果"
+          }
+        ],
+        "adjustment_conditions": [
+          {
+            "next_action": "保留自检要求并降低提示强度",
+            "observable_condition": "能够独立发现并修正疏漏"
+          }
+        ],
+        "finding_ids": [
+          "F02"
+        ],
+        "generation_method": "model",
+        "goal": "形成作答后的自检习惯",
+        "indicator_id": "I01",
+        "reason": "模型根据修订前后表现提出自检活动，等待教师复核",
+        "recommendation_id": "REC03",
+        "review_status": "needs_review"
+      },
+      {
+        "activities": [
+          {
+            "hint_levels": [
+              "先复述原有解题思路"
+            ],
+            "material_id": "Q01",
+            "observation_points": [
+              "能否解释修订原因"
+            ],
+            "order": 1,
+            "previously_attempted": true,
+            "purpose": "复核原有步骤并收集补充证据"
+          }
+        ],
+        "adjustment_conditions": [
+          {
+            "next_action": "拆分为单独的观察任务",
+            "observable_condition": "教师确认F01仍需补充观察"
+          }
+        ],
+        "finding_ids": [
+          "F01",
+          "F02"
+        ],
+        "generation_method": "model",
+        "goal": "同时补充观察并巩固已有步骤",
+        "indicator_id": "I01",
+        "reason": "模型合并了证据充分与证据不足的结论，暂不直接下发",
+        "recommendation_id": "REC04",
+        "review_status": "draft"
+      }
+    ],
+    "run_id": "synthetic-run",
+    "student_id": "S01",
+    "validation_issues": [
+      {
+        "code": "WEAK_EVIDENCE_BASIS",
+        "message": "该建议引用了证据不足的结论，需教师确认后再下发",
+        "recommendation_id": "REC04"
+      }
+    ]
+  }
+}

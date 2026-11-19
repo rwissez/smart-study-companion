@@ -1,0 +1,46 @@
+{
+  "additionalProperties": false,
+  "properties": {
+    "hint_levels": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Hint Levels",
+      "type": "array"
+    },
+    "material_id": {
+      "title": "Material Id",
+      "type": "string"
+    },
+    "observation_points": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Observation Points",
+      "type": "array"
+    },
+    "order": {
+      "minimum": 1,
+      "title": "Order",
+      "type": "integer"
+    },
+    "previously_attempted": {
+      "title": "Previously Attempted",
+      "type": "boolean"
+    },
+    "purpose": {
+      "title": "Purpose",
+      "type": "string"
+    }
+  },
+  "required": [
+    "order",
+    "material_id",
+    "purpose",
+    "hint_levels",
+    "observation_points",
+    "previously_attempted"
+  ],
+  "title": "Activity",
+  "type": "object"
+}

@@ -1,0 +1,19 @@
+{
+  "additionalProperties": false,
+  "properties": {
+    "quarantine_invalid_scores": {
+      "default": true,
+      "title": "Quarantine Invalid Scores",
+      "type": "boolean"
+    },
+    "rule_version": {
+      "title": "Rule Version",
+      "type": "string"
+    }
+  },
+  "required": [
+    "rule_version"
+  ],
+  "title": "ImportConfig",
+  "type": "object"
+}
