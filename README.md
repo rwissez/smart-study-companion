@@ -21,6 +21,12 @@ A需阅读全部手册。完整导览见[阅读顺序与决策](docs/team/00_阅
 
 ## 下一阶段：A0项目骨架
 
+### A0-a：B、C先行所需的共享契约
+
+已提供 Python 3.12、Pydantic v2 的 `study_companion.contracts` 共享类型，以及完全合成的 `tests/fixtures/synthetic_contracts.json`。B 使用 `RawTables`、`PreparedDataset`、`Catalog`、`RunContext` 实现导入和分析；C 使用 `StudentResult`、`Catalog`、`RunContext` 实现选材、建议与验证。函数签名以[统一实施规范](docs/team/11_统一实施规范.md)第四节为准。样例仅用于接口验证，不代表对真实赛题数据的计算结果。
+
+在仓库根目录运行 `uv sync --frozen --python 3.12`，再运行 `uv run --python 3.12 pytest -q`。B、C开始工作前应核对共享字段；字段变更由A统一维护。完整后端、数据库、HTTP服务和前端启动属于后续A0-b，尚未实现。
+
 A负责共享数据模型与合成示例、后端入口、数据库迁移、健康检查、模拟会话、未配置模型适配器，以及启动和测试入口；D协作初始化前端。技术基线采用Python 3.12、uv、FastAPI、Pydantic v2、SQLite、SQLAlchemy 2.x、Alembic，以及React、TypeScript、Vite和npm。
 
 A0验收要求：在全新克隆目录中，按届时补齐的README安装依赖、迁移数据库、载入合成样例并启动前后端。实际版本、锁文件及验证过的命令随A0交付。A0合入main后，B/C/D再从main创建各自功能分支。
