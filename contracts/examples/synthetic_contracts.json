@@ -1,7 +1,46 @@
 {
   "analysis_bundle": {
     "catalog_version": "synthetic-v1",
-    "class_results": [],
+    "class_results": [
+      {
+        "catalog_version": "synthetic-v1",
+        "class_id": "C01",
+        "dataset_id": "synthetic-ds",
+        "findings": [],
+        "limitations": [
+          "样本量不足，不能推断班级整体表现"
+        ],
+        "metrics": [
+          {
+            "denominator": 2,
+            "evidence_refs": [
+              {
+                "id": "R02",
+                "kind": "record",
+                "run_id": "synthetic-run"
+              }
+            ],
+            "limitations": [
+              "仅一名学生有有效分数"
+            ],
+            "metric_id": "M01",
+            "name": "valid_score_ratio",
+            "numerator": 2,
+            "scope": {
+              "class_id": "C01",
+              "indicator_id": "I01",
+              "node_id": "N01"
+            },
+            "unit": "ratio",
+            "value": 1
+          }
+        ],
+        "node_id": "N01",
+        "observed_student_count": 1,
+        "roster_count": 2,
+        "run_id": "synthetic-run"
+      }
+    ],
     "config": {
       "min_reviewed_item_variants": 2,
       "min_valid_distinct_items": 3
@@ -9,7 +48,8 @@
     "dataset_id": "synthetic-ds",
     "quality_summary": {
       "excluded_scores": 1,
-      "selected_events": 4
+      "quarantined_events": 1,
+      "selected_events": 5
     },
     "rule_version": "synthetic-rules-v1",
     "run_id": "synthetic-run",
@@ -95,20 +135,129 @@
         "event_id": "E02",
         "issue_id": "QI01",
         "message": "合成超满分样例",
-        "record_ids": [],
+        "record_ids": [
+          "R03"
+        ],
         "rule_version": "synthetic-rules-v1",
         "severity": "error"
+      },
+      {
+        "action": "quarantine_event",
+        "code": "CONFLICTING_RECORDS",
+        "event_id": "E05",
+        "issue_id": "QI02",
+        "message": "同一版本分数冲突，等待复核",
+        "record_ids": [
+          "R06",
+          "R07"
+        ],
+        "rule_version": "synthetic-rules-v1",
+        "severity": "error"
+      },
+      {
+        "action": "retain",
+        "code": "SUPERSEDED_REVISION",
+        "event_id": "E01",
+        "issue_id": "QI03",
+        "message": "保留最新修订记录",
+        "record_ids": [
+          "R01",
+          "R02"
+        ],
+        "rule_version": "synthetic-rules-v1",
+        "severity": "info"
       }
     ],
     "raw_records": [
       {
         "payload": {
+          "修订版本": "1",
           "分数": "1",
           "学号": "S01",
+          "材料编号": "Q01",
+          "节点编号": "N01",
           "记录编号": "R01"
         },
         "record_id": "R01",
         "source_row_number": 1,
+        "table_name": "records"
+      },
+      {
+        "payload": {
+          "修订版本": "2",
+          "分数": "2",
+          "学号": "S01",
+          "材料编号": "Q01",
+          "节点编号": "N01",
+          "记录编号": "R02"
+        },
+        "record_id": "R02",
+        "source_row_number": 2,
+        "table_name": "records"
+      },
+      {
+        "payload": {
+          "修订版本": "1",
+          "分数": "3",
+          "学号": "S01",
+          "材料编号": "Q01",
+          "节点编号": "N02",
+          "记录编号": "R03"
+        },
+        "record_id": "R03",
+        "source_row_number": 3,
+        "table_name": "records"
+      },
+      {
+        "payload": {
+          "修订版本": "1",
+          "分数": "",
+          "学号": "S02",
+          "材料编号": "Q01",
+          "节点编号": "N01",
+          "记录编号": "R04"
+        },
+        "record_id": "R04",
+        "source_row_number": 4,
+        "table_name": "records"
+      },
+      {
+        "payload": {
+          "修订版本": "1",
+          "分数": "",
+          "学号": "S03",
+          "材料编号": "Q01",
+          "节点编号": "N02",
+          "记录编号": "R05"
+        },
+        "record_id": "R05",
+        "source_row_number": 5,
+        "table_name": "records"
+      },
+      {
+        "payload": {
+          "修订版本": "1",
+          "分数": "0",
+          "学号": "S04",
+          "材料编号": "Q01",
+          "节点编号": "N01",
+          "记录编号": "R06"
+        },
+        "record_id": "R06",
+        "source_row_number": 6,
+        "table_name": "records"
+      },
+      {
+        "payload": {
+          "修订版本": "1",
+          "分数": "2",
+          "学号": "S04",
+          "材料编号": "Q01",
+          "节点编号": "N01",
+          "记录编号": "R07"
+        },
+        "record_id": "R07",
+        "source_row_number": 7,
         "table_name": "records"
       }
     ],
@@ -118,8 +267,8 @@
         "material_id": "Q01",
         "max_score": 2,
         "node_id": "N01",
-        "score": 1,
-        "selected_record_id": "R01",
+        "score": 2,
+        "selected_record_id": "R02",
         "status": "graded",
         "student_id": "S01"
       },
@@ -130,6 +279,7 @@
         "max_score": 2,
         "node_id": "N02",
         "score": 3,
+        "selected_record_id": "R03",
         "status": "graded",
         "student_id": "S01"
       },
@@ -137,6 +287,7 @@
         "event_id": "E03",
         "material_id": "Q01",
         "node_id": "N01",
+        "selected_record_id": "R04",
         "status": "pending",
         "student_id": "S02"
       },
@@ -144,8 +295,17 @@
         "event_id": "E04",
         "material_id": "Q01",
         "node_id": "N02",
+        "selected_record_id": "R05",
         "status": "unanswered",
         "student_id": "S03"
+      },
+      {
+        "disposition": "quarantine_event",
+        "event_id": "E05",
+        "material_id": "Q01",
+        "node_id": "N01",
+        "status": "graded",
+        "student_id": "S04"
       }
     ],
     "source_manifest": {
@@ -155,7 +315,7 @@
         "dictionary": 1,
         "materials": 1,
         "nodes": 2,
-        "records": 1,
+        "records": 7,
         "requirements": 1,
         "students": 4
       }
@@ -207,9 +367,66 @@
     "records": [
       {
         "source_row_number": "1",
+        "修订版本": "1",
         "分数": "1",
         "学号": "S01",
+        "材料编号": "Q01",
+        "节点编号": "N01",
         "记录编号": "R01"
+      },
+      {
+        "source_row_number": "2",
+        "修订版本": "2",
+        "分数": "2",
+        "学号": "S01",
+        "材料编号": "Q01",
+        "节点编号": "N01",
+        "记录编号": "R02"
+      },
+      {
+        "source_row_number": "3",
+        "修订版本": "1",
+        "分数": "3",
+        "学号": "S01",
+        "材料编号": "Q01",
+        "节点编号": "N02",
+        "记录编号": "R03"
+      },
+      {
+        "source_row_number": "4",
+        "修订版本": "1",
+        "分数": "",
+        "学号": "S02",
+        "材料编号": "Q01",
+        "节点编号": "N01",
+        "记录编号": "R04"
+      },
+      {
+        "source_row_number": "5",
+        "修订版本": "1",
+        "分数": "",
+        "学号": "S03",
+        "材料编号": "Q01",
+        "节点编号": "N02",
+        "记录编号": "R05"
+      },
+      {
+        "source_row_number": "6",
+        "修订版本": "1",
+        "分数": "0",
+        "学号": "S04",
+        "材料编号": "Q01",
+        "节点编号": "N01",
+        "记录编号": "R06"
+      },
+      {
+        "source_row_number": "7",
+        "修订版本": "1",
+        "分数": "2",
+        "学号": "S04",
+        "材料编号": "Q01",
+        "节点编号": "N01",
+        "记录编号": "R07"
       }
     ],
     "requirements": [

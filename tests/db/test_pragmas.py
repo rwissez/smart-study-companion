@@ -45,4 +45,4 @@ def test_seeded_event_links_back_to_its_source_row(seeded: dict, session: Sessio
     row = session.get(models.SourceRow, event.selected_source_row_id)
     assert row is not None
     assert row.table_name == "records"
-    assert row.row_number == 1
+    assert row.row_number == 2

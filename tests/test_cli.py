@@ -24,7 +24,7 @@ def test_seed_is_idempotent(app_env, session: Session) -> None:
     assert third["skipped"] is False
 
     assert session.scalar(select(func.count()).select_from(models.Dataset)) == 1
-    assert session.scalar(select(func.count()).select_from(models.AnswerEvent)) == 4
+    assert session.scalar(select(func.count()).select_from(models.AnswerEvent)) == 5
     assert session.scalar(select(func.count()).select_from(models.Student)) == 4
 
 
