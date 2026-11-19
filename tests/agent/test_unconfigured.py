@@ -47,7 +47,11 @@ def test_chat_route_returns_503_not_a_fake_answer(client: TestClient, seeded: di
     assert "data" not in body
 
 
-def test_teacher_cannot_use_the_student_chat(client: TestClient, seeded: dict) -> None:
+def test_bound_teacher_chat_also_reports_the_missing_model(
+    client: TestClient, seeded: dict
+) -> None:
+    # Doc 09 and the /teacher/chat route both require teacher-side chat, so a
+    # bound teacher must pass the guard and fail only on the absent model.
     created = client.post(
         "/api/v1/demo-sessions", json={"role": "teacher", "dataset_id": seeded["dataset_id"]}
     )
@@ -58,4 +62,6 @@ def test_teacher_cannot_use_the_student_chat(client: TestClient, seeded: dict) -
         headers={"Authorization": f"Bearer {token}"},
         json={"messages": [{"role": "user", "content": "测试"}]},
     )
-    assert response.status_code == 403
+
+    assert response.status_code == 503, response.text
+    assert response.json()["error"]["code"] == "MODEL_NOT_CONFIGURED"

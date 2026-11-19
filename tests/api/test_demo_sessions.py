@@ -26,6 +26,8 @@ def test_bound_teacher_gets_full_teacher_capabilities(client: TestClient, seeded
     scope = data["scope"]
     assert scope["bootstrap"] is False
     assert "view_class_analysis" in scope["capabilities"]
+    # Teachers chat under their own capability; the student-scoped one must not leak.
+    assert "chat_teacher" in scope["capabilities"]
     assert "chat_own" not in scope["capabilities"]
 
 

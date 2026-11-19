@@ -33,7 +33,9 @@ class ChatRequest(BaseModel):
 
 @router.post("/chat")
 def post_chat(payload: ChatRequest, scope: Scope, settings: AppSettings) -> dict[str, Any]:
-    scope.require("chat_own")
+    # Teachers and students both chat, under separate capabilities: a student
+    # may only ever discuss their own data, a teacher their bound dataset.
+    scope.require("chat_own" if scope.role == "student" else "chat_teacher")
     provider = build_provider(settings)
     turn = provider.generate([message.model_dump() for message in payload.messages])
     # Unreachable while the only provider is the unconfigured one.

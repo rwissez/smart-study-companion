@@ -35,6 +35,7 @@ TEACHER_CAPABILITIES = (
     "view_quality",
     "edit_recommendations",
     "export_run",
+    "chat_teacher",
 )
 STUDENT_CAPABILITIES = ("view_own_analysis", "view_own_plan", "chat_own")
 
