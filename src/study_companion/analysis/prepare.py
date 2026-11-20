@@ -148,23 +148,30 @@ def prepare_dataset(tables: RawTables, config: ImportConfig) -> PreparedDataset:
     nodes = [Node(node_id=row_id) for row_id in _table_ids(tables.nodes, NODES_COLUMNS["node_id"])]
 
     # 2. 保存全部原始行（含 source_row_number，保证可追溯）
-    raw_records = [
-        SourceRecord(
-            record_id=f"{table}:{index}",
-            table_name=table,
-            source_row_number=index,
-            payload=row,
-        )
-        for table, rows in (
-            ("requirements", tables.requirements),
-            ("materials", tables.materials),
-            ("students", tables.students),
-            ("nodes", tables.nodes),
-            ("records", tables.records),
-            ("dictionary", tables.dictionary),
-        )
-        for index, row in enumerate(rows, start=1)
-    ]
+    #    records 表保留原始记录编号（与 selected_record_id/quality_issues 的引用一致）；
+    #    其余表无编号列，用 表名:行号 作为 record_id。
+    raw_records = []
+    for table, rows in (
+        ("requirements", tables.requirements),
+        ("materials", tables.materials),
+        ("students", tables.students),
+        ("nodes", tables.nodes),
+        ("records", tables.records),
+        ("dictionary", tables.dictionary),
+    ):
+        for index, row in enumerate(rows, start=1):
+            if table == "records":
+                record_id = _pick(row, RECORDS_COLUMNS["record_id"]) or f"records:{index}"
+            else:
+                record_id = f"{table}:{index}"
+            raw_records.append(
+                SourceRecord(
+                    record_id=record_id,
+                    table_name=table,
+                    source_row_number=index,
+                    payload=row,
+                )
+            )
 
     parsed = _parse_records(tables.records, next_issue_id, issues)
     selected_events = _select_events(parsed, config, next_issue_id, issues)
