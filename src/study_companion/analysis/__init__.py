@@ -4,5 +4,6 @@
 """
 
 from study_companion.analysis.prepare import prepare_dataset
+from study_companion.analysis.service import analyze_dataset
 
-__all__ = ["prepare_dataset"]
+__all__ = ["prepare_dataset", "analyze_dataset"]
