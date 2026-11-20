@@ -1,0 +1,178 @@
+{
+  "description": "四类学生合成案例：对应三类学生建议模板v4的1a倾听式/1b扶练递减/类型二两级迁移/类型三证据不足。供案例端到端测试与11.24复核使用，材料与指标引用 recommendation_minimal.json 的目录。",
+  "students": [
+    {
+      "case_id": "case-1a",
+      "label": "类型1a：有思路但走不通（倾听式巩固）",
+      "student_result": {
+        "run_id": "run-demo-1",
+        "dataset_id": "ds-demo-1",
+        "catalog_version": "synthetic-v1",
+        "student_id": "S1A",
+        "class_id": "D01",
+        "node_id": "N01",
+        "metrics": [
+          {
+            "metric_id": "M101",
+            "name": "得分率",
+            "value": 0.3333,
+            "numerator": 1,
+            "denominator": 3,
+            "unit": "ratio",
+            "scope": {"student_id": "S1A", "node_id": "N01"},
+            "evidence_refs": [{"kind": "metric", "id": "M101", "run_id": "run-demo-1"}]
+          }
+        ],
+        "findings": [
+          {
+            "finding_id": "F101",
+            "indicator_id": "T01I1",
+            "description": "有效作答3题中2题在除以负数后未翻转不等号方向，解答过程显示移项正确",
+            "evidence_status": "sufficient",
+            "performance": "needs_practice",
+            "evidence_refs": [
+              {"kind": "record", "id": "R101", "run_id": "run-demo-1"},
+              {"kind": "record", "id": "R102", "run_id": "run-demo-1"}
+            ],
+            "limitations": []
+          }
+        ],
+        "limitations": []
+      },
+      "expect": {
+        "kind": "1a",
+        "reason_contains": ["倾听式"],
+        "activity_materials_any": ["M001", "M002"]
+      }
+    },
+    {
+      "case_id": "case-1b",
+      "label": "类型1b：纯粹不懂（递减干预扶练）",
+      "student_result": {
+        "run_id": "run-demo-1",
+        "dataset_id": "ds-demo-1",
+        "catalog_version": "synthetic-v1",
+        "student_id": "S1B",
+        "class_id": "D01",
+        "node_id": "N01",
+        "metrics": [
+          {
+            "metric_id": "M201",
+            "name": "得分率",
+            "value": 0.0,
+            "numerator": 0,
+            "denominator": 3,
+            "unit": "ratio",
+            "scope": {"student_id": "S1B", "node_id": "N01"},
+            "evidence_refs": [{"kind": "metric", "id": "M201", "run_id": "run-demo-1"}]
+          }
+        ],
+        "findings": [
+          {
+            "finding_id": "F201",
+            "indicator_id": "T01I1",
+            "description": "该生三次作答均无有效解题步骤，无法定位思路断点",
+            "evidence_status": "sufficient",
+            "performance": "needs_practice",
+            "evidence_refs": [
+              {"kind": "record", "id": "R201", "run_id": "run-demo-1"},
+              {"kind": "record", "id": "R202", "run_id": "run-demo-1"},
+              {"kind": "record", "id": "R203", "run_id": "run-demo-1"}
+            ],
+            "limitations": ["缺少解答过程"]
+          }
+        ],
+        "limitations": []
+      },
+      "expect": {
+        "kind": "1b",
+        "reason_contains": ["递减干预"],
+        "support_first": ["M003", "M004"]
+      }
+    },
+    {
+      "case_id": "case-type2",
+      "label": "类型二：学有余力（两级迁移，不刷题）",
+      "student_result": {
+        "run_id": "run-demo-1",
+        "dataset_id": "ds-demo-1",
+        "catalog_version": "synthetic-v1",
+        "student_id": "S2C",
+        "class_id": "D01",
+        "node_id": "N01",
+        "metrics": [
+          {
+            "metric_id": "M301",
+            "name": "得分率",
+            "value": 1.0,
+            "numerator": 2,
+            "denominator": 2,
+            "unit": "ratio",
+            "scope": {"student_id": "S2C", "node_id": "N01"},
+            "evidence_refs": [{"kind": "metric", "id": "M301", "run_id": "run-demo-1"}]
+          }
+        ],
+        "findings": [
+          {
+            "finding_id": "F301",
+            "indicator_id": "T01I2",
+            "description": "两道变式均正确且步骤完整，解集数轴表示规范",
+            "evidence_status": "sufficient",
+            "performance": "observed_strength",
+            "evidence_refs": [
+              {"kind": "record", "id": "R301", "run_id": "run-demo-1"},
+              {"kind": "record", "id": "R302", "run_id": "run-demo-1"}
+            ],
+            "limitations": []
+          }
+        ],
+        "limitations": []
+      },
+      "expect": {
+        "kind": "type2",
+        "reason_contains": ["思想迁移"],
+        "require_thinking_task": true
+      }
+    },
+    {
+      "case_id": "case-type3",
+      "label": "类型三：证据不足（只观察不下结论）",
+      "student_result": {
+        "run_id": "run-demo-1",
+        "dataset_id": "ds-demo-1",
+        "catalog_version": "synthetic-v1",
+        "student_id": "S3D",
+        "class_id": "D01",
+        "node_id": "N01",
+        "metrics": [
+          {
+            "metric_id": "M401",
+            "name": "得分率",
+            "value": 0.5,
+            "numerator": 1,
+            "denominator": 2,
+            "unit": "ratio",
+            "scope": {"student_id": "S3D", "node_id": "N01"},
+            "evidence_refs": [{"kind": "metric", "id": "M401", "run_id": "run-demo-1"}]
+          }
+        ],
+        "findings": [
+          {
+            "finding_id": "F401",
+            "indicator_id": "T01I1",
+            "description": "该指标仅1道有效作答，另有1题修订版与原始版冲突已隔离，不足以形成表现结论",
+            "evidence_status": "insufficient",
+            "performance": "undetermined",
+            "evidence_refs": [],
+            "limitations": []
+          }
+        ],
+        "limitations": []
+      },
+      "expect": {
+        "kind": "type3",
+        "reason_contains": ["不输出会/不会结论"]
+      }
+    }
+  ]
+}

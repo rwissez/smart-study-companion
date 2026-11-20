@@ -1,0 +1,88 @@
+{
+  "run_context": {
+    "run_id": "run-demo-1",
+    "dataset_id": "ds-demo-1",
+    "catalog_version": "synthetic-v1",
+    "rule_version": "rules-demo-1"
+  },
+  "catalog": {
+    "version": "synthetic-v1",
+    "topics": [
+      {"topic_id": "T01", "title": "一元一次不等式"}
+    ],
+    "indicators": [
+      {"indicator_id": "T01I1", "topic_id": "T01", "description": "能解一元一次不等式并检验"},
+      {"indicator_id": "T01I2", "topic_id": "T01", "description": "能在数轴上表示不等式解集"}
+    ],
+    "materials": [
+      {
+        "material_id": "M001",
+        "material_type": "question",
+        "topic_ids": ["T01"],
+        "indicator_ids": ["T01I1"],
+        "content": "解不等式 2x+3<11",
+        "source_locator": {"source_file": "fixtures/materials_demo.csv", "verification_status": "verified"},
+        "max_score": 3,
+        "reviewed_variant_tag": "基础型"
+      },
+      {
+        "material_id": "M002",
+        "material_type": "question",
+        "topic_ids": ["T01"],
+        "indicator_ids": ["T01I1"],
+        "content": "解不等式 -2x<6",
+        "source_locator": {"source_file": "fixtures/materials_demo.csv", "verification_status": "verified"},
+        "max_score": 3,
+        "reviewed_variant_tag": "负数系数"
+      },
+      {
+        "material_id": "M003",
+        "material_type": "card",
+        "topic_ids": ["T01"],
+        "indicator_ids": ["T01I1"],
+        "content": "不等式性质学习卡：三条性质与天平类比，附热身题与答案卡片",
+        "source_locator": {"source_file": "fixtures/cards_demo.csv", "verification_status": "verified"}
+      },
+      {
+        "material_id": "M004",
+        "material_type": "textbook",
+        "topic_ids": ["T01"],
+        "indicator_ids": ["T01I1"],
+        "content": "教材切片：一元一次不等式解法与检验",
+        "source_locator": {"source_file": "fixtures/textbook_demo.csv", "verification_status": "unverified"}
+      },
+      {
+        "material_id": "M005",
+        "material_type": "question",
+        "topic_ids": ["T01"],
+        "indicator_ids": ["T01I2"],
+        "content": "在数轴上表示 x<4 与 x≥-1 的解集",
+        "source_locator": {"source_file": "fixtures/materials_demo.csv", "verification_status": "verified"},
+        "max_score": 2,
+        "reviewed_variant_tag": "数轴表示"
+      },
+      {
+        "material_id": "M006",
+        "material_type": "question",
+        "topic_ids": ["T01"],
+        "indicator_ids": ["T01I2"],
+        "content": "已知 ax<b，按 a 的取值情况讨论解集",
+        "source_locator": {"source_file": "fixtures/materials_demo.csv", "verification_status": "verified"},
+        "max_score": 4,
+        "reviewed_variant_tag": "参数讨论"
+      }
+    ],
+    "links": []
+  },
+  "student_base": {
+    "run_id": "run-demo-1",
+    "dataset_id": "ds-demo-1",
+    "catalog_version": "synthetic-v1",
+    "student_id": "S01",
+    "class_id": "D01",
+    "node_id": "N01",
+    "metrics": [],
+    "findings": [],
+    "limitations": []
+  }
+}
