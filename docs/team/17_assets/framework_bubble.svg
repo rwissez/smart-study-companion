@@ -1,0 +1,104 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 820" width="1200" height="820" font-family="'Microsoft YaHei','PingFang SC',sans-serif">
+  <title>智慧学伴 项目框架气泡图（2026-11-22 进展快照）</title>
+  <rect width="1200" height="820" fill="#fafafa"/>
+  <text x="600" y="36" text-anchor="middle" font-size="22" font-weight="bold" fill="#222">智慧学伴 · 项目框架气泡图（2026-11-22 进展快照，main 分支 113 项测试通过）</text>
+
+  <!-- 连线 -->
+  <g stroke="#bbb" stroke-width="2" stroke-dasharray="5 4">
+    <line x1="600" y1="400" x2="600" y2="150"/>
+    <line x1="600" y1="400" x2="330" y2="200"/>
+    <line x1="600" y1="400" x2="180" y2="400"/>
+    <line x1="600" y1="400" x2="300" y2="620"/>
+    <line x1="600" y1="400" x2="600" y2="660"/>
+    <line x1="600" y1="400" x2="900" y2="620"/>
+    <line x1="600" y1="400" x2="1020" y2="400"/>
+    <line x1="600" y1="400" x2="900" y2="200"/>
+    <line x1="600" y1="400" x2="420" y2="400"/>
+    <line x1="600" y1="400" x2="780" y2="400"/>
+  </g>
+
+  <!-- 中心 -->
+  <circle cx="600" cy="400" r="92" fill="#37474f"/>
+  <text x="600" y="392" text-anchor="middle" font-size="22" font-weight="bold" fill="#fff">智慧学伴</text>
+  <text x="600" y="418" text-anchor="middle" font-size="13" fill="#cfd8dc">本地学习支持原型</text>
+  <text x="600" y="438" text-anchor="middle" font-size="13" fill="#cfd8dc">三任务 · 双端 · 可追溯</text>
+
+  <!-- A 契约与服务：基本完成 -->
+  <circle cx="600" cy="150" r="76" fill="#a5d6a7" stroke="#2e7d32" stroke-width="3"/>
+  <text x="600" y="120" text-anchor="middle" font-size="15" font-weight="bold" fill="#1b5e20">A 契约与后端骨架</text>
+  <text x="600" y="142" text-anchor="middle" font-size="12" fill="#1b5e20">33个契约 · 12张表迁移</text>
+  <text x="600" y="160" text-anchor="middle" font-size="12" fill="#1b5e20">health · 会话 · catalog</text>
+  <text x="600" y="178" text-anchor="middle" font-size="12" fill="#1b5e20">未配置模型适配器</text>
+
+  <!-- A 课程目录：待做 -->
+  <circle cx="330" cy="200" r="68" fill="#ffe082" stroke="#f9a825" stroke-width="3"/>
+  <text x="330" y="172" text-anchor="middle" font-size="15" font-weight="bold" fill="#6d4c00">A 课程目录(任务1)</text>
+  <text x="330" y="194" text-anchor="middle" font-size="12" fill="#6d4c00">真实目录尚未构建</text>
+  <text x="330" y="212" text-anchor="middle" font-size="12" fill="#6d4c00">课标/教材页码待核对</text>
+  <text x="330" y="230" text-anchor="middle" font-size="12" fill="#6d4c00">教材切分草稿已有(B)</text>
+
+  <!-- B 导入与质量：完成 -->
+  <circle cx="180" cy="400" r="72" fill="#a5d6a7" stroke="#2e7d32" stroke-width="3"/>
+  <text x="180" y="372" text-anchor="middle" font-size="15" font-weight="bold" fill="#1b5e20">B 导入与质量</text>
+  <text x="180" y="394" text-anchor="middle" font-size="12" fill="#1b5e20">prepare_dataset</text>
+  <text x="180" y="412" text-anchor="middle" font-size="12" fill="#1b5e20">修订选择 · 异常隔离</text>
+  <text x="180" y="430" text-anchor="middle" font-size="12" fill="#1b5e20">对账 · 9项手算测试</text>
+
+  <!-- B 统计分析：完成 -->
+  <circle cx="300" cy="630" r="70" fill="#a5d6a7" stroke="#2e7d32" stroke-width="3"/>
+  <text x="300" y="602" text-anchor="middle" font-size="15" font-weight="bold" fill="#1b5e20">B 统计与分析工具</text>
+  <text x="300" y="624" text-anchor="middle" font-size="12" fill="#1b5e20">5项指标含分子分母</text>
+  <text x="300" y="642" text-anchor="middle" font-size="12" fill="#1b5e20">个体/班级结果</text>
+  <text x="300" y="660" text-anchor="middle" font-size="12" fill="#1b5e20">4个工具 · 范围校验</text>
+
+  <!-- C 规则建议：完成 -->
+  <circle cx="600" cy="670" r="74" fill="#a5d6a7" stroke="#2e7d32" stroke-width="3"/>
+  <text x="600" y="640" text-anchor="middle" font-size="15" font-weight="bold" fill="#1b5e20">C 规则建议与校验</text>
+  <text x="600" y="662" text-anchor="middle" font-size="12" fill="#1b5e20">三类学生模板 v4</text>
+  <text x="600" y="680" text-anchor="middle" font-size="12" fill="#1b5e20">证据校验 · 泄答校验</text>
+  <text x="600" y="698" text-anchor="middle" font-size="12" fill="#1b5e20">模型文本尚未接入</text>
+
+  <!-- D 前端：未开始 -->
+  <circle cx="900" cy="630" r="74" fill="#ef9a9a" stroke="#c62828" stroke-width="3"/>
+  <text x="900" y="602" text-anchor="middle" font-size="15" font-weight="bold" fill="#7f0000">D 双端前端</text>
+  <text x="900" y="624" text-anchor="middle" font-size="12" fill="#7f0000">仓库内无 frontend/</text>
+  <text x="900" y="642" text-anchor="middle" font-size="12" fill="#7f0000">教师端 · 学生端 · 对话</text>
+  <text x="900" y="660" text-anchor="middle" font-size="12" fill="#7f0000">依赖A补齐分析接口</text>
+
+  <!-- 智能体与模型：未开始 -->
+  <circle cx="1030" cy="400" r="70" fill="#ef9a9a" stroke="#c62828" stroke-width="3"/>
+  <text x="1030" y="372" text-anchor="middle" font-size="15" font-weight="bold" fill="#7f0000">智能体与模型</text>
+  <text x="1030" y="394" text-anchor="middle" font-size="12" fill="#7f0000">OpenAI兼容适配器</text>
+  <text x="1030" y="412" text-anchor="middle" font-size="12" fill="#7f0000">工具循环 · 预生成</text>
+  <text x="1030" y="430" text-anchor="middle" font-size="12" fill="#7f0000">仅有未配置占位</text>
+
+  <!-- 导出：未开始 -->
+  <circle cx="900" cy="190" r="64" fill="#ef9a9a" stroke="#c62828" stroke-width="3"/>
+  <text x="900" y="168" text-anchor="middle" font-size="15" font-weight="bold" fill="#7f0000">导出成果包</text>
+  <text x="900" y="190" text-anchor="middle" font-size="12" fill="#7f0000">ZIP · 字段说明</text>
+  <text x="900" y="208" text-anchor="middle" font-size="12" fill="#7f0000">教师修订记录</text>
+
+  <!-- 新增：库管理 -->
+  <circle cx="420" cy="400" r="62" fill="#b3e5fc" stroke="#0277bd" stroke-width="4" stroke-dasharray="8 5"/>
+  <text x="420" y="378" text-anchor="middle" font-size="15" font-weight="bold" fill="#01579b">库管理(新增)</text>
+  <text x="420" y="398" text-anchor="middle" font-size="12" fill="#01579b">数据集库 · 材料库</text>
+  <text x="420" y="416" text-anchor="middle" font-size="12" fill="#01579b">上传自有数据可视化</text>
+  <text x="420" y="434" text-anchor="middle" font-size="12" fill="#01579b">增删改查</text>
+
+  <!-- 新增：来源可靠性 -->
+  <circle cx="780" cy="400" r="62" fill="#b3e5fc" stroke="#0277bd" stroke-width="4" stroke-dasharray="8 5"/>
+  <text x="780" y="378" text-anchor="middle" font-size="15" font-weight="bold" fill="#01579b">可靠性依据(新增)</text>
+  <text x="780" y="398" text-anchor="middle" font-size="12" fill="#01579b">来源分级 · 核对状态</text>
+  <text x="780" y="416" text-anchor="middle" font-size="12" fill="#01579b">不可靠不进结论</text>
+  <text x="780" y="434" text-anchor="middle" font-size="12" fill="#01579b">教师可核对</text>
+
+  <!-- 图例 -->
+  <g font-size="13" fill="#333">
+    <circle cx="70" cy="760" r="11" fill="#a5d6a7" stroke="#2e7d32" stroke-width="2"/><text x="90" y="765">已合入 main 并有测试</text>
+    <circle cx="260" cy="760" r="11" fill="#ffe082" stroke="#f9a825" stroke-width="2"/><text x="280" y="765">部分完成/待核对</text>
+    <circle cx="420" cy="760" r="11" fill="#ef9a9a" stroke="#c62828" stroke-width="2"/><text x="440" y="765">尚未开始</text>
+    <circle cx="540" cy="760" r="11" fill="#b3e5fc" stroke="#0277bd" stroke-width="2" stroke-dasharray="4 3"/><text x="560" y="765">本次规划新增能力</text>
+    <text x="760" y="765">气泡大小仅示意工作量，非精确比例</text>
+  </g>
+</svg>
