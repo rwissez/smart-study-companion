@@ -4,7 +4,9 @@
 
 ## 当前状态
 
-A0-a（共享契约）与A0-b（后端骨架）已实现：可迁移数据库、载入合成样例、启动HTTP服务并通过测试。前端初始化（A0-b前端部分）由D并行进行，尚未并入。模型供应商、地址、模型名称和密钥默认未配置，可选接入；未配置时对话接口返回503 `MODEL_NOT_CONFIGURED`，不产生假模型回复，其余分析与材料功能照常工作。
+A0-a（共享契约）与A0-b（后端骨架）已实现：可迁移数据库、载入合成样例、启动HTTP服务并通过测试。B 的教材切段与页码处理、个体/班级分析、C 的规则建议与引用校验已经合入。知识点图谱增量模块也已合入：可复用 B 的切段结果，抽取新出现的知识点，按关键词定位到单元/章节/页码，并校验四类关系；衍生和合并创造投影为前置，特例投影为支持，从属不作为学习顺序。
+
+前端 `frontend/` 尚未并入。模型供应商、地址、模型名称和密钥默认未配置，可选接入；未配置时对话接口返回503 `MODEL_NOT_CONFIGURED`，不产生假模型回复。知识点抽取结果和关系候选默认是 `unverified`/`candidate`，必须人工核对后才能进入正式课程目录。RapidOCR 是可选的本地离线依赖，尚未写入默认依赖锁文件。
 
 ## 本地运行
 
@@ -25,10 +27,30 @@ uv run uvicorn study_companion.main:app --reload --port 8000
 | `uv run pytest -q` | 运行全部测试 |
 | `uv run study-companion seed-demo [--force]` | 载入合成演示数据；已存在时跳过，`--force` 先清空该数据集 |
 | `uv run study-companion export-contracts` | 导出 `contracts/` 下的 JSON Schema、OpenAPI 与样例，输出逐字节可复现 |
+| `uv run study-companion split-textbook --help` | 查看 B 的教材 PDF 切段、倒序页码矫正与核对清单命令 |
+| `uv run pytest tests/knowledge -q` | 运行知识点模型、关键词查询、关系校验与 Catalog 投影测试 |
 
 `seed-demo` 只接受标记为 `synthetic` 的样例文件，不会导入赛题原始数据。
 
 实测版本：Python 3.12.14、fastapi 0.165.0、uvicorn 0.54.0、sqlalchemy 2.1.9、alembic 1.20.1、pydantic 2.14.3、pydantic-settings 2.16.3、pandas 2.3.3、httpx 0.28.1、pytest 9.2.0。以 `uv.lock` 为准。
+
+## 知识点图谱与 B 方案的衔接
+
+任务1的知识点处理采用增量边界，不修改既有 HTTP 接口、共享契约、B/C 纯函数签名或数据库迁移：
+
+```text
+PDF/图片
+  -> B: split_textbook（章/节切段、文件页/印刷页映射、连续性检查）
+  -> A: knowledge.ingest（知识点候选、关键词索引、章节页码定位）
+  -> A/C: 关系候选与题目/材料标注（均需人工核对）
+  -> Catalog 投影（verified 关系才进入正式目录）
+```
+
+B 的 `split_textbook` 是“在哪里、哪一页、属于哪一节”的基础处理，不负责判断知识点关系；`src/study_companion/knowledge/ingest.py` 只读取并复用它的切段和页码结果。知识图谱里的 `KnowledgePoint` 比赛题 `Indicator` 更细：知识点需要后续人工标注到指标，才能投影到现有 `Catalog`。
+
+带文字层的教材 PDF 使用 `pypdf`。扫描 PDF 或图片可通过可选的 RapidOCR 在本地离线识别；OCR 低置信度页仍需人工看图，资料不会自动上传到远程服务。真实教材和赛题数据只放在本地 `data/`，不提交仓库。
+
+更完整的边界、四种关系定义、自动入库流程和适配说明见[18号知识点图谱设计](docs/team/18_知识点图谱与自动入库设计.md)。
 
 ## 从哪里开始
 
