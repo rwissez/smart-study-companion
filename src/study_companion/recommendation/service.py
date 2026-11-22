@@ -27,6 +27,8 @@ from study_companion.contracts import (
     ValidationResult,
 )
 
+from study_companion.recommendation.leak_check import check_hint
+
 RULE_VERSION = "c-rules-v1"
 
 # 1a 需要解答过程信号：B 的 finding description 引用了过程事实才算"有思路"
@@ -452,6 +454,7 @@ def validate_recommendations(
     - activities 顺序从 1 连续递增，提示与观察点非空
     - 调整条件非空
     - 空话禁令：理由必须落到材料编号或诊断编号
+    - 提示泄答拦截（15 号文档 §六）：HINT_LEAKS_ANSWER，命中不得以 validated 状态保存
     """
     issues: list[ValidationIssue] = []
 
@@ -553,6 +556,23 @@ def validate_recommendations(
                         recommendation_id=rid,
                     )
                 )
+            elif material is not None:
+                # 15 号文档 §六：提示不泄答的程序校验，保存前代码拦截
+                for hint_idx, hint_text in enumerate(act.hint_levels, start=1):
+                    leak = check_hint(
+                        material.reference_answer, material.reference_explanation, hint_text
+                    )
+                    if leak:
+                        issues.append(
+                            ValidationIssue(
+                                code="HINT_LEAKS_ANSWER",
+                                message=(
+                                    f"建议 {rid} 活动 {act.order} 第 {hint_idx} 级提示{leak}；"
+                                    "该建议应置 review_status=needs_review，不得以 validated 状态保存"
+                                ),
+                                recommendation_id=rid,
+                            )
+                        )
             if not act.observation_points:
                 issues.append(
                     ValidationIssue(

@@ -271,3 +271,33 @@ def test_validate_rejects_material_out_of_scope():
     result = validate_recommendations(bad_bundle, analysis, catalog)
     assert not result.valid
     assert any(i.code == "MATERIAL_SCOPE_INVALID" for i in result.issues)
+
+
+def test_validate_rejects_hint_leaking_answer():
+    # 15 号文档 §六：提示泄答保存前代码拦截（HINT_LEAKS_ANSWER）
+    bundle, analysis, catalog = _valid_bundle()
+    leaky_catalog = catalog.model_copy(
+        update={
+            "materials": [
+                m.model_copy(update={"reference_answer": "x<4"}) for m in catalog.materials
+            ]
+        }
+    )
+    leaky_act = bundle.recommendations[0].activities[0].model_copy(
+        update={"hint_levels": ["直接看答案：2x+3<11 的解是 x<4"]}
+    )
+    bad_rec = bundle.recommendations[0].model_copy(update={"activities": [leaky_act]})
+    bad_bundle = bundle.model_copy(update={"recommendations": [bad_rec]})
+    result = validate_recommendations(bad_bundle, analysis, leaky_catalog)
+    assert not result.valid
+    leak_issues = [i for i in result.issues if i.code == "HINT_LEAKS_ANSWER"]
+    assert leak_issues, [i.code for i in result.issues]
+    assert "needs_review" in leak_issues[0].message
+
+
+def test_validate_accepts_hints_when_no_reference_answer():
+    # 材料无参考答案时泄答检查静默跳过，正常建议不受影响
+    bundle, analysis, catalog = _valid_bundle()
+    result = validate_recommendations(bundle, analysis, catalog)
+    assert result.valid, [i.message for i in result.issues]
+    assert not any(i.code == "HINT_LEAKS_ANSWER" for i in result.issues)
