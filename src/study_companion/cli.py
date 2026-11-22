@@ -293,6 +293,68 @@ def export_contracts(target: Path = CONTRACTS_DIR) -> list[Path]:
 
 
 # --------------------------------------------------------------------------- #
+# split-textbook
+# --------------------------------------------------------------------------- #
+
+
+def split_textbook_command(pdfs: list[Path], out: Path) -> dict[str, Any]:
+    """切分教材切片 PDF，产出 materials_index / page_mapping / catalog_review 草稿。
+
+    半自动流程：全部条目 verification_status=unverified，A 人工核对后置 verified。
+    不写数据库；产出仅落在输出目录，走 A 的目录流程入库。
+    """
+    from study_companion.analysis.textbook_split import split_textbook
+
+    if not pdfs:
+        raise SystemExit("请提供至少一个 PDF 文件")
+
+    all_materials: list[dict[str, Any]] = []
+    review_lines: list[str] = [
+        "# 教材切分核对清单（脚本自动生成草稿）",
+        "",
+        "> 全部条目 verification_status=unverified。逐条核对页码与章节归属后，",
+        "> 将 materials_index.json 中对应条目改为 verified，并在此文件记录核对结论。",
+        "",
+    ]
+    summary: dict[str, Any] = {"files": [], "total_sections": 0}
+
+    for pdf in pdfs:
+        result = split_textbook(pdf)
+        all_materials.extend(result["materials"])
+        notes = result["review_notes"]
+        summary["files"].append(
+            {
+                "pdf": pdf.name,
+                "file_pages": result["total_file_pages"],
+                "chapters": result["chapters_seen"],
+                "sections": len(result["materials"]),
+                "continuity_issues": len(notes["page_continuity_issues"]),
+            }
+        )
+        summary["total_sections"] += len(result["materials"])
+
+        review_lines += [
+            f"## {pdf.name}（{result['total_file_pages']} 文件页）",
+            "",
+            f"- 识别到的章：{'、'.join(result['chapters_seen']) or '（无）'}",
+            f"- 切分出小节：{len(result['materials'])} 个",
+        ]
+        if notes["page_continuity_issues"]:
+            review_lines.append("- ⚠️ 页码不连续（需对照页面图像确认）：")
+            review_lines += [f"  - {msg}" for msg in notes["page_continuity_issues"]]
+        if notes["sections_without_page_number"]:
+            review_lines.append("- ⚠️ 以下小节起始页无页码（printed_page 为 null，未猜页数）：")
+            review_lines += [f"  - {s}" for s in notes["sections_without_page_number"]]
+        review_lines.append("")
+
+        _write_json(out / "page_mappings" / f"{pdf.stem}.json", result["page_mapping"])
+
+    _write_json(out / "materials_index.json", {"materials": all_materials})
+    (out / "catalog_review.md").write_text("\n".join(review_lines), encoding="utf-8", newline="\n")
+    return summary
+
+
+# --------------------------------------------------------------------------- #
 # entry point
 # --------------------------------------------------------------------------- #
 
@@ -309,6 +371,15 @@ def main(argv: list[str] | None = None) -> int:
     export = sub.add_parser("export-contracts", help="导出 JSON Schema、OpenAPI 与示例")
     export.add_argument("--out", type=Path, default=CONTRACTS_DIR)
 
+    split = sub.add_parser(
+        "split-textbook", help="切分教材切片PDF为目录草稿（半自动，产出unverified待A核对）"
+    )
+    split.add_argument("pdfs", type=Path, nargs="+", help="教材切片PDF文件路径（可多个）")
+    split.add_argument(
+        "--out", type=Path, default=REPO_ROOT / "data" / "catalogs" / "catalog-1",
+        help="输出目录（默认 data/catalogs/catalog-1/）",
+    )
+
     args = parser.parse_args(argv)
 
     if args.command == "seed-demo":
@@ -319,6 +390,11 @@ def main(argv: list[str] | None = None) -> int:
     if args.command == "export-contracts":
         written = export_contracts(args.out)
         print(f"导出 {len(written)} 个文件到 {args.out}")
+        return 0
+
+    if args.command == "split-textbook":
+        summary = split_textbook_command(args.pdfs, args.out)
+        print(json.dumps(summary, ensure_ascii=False, indent=2))
         return 0
 
     parser.error("unknown command")
