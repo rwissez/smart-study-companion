@@ -172,8 +172,9 @@ def test_recommend_1a_path():
 def test_recommend_1b_declares_revision_limit():
     bundle = recommend_rules(make_analysis([finding_1b()]), make_catalog(), make_context(), RecommendationConfig())
     rec = bundle.recommendations[0]
-    # 回头题限制必须如实声明，不编造原题引用
-    assert "服务端" in rec.reason or "教师可先从记录列表指定" in rec.reason
+    # 回头题限制必须如实声明，不编造原题引用；措辞遵循话术四条（无内部术语）
+    assert "教师可在记录列表中指定" in rec.reason
+    assert "服务端" not in rec.reason
     # 扶 + 练：扶用卡片/教材，练用题目
     assert rec.activities[0].material_id in {"M003", "M004"}
     assert rec.activities[1].material_id in {"M001", "M002"}

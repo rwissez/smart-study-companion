@@ -211,7 +211,7 @@ def _build_type3(finding: Finding, catalog: Catalog, rec_id: str) -> Recommendat
 
 
 def _build_type2(finding: Finding, catalog: Catalog, rec_id: str) -> Recommendation:
-    """表现较好：两级迁移。先知识迁移（变式），再思想迁移（总结性小任务，不刷题）。"""
+    """表现较好：两级迁移。先知识迁移（变式），再思想辨识选择（学生选、学伴解释，不刷题）。"""
     indicator_id = finding.indicator_id
     variants = _materials_for(catalog, indicator_id, (_PRACTICE_TYPE,), 2)
     _require_materials(catalog, indicator_id, variants)
@@ -233,13 +233,18 @@ def _build_type2(finding: Finding, catalog: Catalog, rec_id: str) -> Recommendat
             _activity(
                 variants[1],
                 2,
-                purpose="思想迁移：总结性小任务，从做过的题里长出数学思想（数形结合/分类讨论/化归）",
+                purpose="思想迁移：思想辨识选择（低频环节：同一思想每周至多出现一次，三个思想可轮换），学生从三个数学思想中选出他认为最核心的一个，学伴解释他的选择",
                 hints=(
-                    "你解过的这些题最后都变成了什么样子？解不等式是在往什么方向变？",
+                    # 题干示例绑定 synthetic-v1 材料目录（M001/M006），目录更换需同步调整
+                    "这些题你都解对了。有个有意思的事想跟你确认：解 2x+3<11 时最后"
+                    "变成了 x>4，解 ax<b 时要先想 a 是正还是负。你觉得这些做法里"
+                    "反复出现的是哪一个？A. 化归：把没见过的题，变成会做的旧题；"
+                    "B. 数形结合：用图来想数的问题；C. 分类讨论：情况不止一种时，"
+                    "分开想。选一个就行。",
                 ),
                 points=(
-                    "能否说出思想名称及适用时机",
-                    "能否举出自己经历过的例子",
+                    "选择结果本身（三个思想均真实存在，无错误选项）",
+                    "学伴反馈是否把三个思想都覆盖到",
                 ),
             )
         )
@@ -249,18 +254,29 @@ def _build_type2(finding: Finding, catalog: Catalog, rec_id: str) -> Recommendat
         finding_ids=[finding.finding_id],
         goal=f"在指标 {indicator_id} 上完成知识与思想两级迁移，说清每步依据",
         reason=(
-            f"诊断 {finding.finding_id} 判定表现较好。按剧本不追加刷题量："
-            "先用变式确认知识迁移，再用总结性小任务引导思想迁移。"
+            f"诊断 {finding.finding_id} 判定表现较好。"
+            "不追加刷题量：先用变式确认知识迁移，"
+            "再用思想辨识选择（学生选、学伴解释）落实思想迁移。"
+            "思想辨识为低频环节：同一思想每周至多一次，"
+            "三个思想可轮换；学生表现持续稳定的不重复安排。"
         ),
         activities=activities,
         adjustment_conditions=[
             AdjustmentCondition(
-                observable_condition="能说出思想并举出自己的例子",
-                next_action="本指标收尾，记录为亮点证据（教师端展示）",
+                observable_condition="完成选择，反馈已呈现",
+                next_action="本指标收尾，选择记录为亮点证据（教师端展示）",
             ),
             AdjustmentCondition(
-                observable_condition="会做但说不出思想",
-                next_action="教师端标注建议面谈追问，学生端不硬灌名词",
+                observable_condition="学生对思想有进一步疑问",
+                next_action="学伴顺势延伸讨论，不设为必经环节；持续困惑则建议面谈",
+            ),
+            AdjustmentCondition(
+                observable_condition="同一思想本周已出现过",
+                next_action="跳过该思想的本轮辨识，可轮换另一思想或直接收尾",
+            ),
+            AdjustmentCondition(
+                observable_condition="学生表现持续稳定无新变化",
+                next_action="不重复安排任务，仅更新亮点证据",
             ),
             AdjustmentCondition(
                 observable_condition="变式题出错",
@@ -297,9 +313,9 @@ def _build_1a(finding: Finding, catalog: Catalog, rec_id: str) -> Recommendation
         finding_ids=[finding.finding_id],
         goal=f"按修正后思路独立完成指标 {indicator_id} 的同类题，并保持代入检验习惯",
         reason=(
-            f"诊断 {finding.finding_id} 显示思路完整、失败点集中。"
-            "按剧本 1a 采用倾听式引导（复述确认→定位分岔→引导自撞→修正重走，"
-            "见 prompts/diagnosis.md 流程），建议只安排巩固，不追加新课。"
+            f"诊断 {finding.finding_id}：{finding.description}。"
+            "思路完整、失败点集中，按倾听式四步引导"
+            "（复述确认→定位分岔→引导自撞→修正重走），只安排巩固，不追加新课。"
         ),
         activities=activities,
         adjustment_conditions=[
@@ -367,10 +383,10 @@ def _build_1b(finding: Finding, catalog: Catalog, rec_id: str, config: Recommend
         finding_ids=[finding.finding_id],
         goal=f"在指标 {indicator_id} 上补齐基础台阶，独立完成求解并自查",
         reason=(
-            f"诊断 {finding.finding_id} 判定需练习且无可用思路信号。"
-            "按剧本 1b 采用递减干预扶练：扶的目的是尽早放手，接住即进入独立练习。"
-            "重做原错题（回头）需要原题材料定位，建议生成时以诊断引用记录为准由服务端"
-            "补充记录与材料的关联（已知契约缺口），教师可先从记录列表指定。"
+            f"诊断 {finding.finding_id}：{finding.description}。"
+            "采用递减干预扶练：先扶助后练习，接住即放手。"
+            "系统默认安排同类题；若想让学生重做自己的原错题，"
+            "教师可在记录列表中指定那道题。"
         ),
         activities=activities,
         adjustment_conditions=[
