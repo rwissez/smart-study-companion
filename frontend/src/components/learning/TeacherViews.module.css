@@ -1,0 +1,68 @@
+.layout { display:grid; grid-template-columns:minmax(300px, 0.9fr) minmax(440px, 1.45fr); gap:16px; align-items:start; }
+.profileLayout { display:grid; grid-template-columns:minmax(360px, 1fr) minmax(360px, 1fr); gap:16px; align-items:start; }
+.column { display:flex; flex-direction:column; gap:16px; min-width:0; }
+.panel { background:white; border:1px solid #e0e7f2; border-radius:12px; padding:20px; min-width:0; }
+.panelHeader { display:flex; justify-content:space-between; align-items:center; gap:12px; flex-wrap:wrap; margin-bottom:16px; }
+.panelHeader h2 { font-size:17px; margin:0; }
+.panelHeader a { font-size:13px; }
+.muted { color:#738198; font-size:13px; }
+.stats { display:grid; grid-template-columns:1fr 1fr; gap:10px; margin:14px 0 20px; }
+.stat { background:#f5f8fd; border:1px solid #e9eef7; border-radius:9px; padding:12px; color:#66758d; font-size:12px; }
+.stat strong { display:block; color:#245de0; font-size:22px; margin-top:3px; }
+.barItem { margin:14px 0; font-size:13px; }
+.barTop { display:flex; justify-content:space-between; gap:8px; margin-bottom:6px; }
+.track { height:8px; background:#edf1f7; border-radius:9px; overflow:hidden; }
+.fill { height:100%; background:#4d79e7; border-radius:9px; }
+.grid { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:12px; }
+.student { display:flex; flex-direction:column; align-items:flex-start; text-align:left; justify-content:space-between; gap:10px; min-height:112px; padding:14px; border:1px solid #e2e9f3; border-radius:9px; background:#fbfcff; color:#172b42; cursor:pointer; }
+.student:hover { border-color:#7699ee; background:#f3f7ff; }
+.student strong { font-size:14px; overflow-wrap:anywhere; }
+.student span { color:#738198; font-size:12px; }
+.student em { margin-left:auto; color:#2463eb; font-style:normal; font-size:18px; }
+.tabs { display:flex; gap:6px; flex-wrap:wrap; }
+.tab { border:0; background:#f2f5fb; padding:7px 12px; border-radius:6px; color:#61718a; }
+.tabActive { background:#2764e9; color:white; }
+.head { display:flex; align-items:center; justify-content:space-between; gap:12px; flex-wrap:wrap; }
+.head h2 { margin:0; font-size:22px; }
+.breadcrumbs { color:#8390a3; font-size:12px; margin-bottom:5px; }
+.finding { padding:12px 0; border-top:1px solid #edf1f6; }
+.finding:first-of-type { border-top:0; }
+.finding p { margin:5px 0; font-size:13px; line-height:1.6; }
+.findingTop { display:flex; justify-content:space-between; gap:12px; align-items:center; }
+.findingTop strong { font-size:13px; }
+.findingTop button { border:0; background:none; color:#2862db; font-size:13px; cursor:pointer; }
+.radarContent { min-width:0; }
+.radarChart { min-width:0; }
+.radarEmpty { height:230px; display:flex; flex-direction:column; align-items:center; justify-content:center; color:#8b9ab0; font-size:13px; }
+.radarOutline { font-size:70px; line-height:1; color:#d8e2f2; }
+.metricRows { border-top:1px solid #edf1f6; }
+.metricRow { display:grid; grid-template-columns:minmax(0,1fr) auto auto; gap:14px; padding:10px 0; align-items:center; border-bottom:1px solid #edf1f6; font-size:12px; }
+.metricRow span:last-child { color:#8a96a8; }
+.metaDetail { margin-top:12px; font-size:12px; color:#718099; }
+.metaDetail summary { cursor:pointer; color:#2463eb; }
+.metaDetail p { line-height:1.6; }
+.pageTabs { display:flex; gap:24px; border-bottom:1px solid #e3eaf4; }
+.pageTabs button { padding:12px 4px; border:0; background:none; color:#79869b; cursor:pointer; }
+.pageTabs .activePageTab { color:#245fe7; border-bottom:2px solid #245fe7; font-weight:600; }
+.network { position:relative; padding:24px; display:grid; gap:14px; }
+.topic { border:1px solid #dbe7fb; background:#f6f9ff; color:#2456a0; padding:14px; border-radius:10px; text-align:left; cursor:pointer; }
+.topicActive { border-color:#7ca2ef; background:#eaf1ff; }
+.networkRow { display:flex; align-items:center; min-width:0; }
+.networkRow .topic { width:220px; flex-shrink:0; }
+.networkLine { width:48px; height:1px; background:#bfcfe8; flex-shrink:0; }
+.networkIndicators { display:flex; flex-wrap:wrap; gap:8px; }
+.networkIndicator { padding:8px 12px; color:#465a76; border:1px solid #e3e9f2; background:#fff; border-radius:16px; font-size:12px; cursor:pointer; }
+@media(max-width:1200px) { .layout,.profileLayout { grid-template-columns:1fr; } }
+@media(max-width:800px) { .grid { grid-template-columns:repeat(2,minmax(0,1fr)); } .panel { padding:15px; } .networkRow { align-items:flex-start; flex-direction:column; gap:8px; } .networkRow .topic { width:100%; } .networkLine { display:none; } .network { padding:8px; } }
+
+/* 视觉层级与间距沿用确认的蓝白工作台。 */
+.layout { grid-template-columns:minmax(320px, .78fr) minmax(490px, 1.22fr); gap:14px; }
+.profileLayout { gap:14px; }
+.panel { border-color:#dce5f3; border-radius:11px; padding:20px; }
+.panelHeader h2 { font-size:18px; color:#172741; }
+.head h2 { font-size:25px; color:#14233a; }
+.grid { gap:10px; }
+.student { min-height:112px; background:#f9fbff; padding:16px; }
+.student strong { font-size:15px; }
+.tab { cursor:pointer; }
+@media(max-width:1200px) { .layout,.profileLayout { grid-template-columns:1fr; } }

@@ -1,0 +1,7 @@
+.scope { display:flex; align-items:center; gap:10px; flex-wrap:wrap; }
+.settings { position:relative; }
+.settings summary, .node { min-height:38px; display:flex; align-items:center; gap:8px; padding:0 12px; border:1px solid #dbe4f2; border-radius:8px; background:#fff; color:#40516b; font-size:13px; }
+.settings summary { cursor:pointer; list-style:none; } .settings summary::after { content:"⌄"; margin-left:8px; }
+.popover { position:absolute; top:44px; right:0; z-index:20; width:250px; padding:16px; display:grid; gap:12px; background:#fff; border:1px solid #dbe4f2; border-radius:10px; box-shadow:0 12px 30px #263b5f20; }
+.popover label { display:grid; gap:6px; color:#66758d; font-size:12px; } .popover select { width:100%; padding:8px; border:1px solid #dbe4f2; border-radius:6px; background:white; } .popover p { color:#66758d; font-size:12px; margin:0; line-height:1.5; }
+.node select { max-width:215px; border:0; background:transparent; color:#1a2d48; font:inherit; outline-offset:3px; }

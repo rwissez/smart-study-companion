@@ -1,0 +1,37 @@
+{
+  "name": "smart-study-companion-frontend",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "description": "智慧学伴 Web 双端界面（D 模块）",
+  "engines": {
+    "node": ">=22.12"
+  },
+  "scripts": {
+    "dev": "vite --host 127.0.0.1",
+    "build": "tsc --noEmit && vite build",
+    "preview": "vite preview --host 127.0.0.1",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest",
+    "test:e2e": "node scripts/verify-pages.mjs"
+  },
+  "dependencies": {
+    "@tanstack/react-query": "^5.62.7",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "react-router-dom": "^6.28.0",
+    "recharts": "^2.13.3"
+  },
+  "devDependencies": {
+    "@testing-library/jest-dom": "^6.6.3",
+    "@testing-library/react": "^16.1.0",
+    "@types/react": "^18.3.12",
+    "@types/react-dom": "^18.3.1",
+    "@vitejs/plugin-react": "^4.3.4",
+    "jsdom": "^25.0.1",
+    "playwright-core": "^1.65.1",
+    "typescript": "^5.7.2",
+    "vite": "^6.0.5",
+    "vitest": "^2.1.8"
+  }
+}

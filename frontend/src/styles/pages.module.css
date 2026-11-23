@@ -1,0 +1,173 @@
+/* 页面级布局 */
+
+.identityWrap {
+  min-height: 100vh;
+  max-width: 1040px;
+  margin: 0 auto;
+  padding: 64px 24px;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-6);
+}
+
+.identityHead {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.identityGrid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-4);
+}
+
+.section {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.sectionHead {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-3);
+  flex-wrap: wrap;
+}
+
+.split {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 320px;
+  gap: var(--space-4);
+  align-items: start;
+}
+
+.splitWide {
+  display: grid;
+  grid-template-columns: minmax(0, 2fr) minmax(0, 1fr);
+  gap: var(--space-4);
+  align-items: start;
+}
+
+.grid2 {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-3);
+}
+
+.grid3 {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: var(--space-3);
+}
+
+.classList {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: var(--space-3);
+}
+
+.curriculum {
+  display: grid;
+  grid-template-columns: 240px minmax(0, 1fr);
+  gap: var(--space-4);
+  align-items: start;
+}
+
+.topicList {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.topicButton {
+  width: 100%;
+  text-align: left;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  border-radius: var(--radius-sm);
+  padding: 10px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.topicButtonActive {
+  border-color: var(--primary);
+  box-shadow: 0 0 0 1px var(--primary);
+}
+
+.indicatorList {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+.studentHero {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: var(--space-4);
+  align-items: center;
+}
+
+.mono {
+  font-family: var(--font-mono);
+  font-size: 13px;
+}
+
+.fileGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: var(--space-3);
+}
+
+.fileSlot {
+  border: 1px dashed var(--border-strong);
+  border-radius: var(--radius-sm);
+  padding: var(--space-3);
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  background: var(--surface);
+}
+
+.traceList {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+@media (max-width: 1199px) {
+  .split,
+  .splitWide,
+  .curriculum {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .grid3 {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 767px) {
+  .identityWrap {
+    padding: 32px 16px;
+  }
+
+  .identityGrid,
+  .grid2,
+  .grid3 {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .studentHero {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
