@@ -41,7 +41,7 @@
       },
       "expect": {
         "kind": "1a",
-        "reason_contains": ["倾听式"],
+        "reason_contains": ["回看已有步骤"],
         "activity_materials_any": ["M001", "M002"]
       }
     },
@@ -86,7 +86,7 @@
       },
       "expect": {
         "kind": "1b",
-        "reason_contains": ["递减干预"],
+        "reason_contains": ["再独立做题"],
         "support_first": ["M003", "M004"]
       }
     },
@@ -130,7 +130,7 @@
       },
       "expect": {
         "kind": "type2",
-        "reason_contains": ["思想迁移"],
+        "reason_contains": ["换一道题"],
         "require_thinking_task": true
       }
     },
@@ -171,7 +171,7 @@
       },
       "expect": {
         "kind": "type3",
-        "reason_contains": ["不输出会/不会结论"]
+        "reason_contains": ["不足以判断表现"]
       }
     }
   ]

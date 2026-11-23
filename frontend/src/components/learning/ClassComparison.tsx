@@ -10,7 +10,7 @@ import {
   YAxis,
 } from "recharts";
 import type { ClassResult, Metric } from "../../api/types";
-import { formatFraction, formatNumber, formatRatio } from "../../lib/format";
+import { formatFraction, formatMetricName, formatNumber, formatRatio } from "../../lib/format";
 import styles from "../../styles/ui.module.css";
 
 interface Props {
@@ -39,8 +39,8 @@ export function ClassComparison({ left, right, leftName, rightName, indicatorNam
     left.dataset_id === right.dataset_id && left.catalog_version === right.catalog_version;
   const rows = sameScope ? Array.from(byKey, ([key, metric]) => ({
     key, name: metric.scope.indicator_id
-      ? `${metric.name} · ${indicatorNames?.[metric.scope.indicator_id] ?? metric.scope.indicator_id}`
-      : metric.name,
+      ? `${formatMetricName(metric.name)} · ${indicatorNames?.[metric.scope.indicator_id] ?? metric.scope.indicator_id}`
+      : formatMetricName(metric.name),
     left: matching(left.metrics, key), right: matching(right.metrics, key),
   })) : [];
 

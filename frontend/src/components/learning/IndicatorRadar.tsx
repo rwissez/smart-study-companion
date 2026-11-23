@@ -4,7 +4,11 @@ import styles from "./TeacherViews.module.css";
 
 /** 只画具有相同口径、有效值及不同指标的结果；缺失值保持缺失。 */
 export function IndicatorRadar({ metrics, names }: { metrics: Metric[]; names: Record<string, string> }) {
-  const ratios = metrics.filter((item) => item.unit === "ratio" && item.name === "得分率" && item.scope.indicator_id);
+  const ratios = metrics.filter((item) =>
+    item.unit === "ratio" &&
+    (item.name === "valid_score_ratio" || item.name === "得分率") &&
+    item.scope.indicator_id
+  );
   const unique = ratios.filter((item) => ratios.filter((other) => other.scope.indicator_id === item.scope.indicator_id).length === 1);
   const available = unique.filter((item) => item.value !== null);
   const data = available.map((item) => ({

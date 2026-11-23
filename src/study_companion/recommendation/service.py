@@ -29,7 +29,7 @@ from study_companion.contracts import (
 
 from study_companion.recommendation.leak_check import check_hint
 
-RULE_VERSION = "c-rules-v1"
+RULE_VERSION = "c-rules-v2"
 
 # 1a 需要解答过程信号：B 的 finding description 引用了过程事实才算"有思路"
 PROCESS_SIGNALS: tuple[str, ...] = ("过程", "步骤")
@@ -43,7 +43,6 @@ MISSING_PROCESS_MARKERS: tuple[str, ...] = (
 )
 # 空话禁令（05：空泛"多练习"不能验收）
 VAGUE_PHRASES: tuple[str, ...] = ("多练习", "加强巩固", "认真听讲")
-_MIN_REASON_LEN = 12
 
 # 材料偏好：扶用卡片/教材，练与巩固用题目
 _SUPPORT_TYPES = ("card", "textbook")
@@ -136,15 +135,6 @@ def _materials_for(
     )
 
 
-def _require_materials(catalog: Catalog, indicator_id: str, materials: list[Material]) -> None:
-    if not materials:
-        raise DomainError(
-            "MATERIAL_NOT_FOUND",
-            f"指标 {indicator_id} 在材料目录中无适配材料，无法生成建议",
-            [{"field": "indicator_id", "reason": "目录中无适配材料"}],
-        )
-
-
 def _activity(
     material: Material,
     order: int,
@@ -166,234 +156,123 @@ def _activity(
 # 四类建议生成（剧本 v4）
 # ---------------------------------------------------------------------------
 
-def _build_type3(finding: Finding, catalog: Catalog, rec_id: str) -> Recommendation:
-    """证据不足：观察用题组，不下结论（剧本：先观察再说话）。"""
-    indicator_id = finding.indicator_id
-    materials = _materials_for(catalog, indicator_id, (_PRACTICE_TYPE,), 3)
-    _require_materials(catalog, indicator_id, materials)
+def _practice_cue(requirement: str) -> str:
+    if "交集" in requirement:
+        return "先分别求出两个不等式的解集，再在数轴上找同时满足的部分。"
+    if "实际" in requirement and ("列" in requirement or "解释" in requirement):
+        return "先说明未知量表示什么、单位是什么，再列出数量关系，最后用原题条件检查结果。"
+    if "不等式" in requirement:
+        return "逐行写出变形；两边同乘或同除时，先看这个数是正数还是负数。"
+    if "消元" in requirement:
+        return "先比较两个方程中同一个未知数的系数，选一个较容易消去的未知数。"
+    if "同类项" in requirement or "括号" in requirement:
+        return "先用笔标出括号前的符号，再把字母和指数都相同的项划到一起。"
+    if "代入" in requirement or "数量关系" in requirement:
+        return "先写出字母代表的量和它们之间的关系，再把给定值代进去分步计算。"
+    if "等式" in requirement or "方程" in requirement:
+        return "每变形一次，写清等式两边做了什么；求得结果后代回原式检查。"
+    return "先圈出题目给出的条件和要求，再写出第一步。"
 
-    activities = [
-        _activity(
-            m,
-            i,
-            purpose=f"观察用题组第 {i} 题：收集证据，不判定会或不会",
-            hints=("这几道小题帮我们看看你的思路，不着急，做完可以自己检查",),
-            points=(
-                "完成度与过程完整度",
-                f"错误是否集中在同一位置（对照诊断 {finding.finding_id}）",
-            ),
-        )
-        for i, m in enumerate(materials, start=1)
-    ]
-    return Recommendation(
-        recommendation_id=rec_id,
-        indicator_id=indicator_id,
-        finding_ids=[finding.finding_id],
-        goal=f"针对指标 {indicator_id} 补齐观察证据，再定学习安排",
-        reason=(
-            f"诊断 {finding.finding_id} 判定证据不足（{finding.evidence_status}）。"
-            "按剧本红线不输出会/不会结论，先安排覆盖不同变式的观察题组收集证据。"
-        ),
-        activities=activities,
-        adjustment_conditions=[
-            AdjustmentCondition(
-                observable_condition="题组证据齐备",
-                next_action="按证据归类到 1a/1b/类型二并重新生成建议",
-            ),
-            AdjustmentCondition(
-                observable_condition="学生未完成观察题组",
-                next_action="记录 limitation，不强行归因，教师端如实呈现该生未参与本轮观察",
-            ),
-        ],
-        review_status="draft",
-        generation_method="rule",
+
+def _practice(material: Material, order: int, purpose: str, cue: str) -> Activity:
+    return _activity(
+        material, order, purpose,
+        (cue,
+         "做完后对照题目条件和每一步的计算，检查有没有漏写或抄错。"),
+        ("查看学生能否独立写出第一步，并说明每一步用了哪个条件。",),
     )
 
 
-def _build_type2(finding: Finding, catalog: Catalog, rec_id: str) -> Recommendation:
-    """表现较好：两级迁移。先知识迁移（变式），再思想迁移（总结性小任务，不刷题）。"""
+def _quantity_exercises(questions: list[Material]) -> tuple[Material, Material] | None:
+    expression = next((item for item in questions if "表示" in item.content and "值是多少" not in item.content), None)
+    evaluation = next((
+        item for item in questions if item != expression
+        and any(word in item.content for word in ("的值", "求值", "代入"))
+    ), None)
+    return (expression, evaluation) if expression and evaluation else None
+
+
+def _build_recommendation(
+    finding: Finding,
+    catalog: Catalog,
+    rec_id: str,
+    config: RecommendationConfig,
+    attempted: set[str],
+) -> Recommendation:
     indicator_id = finding.indicator_id
-    variants = _materials_for(catalog, indicator_id, (_PRACTICE_TYPE,), 2)
-    _require_materials(catalog, indicator_id, variants)
-
-    activities = [
-        _activity(
-            variants[0],
-            1,
-            purpose="知识迁移：变式或综合题，检验换问法后是否仍能识别",
-            hints=("这道题和你之前做的比，有什么不一样的地方",),
-            points=(
-                "是否主动识别变化点",
-                "每步依据哪条性质说得清",
-            ),
-        )
-    ]
-    if len(variants) > 1:
-        activities.append(
-            _activity(
-                variants[1],
-                2,
-                purpose="思想迁移：总结性小任务，从做过的题里长出数学思想（数形结合/分类讨论/化归）",
-                hints=(
-                    "你解过的这些题最后都变成了什么样子？解不等式是在往什么方向变？",
-                ),
-                points=(
-                    "能否说出思想名称及适用时机",
-                    "能否举出自己经历过的例子",
-                ),
-            )
-        )
-    return Recommendation(
-        recommendation_id=rec_id,
-        indicator_id=indicator_id,
-        finding_ids=[finding.finding_id],
-        goal=f"在指标 {indicator_id} 上完成知识与思想两级迁移，说清每步依据",
-        reason=(
-            f"诊断 {finding.finding_id} 判定表现较好。按剧本不追加刷题量："
-            "先用变式确认知识迁移，再用总结性小任务引导思想迁移。"
-        ),
-        activities=activities,
-        adjustment_conditions=[
-            AdjustmentCondition(
-                observable_condition="能说出思想并举出自己的例子",
-                next_action="本指标收尾，记录为亮点证据（教师端展示）",
-            ),
-            AdjustmentCondition(
-                observable_condition="会做但说不出思想",
-                next_action="教师端标注建议面谈追问，学生端不硬灌名词",
-            ),
-            AdjustmentCondition(
-                observable_condition="变式题出错",
-                next_action="回落第一级补一道，思想任务顺延",
-            ),
-        ],
-        review_status="draft",
-        generation_method="rule",
-    )
-
-
-def _build_1a(finding: Finding, catalog: Catalog, rec_id: str) -> Recommendation:
-    """有思路但走不通：倾听式引导 + 巩固，不追加新课。"""
-    indicator_id = finding.indicator_id
-    consolidations = _materials_for(catalog, indicator_id, (_PRACTICE_TYPE,), 2)
-    _require_materials(catalog, indicator_id, consolidations)
-
-    activities = [
-        _activity(
-            m,
-            i,
-            purpose="按修正后思路独立完成同类题，并用代入检验自查（倾听式引导后的巩固）",
-            hints=("先独立完成，再把答案代回原式检查一遍",),
-            points=(
-                "修正点（如方向处理）是否稳定",
-                "检验是否主动发生",
-            ),
-        )
-        for i, m in enumerate(consolidations, start=1)
-    ]
-    return Recommendation(
-        recommendation_id=rec_id,
-        indicator_id=indicator_id,
-        finding_ids=[finding.finding_id],
-        goal=f"按修正后思路独立完成指标 {indicator_id} 的同类题，并保持代入检验习惯",
-        reason=(
-            f"诊断 {finding.finding_id} 显示思路完整、失败点集中。"
-            "按剧本 1a 采用倾听式引导（复述确认→定位分岔→引导自撞→修正重走，"
-            "见 prompts/diagnosis.md 流程），建议只安排巩固，不追加新课。"
-        ),
-        activities=activities,
-        adjustment_conditions=[
-            AdjustmentCondition(
-                observable_condition="巩固题全对",
-                next_action="记录修正证据，进入类型二两级迁移",
-            ),
-            AdjustmentCondition(
-                observable_condition="同类位置再次出错",
-                next_action="降级到 1b 递减干预，从对应性质补台阶",
-            ),
-        ],
-        review_status="draft",
-        generation_method="rule",
-    )
-
-
-def _build_1b(finding: Finding, catalog: Catalog, rec_id: str, config: RecommendationConfig) -> Recommendation:
-    """纯粹不懂：递减干预扶练。接住即放手，回头题受限在 reason 中如实声明。"""
-    indicator_id = finding.indicator_id
+    indicator = next((item.description for item in catalog.indicators if item.indicator_id == indicator_id), "这项学习要求")
+    kind = classify_finding(finding)
+    questions = _materials_for(catalog, indicator_id, (_PRACTICE_TYPE,), len(catalog.materials))
+    questions.sort(key=lambda material: (
+        not any(point.description == finding.rubric_focus for point in material.rubric_points),
+        material.material_id in attempted,
+    ))
     support = _materials_for(catalog, indicator_id, _SUPPORT_TYPES, 1)
-    practices = _materials_for(catalog, indicator_id, (_PRACTICE_TYPE,), 2)
-    _require_materials(catalog, indicator_id, practices)
-
     activities: list[Activity] = []
-    order = 1
-    if support:
-        activities.append(
-            _activity(
-                support[0],
-                order,
-                purpose="递减干预式扶助：从 L1 方向层开始，每层设探针，接住即放手",
-                hints=(
-                    "先回想一下，不等号两边同时加一个数，方向会不会变？",
-                    "学习卡热身题做完对答案卡片，卡哪道只追问那道",
-                    "完整讲解版例题（兜底层，用完即回探针）",
-                ),
-                points=(
-                    "最终接住的层级（L1/L2/L3）：层级越浅，后续练习提示上限越低",
-                ),
-            )
+
+    if kind == "type3":
+        goal = f"用短练习了解「{indicator}」的解题过程"
+        reason = "本次相关作答还不足以判断表现。先补做少量题，保留解题步骤，便于老师确认从哪里开始讲。"
+        actions = [("能独立完成并说清步骤", "老师结合新作答重新判断；如仍卡住，先讨论写不下去的那一步。")]
+        purposes = ["先独立完成，保留草稿；写不下去就在那一步停下并画圈。"] * 3
+    elif kind == "type2":
+        goal = f"在不同题目中运用「{indicator}」"
+        reason = "这项学习要求在本次测验中表现较好。用少量练习检查换一道题时是否仍能用对方法。"
+        actions = [("能独立完成并说清方法", "结束这组练习；若条件一变就出错，和老师对照两道题的区别。")]
+        purposes = ["独立完成这道题，并写下一条解题依据。", "完成后和上一题比较，说出两题共用的方法和各自不同的条件。"]
+    else:
+        goal = f"巩固「{indicator}」，独立完成并检查"
+        reason = "本次测验中，这项学习要求的得分偏低。先弄清怎么开始，再独立做题，看看是否还会在同一步卡住。"
+        actions = [("两道练习都能独立完成", "尝试换一道题，复述解题方法。"),
+                   ("仍需提示才能开始，或同一步再次卡住", "把草稿交给老师，一起找出需要补讲的步骤。")]
+        purposes = ["独立做题，逐行写出依据；卡住时先标记卡住的那一步。",
+                    "先不看提示，再做一道相关题；做完后检查结果是否符合原题条件。"]
+        if kind == "1a":
+            reason = "这次作答留下了解题过程。先回看已有步骤，找出自己说不清的一步，再独立完成同类题。"
+        if kind == "1b" and support:
+            activities.append(_activity(
+                support[0], 1, "先读这份学习材料，找出与下面练习有关的一条方法，用自己的话说一遍。",
+                ("先想一想，下面这道题的第一步能用到材料中的哪条方法？",),
+                ("能否合上材料，自己写出并解释第一步。",),
+            ))
+        if finding.rubric_focus:
+            reason = f"本次相关作答在「{finding.rubric_focus}」这一评分点失分。练习时把这一步单独写清，再检查整道题。"
+
+    paired = _quantity_exercises(questions) if kind in {"1a", "1b"} and "数量关系" in indicator and "代入" in indicator else None
+    if paired:
+        expression, evaluation = paired
+        activities.append(_practice(
+            expression, len(activities) + 1, "先写每个字母表示什么，再用代数式表示题目里的数量关系。",
+            "把题目里的各部分数量分别写出来，再想它们要相加、相减还是相乘。",
+        ))
+        activities.append(_practice(
+            evaluation, len(activities) + 1, "把题目给的数代进去，写出代入后的式子再计算，最后检查符号。",
+            "如果代入的是负数，先给它加括号，再按运算顺序计算。",
+        ))
+    else:
+        cue = _practice_cue(indicator)
+        for material, purpose in zip(questions, purposes):
+            activities.append(_practice(material, len(activities) + 1, purpose, cue))
+    if not activities:
+        activities.extend(
+            _activity(material, 1, "阅读相关例题并写下解法，与老师核对。",
+                      ("任选一个例子，先说清题目条件和要完成的任务。",),
+                      ("能否用自己的话复述例题第一步。",))
+            for material in support
         )
-        order += 1
-    for i, m in enumerate(practices, start=order):
-        activities.append(
-            _activity(
-                m,
-                i,
-                purpose="独立走完整流程，提示上限随扶助接住层级递减",
-                hints=(
-                    "解完以后，用自己的办法检查一遍",
-                    "把你的答案代回原式，看不等式还成立吗",
-                ),
-                points=(
-                    "失分位置是否修复",
-                    "需要的提示层是否比扶助阶段更浅",
-                ),
-            )
-        )
-    activities = activities[: config.max_activities]
+    if not activities:
+        reason += " 当前目录还没有匹配的材料，请老师先准备一道对应练习。"
+    for activity in activities:
+        activity.previously_attempted = activity.material_id in attempted
 
     return Recommendation(
-        recommendation_id=rec_id,
-        indicator_id=indicator_id,
-        finding_ids=[finding.finding_id],
-        goal=f"在指标 {indicator_id} 上补齐基础台阶，独立完成求解并自查",
-        reason=(
-            f"诊断 {finding.finding_id} 判定需练习且无可用思路信号。"
-            "按剧本 1b 采用递减干预扶练：扶的目的是尽早放手，接住即进入独立练习。"
-            "重做原错题（回头）需要原题材料定位，建议生成时以诊断引用记录为准由服务端"
-            "补充记录与材料的关联（已知契约缺口），教师可先从记录列表指定。"
-        ),
-        activities=activities,
+        recommendation_id=rec_id, indicator_id=indicator_id, finding_ids=[finding.finding_id],
+        goal=goal, reason=reason, activities=activities[:config.max_activities],
         adjustment_conditions=[
-            AdjustmentCondition(
-                observable_condition="回头重做原错题全对",
-                next_action="进入类型二两级迁移",
-            ),
-            AdjustmentCondition(
-                observable_condition="仍错",
-                next_action="记录新证据并提示教师介入",
-            ),
+            AdjustmentCondition(observable_condition=when, next_action=then) for when, then in actions
         ],
-        review_status="draft",
-        generation_method="rule",
+        review_status="draft", generation_method="rule",
     )
-
-
-_BUILDERS = {
-    "type3": lambda f, c, rid, cfg: _build_type3(f, c, rid),
-    "type2": lambda f, c, rid, cfg: _build_type2(f, c, rid),
-    "1a": lambda f, c, rid, cfg: _build_1a(f, c, rid),
-    "1b": _build_1b,
-}
 
 
 # ---------------------------------------------------------------------------
@@ -405,6 +284,8 @@ def recommend_rules(
     catalog: Catalog,
     context: RunContext,
     config: RecommendationConfig,
+    *,
+    attempted_material_ids: set[str] | None = None,
 ) -> RecommendationBundle:
     """基于已验证分析结果与材料目录，生成规则建议（剧本 v4 四类）。
 
@@ -421,9 +302,8 @@ def recommend_rules(
 
     recommendations: list[Recommendation] = []
     for seq, finding in enumerate(analysis.findings, start=1):
-        kind = classify_finding(finding)
         rec_id = f"rec-{analysis.student_id}-{analysis.node_id}-{finding.indicator_id}-{seq:02d}"
-        recommendations.append(_BUILDERS[kind](finding, catalog, rec_id, config))
+        recommendations.append(_build_recommendation(finding, catalog, rec_id, config, attempted_material_ids or set()))
 
     return RecommendationBundle(
         run_id=context.run_id,
@@ -453,7 +333,7 @@ def validate_recommendations(
     - 材料必须存在且适配该指标
     - activities 顺序从 1 连续递增，提示与观察点非空
     - 调整条件非空
-    - 空话禁令：理由必须落到材料编号或诊断编号
+    - 空话禁令：理由应具体，诊断通过结构化引用关联
     - 提示泄答拦截（15 号文档 §六）：HINT_LEAKS_ANSWER，命中不得以 validated 状态保存
     """
     issues: list[ValidationIssue] = []
@@ -466,7 +346,7 @@ def validate_recommendations(
         issues.append(
             ValidationIssue(code="CONTEXT_MISMATCH", message="建议包与分析结果的运行身份不一致")
         )
-    if bundle.student_id != analysis.student_id:
+    if bundle.student_id != analysis.student_id or bundle.node_id != analysis.node_id:
         issues.append(
             ValidationIssue(code="STUDENT_MISMATCH", message="建议包学生与分析结果学生不一致")
         )
@@ -483,7 +363,7 @@ def validate_recommendations(
                 issues.append(
                     ValidationIssue(
                         code="FINDING_REF_INVALID",
-                        message=f"建议 {rid} 引用的诊断 {fid} 不属于当前学生本次分析",
+                        message="建议引用了当前学生本次分析之外的诊断",
                         recommendation_id=rid,
                     )
                 )
@@ -492,39 +372,26 @@ def validate_recommendations(
             issues.append(
                 ValidationIssue(
                     code="INDICATOR_REF_INVALID",
-                    message=f"建议 {rid} 的指标 {rec.indicator_id} 不在材料目录中",
+                    message="建议对应的学习要求不在当前课程目录中",
                     recommendation_id=rid,
                 )
             )
 
-        if not rec.reason or len(rec.reason.strip()) < _MIN_REASON_LEN:
+        if rec.reason.strip().rstrip("。！") in ("", *VAGUE_PHRASES):
             issues.append(
                 ValidationIssue(
                     code="VAGUE_REASON",
-                    message=f"建议 {rid} 缺少具体理由（05 空话禁令）",
+                    message="请写明推荐这项活动的具体理由",
                     recommendation_id=rid,
                 )
             )
-        else:
-            concrete_tokens = list(known_findings) + list(materials_by_id.keys())
-            has_concrete_ref = any(token in rec.reason for token in concrete_tokens)
-            vague_only = any(p in rec.reason for p in VAGUE_PHRASES)
-            if not has_concrete_ref and vague_only:
-                issues.append(
-                    ValidationIssue(
-                        code="VAGUE_REASON",
-                        message=f"建议 {rid} 理由空泛：需落到材料编号或诊断编号",
-                        recommendation_id=rid,
-                    )
-                )
-
         expected_order = 1
         for act in rec.activities:
             if act.order != expected_order:
                 issues.append(
                     ValidationIssue(
                         code="ACTIVITY_ORDER_INVALID",
-                        message=f"建议 {rid} 活动顺序必须从 1 连续递增",
+                        message="活动顺序必须从 1 连续递增",
                         recommendation_id=rid,
                     )
                 )
@@ -535,7 +402,7 @@ def validate_recommendations(
                 issues.append(
                     ValidationIssue(
                         code="MATERIAL_REF_INVALID",
-                        message=f"建议 {rid} 活动 {act.order} 引用的材料 {act.material_id} 不存在",
+                        message=f"第 {act.order} 项活动的材料不存在",
                         recommendation_id=rid,
                     )
                 )
@@ -543,16 +410,18 @@ def validate_recommendations(
                 issues.append(
                     ValidationIssue(
                         code="MATERIAL_SCOPE_INVALID",
-                        message=f"建议 {rid} 活动 {act.order} 的材料不适配指标 {rec.indicator_id}",
+                        message=f"第 {act.order} 项活动的材料与这项学习要求不匹配",
                         recommendation_id=rid,
                     )
                 )
 
-            if not act.hint_levels:
+            if not act.purpose.strip():
+                issues.append(ValidationIssue(code="PURPOSE_MISSING", message=f"请填写第 {act.order} 项活动的具体做法", recommendation_id=rid))
+            if not act.hint_levels or not all(text.strip() for text in act.hint_levels):
                 issues.append(
                     ValidationIssue(
                         code="HINT_MISSING",
-                        message=f"建议 {rid} 活动 {act.order} 缺少分步提示",
+                        message=f"第 {act.order} 项活动缺少分步提示",
                         recommendation_id=rid,
                     )
                 )
@@ -567,26 +436,28 @@ def validate_recommendations(
                             ValidationIssue(
                                 code="HINT_LEAKS_ANSWER",
                                 message=(
-                                    f"建议 {rid} 活动 {act.order} 第 {hint_idx} 级提示{leak}；"
-                                    "该建议应置 review_status=needs_review，不得以 validated 状态保存"
+                                    f"第 {act.order} 项活动的第 {hint_idx} 条提示可能直接透露答案，"
+                                    "请改成引导学生思考的问题后再发布"
                                 ),
                                 recommendation_id=rid,
                             )
                         )
-            if not act.observation_points:
+            if not act.observation_points or not all(text.strip() for text in act.observation_points):
                 issues.append(
                     ValidationIssue(
                         code="OBSERVATION_MISSING",
-                        message=f"建议 {rid} 活动 {act.order} 缺少观察点",
+                        message=f"第 {act.order} 项活动缺少观察点",
                         recommendation_id=rid,
                     )
                 )
 
-        if not rec.adjustment_conditions:
+        if not rec.adjustment_conditions or any(
+            not item.observable_condition.strip() or not item.next_action.strip() for item in rec.adjustment_conditions
+        ):
             issues.append(
                 ValidationIssue(
                     code="ADJUSTMENT_MISSING",
-                    message=f"建议 {rid} 缺少调整条件（剧本：出现什么证据时升级/继续/转观察）",
+                    message="请至少填写一个后续调整条件",
                     recommendation_id=rid,
                 )
             )

@@ -11,7 +11,7 @@ import styles from "../../styles/ui.module.css";
 /** 教师对话：先明确对象与节点，再进入对话视图 */
 export function ChatPage() {
   const { session } = useSession();
-  const { datasetId, nodeId, nodes } = useScope();
+  const { datasetId, runId, nodeId, nodes } = useScope();
   const [search, setSearch] = useSearchParams();
   const classes = useQuery({
     queryKey: queryKeys.classes(session, datasetId),
@@ -67,7 +67,7 @@ export function ChatPage() {
           </select>
         </label>
         <p className={`${styles.small} ${styles.muted}`} style={{ maxWidth: 420 }}>
-          对话的范围会固定在当前数据集、运行与节点上。切换对象或节点后旧对话清空。
+          可按学生或班级分别提问。切换对象或测验会开始新的对话。
         </p>
       </div>
 
@@ -76,9 +76,14 @@ export function ChatPage() {
       ) : null}
 
       <ChatPanel
+        key={`${session?.session_id}:${runId}:${nodeId}:${target}`}
         role="teacher"
         targetLabel={targetLabel}
         nodeName={nodeName}
+        analysisContext={nodeId && runId && target ? {
+          run_id: runId, node_id: nodeId, subject_type: target.startsWith("class:") ? "class" : "student",
+          subject_id: target.slice(target.indexOf(":") + 1),
+        } : undefined}
         backTo={{ label: "查看该对象的学情", to: returnTo }}
       />
     </div>

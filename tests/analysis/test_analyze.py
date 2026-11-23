@@ -162,6 +162,28 @@ def test_student_observation_rate_denominator_is_roster():
     assert m.value == pytest.approx(2 / 3)
 
 
+def test_class_indicator_coverage_and_question_scope_use_the_same_records():
+    base = make_catalog()
+    second = Indicator(indicator_id="I02", topic_id="T01", description="另一项要求")
+    catalog = base.model_copy(update={
+        "indicators": [*base.indicators, second],
+        "materials": [material("Q01"), material("Q02").model_copy(update={"indicator_ids": ["I02"]}), material("Q03")],
+    })
+    dataset = make_dataset([
+        event("E1", "S01", "N01", "Q01", score=1),
+        event("E2", "S02", "N01", "Q02", score=2),
+        event("E3", "S03", "N01", "Q03", score=2),
+    ])
+    dataset.nodes[0].available_question_ids = ["Q01", "Q02"]
+    result = analyze_dataset(dataset, catalog, CTX, CONFIG)
+    cls = next(row for row in result.class_results if row.node_id == "N01")
+    assert cls.observed_student_count == 2
+    coverage = {metric.scope.indicator_id: metric for metric in cls.metrics if metric.name == "student_observation_rate"}
+    assert (coverage["I01"].numerator, coverage["I01"].denominator) == (1, 3)
+    assert {ref.id for ref in coverage["I01"].evidence_refs} == {"R-E1"}
+    assert result.quality_summary["outside_node_scope"] == 1
+
+
 # 7. 观测作答比例：(已评分+待评分)/全部选中事件；S02/N01 = (E3+E4)/(E3+E4) = 1
 def test_observed_response_ratio_counts_pending():
     m = metric_of(student_result(run(), "S02", "N01"), "observed_response_ratio")
@@ -221,6 +243,7 @@ def test_quality_summary_reconciles():
     assert qs == {
         "selected_events": 6, "graded": 5, "pending": 1, "unanswered": 0,
         "excluded_scores": 1, "quarantined_events": 0, "valid_scored_events": 4,
+        "outside_node_scope": 0,
     }
 
 

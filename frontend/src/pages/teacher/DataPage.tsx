@@ -1,12 +1,12 @@
 import { useEffect, useRef, useState } from "react";
-import { useQuery } from "@tanstack/react-query";
-import { isDemo, getExportPreview, listQuality, simulateRun } from "../../api/service";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { isDemo, getExportPreview, downloadExport, listQuality, simulateRun, uploadDataset, runAnalysis, createSession } from "../../api/service";
 import { queryKeys } from "../../api/queryKeys";
 import { useScope } from "../../app/scope";
 import { useSession } from "../../app/session";
 import { EvidencePanel, type EvidenceTarget } from "../../components/evidence/EvidencePanel";
 import { StatePanel } from "../../components/feedback/StatePanel";
-import { formatDateTime } from "../../lib/format";
+import { formatDateTime, formatRuleVersion } from "../../lib/format";
 import styles from "../../styles/ui.module.css";
 import page from "../../styles/pages.module.css";
 import view from "../../components/learning/TeacherViews.module.css";
@@ -22,16 +22,24 @@ const FILE_SLOTS = [
 
 /** 数据管理：数据集、导入位、质量、运行与成果导出入口 */
 export function DataPage() {
-  const { session } = useSession();
-  const { datasetId, runId, runs } = useScope();
+  const { session, start } = useSession();
+  const { datasetId, runId, runs, setDatasetId } = useScope();
+  const queryClient = useQueryClient();
   const [activeTab, setActiveTab] = useState<"dataset" | "quality" | "runs" | "exports">("dataset");
-  const [files, setFiles] = useState<Record<string, string>>({});
+  const [files, setFiles] = useState<Record<string, File>>({});
   const [importFeedback, setImportFeedback] = useState("");
+  const [exporting, setExporting] = useState(false);
+  const [publishedOnly, setPublishedOnly] = useState(true);
+  const [exportError, setExportError] = useState("");
+  const [importing, setImporting] = useState(false);
   const [jobStatus, setJobStatus] = useState<"idle" | "running" | "done" | "failed" | "stopped">("idle");
   const [evidence, setEvidence] = useState<EvidenceTarget | null>(null);
   const pending = useRef(0);
+  const uploadRequestId = useRef(crypto.randomUUID());
+  const runRequestId = useRef(crypto.randomUUID());
   useEffect(() => {
     setEvidence(null);
+    setExportError("");
     setJobStatus("idle");
     return () => { pending.current += 1; };
   }, [datasetId, runId]);
@@ -44,9 +52,9 @@ export function DataPage() {
   });
 
   const exportPreview = useQuery({
-    queryKey: queryKeys.exportPreview(session, runId),
-    queryFn: () => getExportPreview(runId as string),
-    enabled: Boolean(session && runId),
+    queryKey: [...queryKeys.exportPreview(session, runId), publishedOnly],
+    queryFn: () => getExportPreview(runId as string, publishedOnly),
+    enabled: Boolean(session && runId && activeTab === "exports"),
     retry: false,
   });
 
@@ -88,23 +96,57 @@ export function DataPage() {
               <span className={page.mono}>{slot.file}</span>
               <label className={styles.field}>
                 <span className={styles.small}>选择{slot.label}文件</span>
-                <input type="file" accept=".csv,text/csv" disabled={!isDemo}
+                <input type="file" accept=".csv,text/csv" disabled={importing}
                   onChange={(event) => {
-                    const name = event.target.files?.[0]?.name ?? "";
-                    setFiles((previous) => ({ ...previous, [slot.key]: name }));
+                    const file = event.target.files?.[0];
+                    uploadRequestId.current = crypto.randomUUID();
+                    runRequestId.current = crypto.randomUUID();
+                    setFiles((previous) => {
+                      const next = { ...previous };
+                      if (file) next[slot.key] = file;
+                      else delete next[slot.key];
+                      return next;
+                    });
                     setImportFeedback("");
                   }} />
               </label>
             </div>
           ))}
         </div>
-        <button type="button" className={styles.button} disabled={!isDemo} onClick={() => {
+        <button type="button" className={styles.button} disabled={importing} onClick={async () => {
           const missing = FILE_SLOTS.filter((slot) => !files[slot.key]);
-          setImportFeedback(missing.length
-            ? `请补选：${missing.map((slot) => slot.label).join("、")}`
-            : "六个文件位已选齐。以下质量结果为固定示例，未读取文件内容。");
+          if (missing.length) {
+            setImportFeedback(`请补选：${missing.map((slot) => slot.label).join("、")}`);
+            return;
+          }
+          if (isDemo) {
+            setImportFeedback("六个文件位已选齐。以下质量结果为固定示例，未读取文件内容。");
+            return;
+          }
+          setImporting(true);
+          let imported = false;
+          try {
+            const uploaded = await uploadDataset(files, uploadRequestId.current);
+            imported = true;
+            setImportFeedback("数据已导入，正在分析…");
+            const newSession = await createSession("teacher", undefined, uploaded.dataset_id);
+            start(newSession);
+            setDatasetId(uploaded.dataset_id);
+            const run = await runAnalysis(uploaded.dataset_id, uploaded.catalog_version, uploaded.node_ids, runRequestId.current);
+            if (run.status === "failed") {
+              runRequestId.current = crypto.randomUUID();
+              throw new Error(run.error?.message ?? "分析失败，请检查数据后重试。");
+            }
+            await queryClient.invalidateQueries();
+            setImportFeedback("数据已导入并完成分析，可返回班级总览查看。");
+          } catch (error) {
+            const message = error instanceof Error ? error.message : "操作失败";
+            setImportFeedback(imported ? `数据已导入，但分析未完成：${message}。可以重试。` : `导入失败：${message}`);
+          } finally {
+            setImporting(false);
+          }
         }}>
-          {isDemo ? "检查示例选件" : "导入待联调"}
+          {importing ? "正在导入和分析…" : isDemo ? "检查示例选件" : "导入并分析"}
         </button>
         {importFeedback && <p role="status">{importFeedback}</p>}
       </section>
@@ -198,8 +240,7 @@ export function DataPage() {
             <span className={page.mono}>{runId ?? "未选择运行"}</span>
           </div>
           <p className={`${styles.small} ${styles.muted}`}>
-            运行状态为 queued → running → succeeded／failed。示例运行固定为已完成；
-            “模拟一次运行”只演示状态变化，不产生新的分析结果。
+            {isDemo ? "示例运行固定为已完成；模拟运行只演示状态变化。" : "导入数据后会自动创建分析运行。"}
           </p>
           {jobStatus === "failed" && <p role="alert">模拟任务失败，可重新运行。</p>}
           {jobStatus === "stopped" && <p role="status">已停止页面等待。该操作不取消任务。</p>}
@@ -212,8 +253,15 @@ export function DataPage() {
       <section className={page.section} style={{ display: activeTab === "exports" ? undefined : "none" }}>
         <div className={page.sectionHead}>
           <h3>成果导出</h3>
-          <span className={`${styles.small} ${styles.muted}`}>联调后由服务生成 ZIP</span>
+          <span className={`${styles.small} ${styles.muted}`}>{isDemo ? "示例清单" : "当前分析结果 · ZIP"}</span>
         </div>
+        {!isDemo && <label className={styles.field}>导出的建议版本
+          <select className={styles.select} value={publishedOnly ? "published" : "teacher"}
+            onChange={(event) => setPublishedOnly(event.target.value === "published")}>
+            <option value="published">学生看到的已发布版本</option>
+            <option value="teacher">教师当前版本（可含草稿）</option>
+          </select>
+        </label>}
 
         {exportPreview.isLoading ? <StatePanel kind="loading" title="正在读取成果包清单" /> : null}
         {exportPreview.error ? (
@@ -230,7 +278,7 @@ export function DataPage() {
               <span className={styles.label}>生成时间</span>
               <span className={styles.num}>{formatDateTime(exportPreview.data.created_at)}</span>
               <span className={styles.label}>规则版本</span>
-              <span className={page.mono}>{exportPreview.data.rule_version}</span>
+              <span>{formatRuleVersion(exportPreview.data.rule_version)}</span>
             </div>
             <ul className={styles.steps}>
               {exportPreview.data.files.map((file) => (
@@ -242,8 +290,25 @@ export function DataPage() {
             <p className={`${styles.small} ${styles.muted}`}>
               {exportPreview.data.limitations.join("；")}
             </p>
-            <button type="button" className={styles.button} disabled>
-              下载成果包（示例模式不可用）
+            {exportError && <p role="alert">{exportError}</p>}
+            <button type="button" className={styles.button} disabled={isDemo || exporting || !runId} onClick={async () => {
+              if (!runId) return;
+              setExporting(true);
+              setExportError("");
+              try {
+                const url = URL.createObjectURL(await downloadExport(runId, publishedOnly));
+                const link = document.createElement("a");
+                link.href = url;
+                link.download = "智慧学伴成果包.zip";
+                link.click();
+                window.setTimeout(() => URL.revokeObjectURL(url), 1000);
+              } catch (error) {
+                setExportError(error instanceof Error ? error.message : "下载失败，请重试。");
+              } finally {
+                setExporting(false);
+              }
+            }}>
+              {isDemo ? "下载成果包（示例模式不可用）" : exporting ? "正在打包…" : "下载成果包"}
             </button>
           </div>
         ) : null}

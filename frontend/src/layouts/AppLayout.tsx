@@ -2,6 +2,7 @@ import { NavLink, Outlet } from "react-router-dom";
 import { useSession } from "../app/session";
 import { ScopeBar } from "../components/layout/ScopeBar";
 import { DemoBadge } from "../components/feedback/DemoBadge";
+import { isDemo } from "../api/service";
 import styles from "./AppLayout.module.css";
 
 export interface NavItem {
@@ -46,7 +47,7 @@ export function AppLayout({ role, items }: Props) {
         </ul>
 
         <div className={styles.navFoot}>
-          <DemoBadge />
+          <DemoBadge synthetic={isDemo || session?.scope.synthetic === true} />
           <button type="button" className={styles.navLink} onClick={signOut}>
             <span>退出并重选身份</span>
           </button>
@@ -56,7 +57,7 @@ export function AppLayout({ role, items }: Props) {
       <main className={styles.main}>
         <div className={styles.mainInner}>
           <div className={styles.topbar}>
-            {role === "teacher" ? <><ScopeBar /><DemoBadge /><button type="button" className={styles.headerSignOut} onClick={signOut}>切换身份</button></> : <><div className={styles.titleBlock}><h1 style={{ fontSize: 24 }}>学生端{session?.scope.student_id ? ` · ${session.scope.student_id}` : ""}</h1><span className={styles.subtitle}>查看自己的学习情况与下一步任务</span></div><DemoBadge /><button type="button" className={styles.compactSignOut} onClick={signOut}>退出并重选身份</button></>}
+            {role === "teacher" ? <><ScopeBar /><DemoBadge synthetic={isDemo || session?.scope.synthetic === true} /><button type="button" className={styles.headerSignOut} onClick={signOut}>切换身份</button></> : <><div className={styles.titleBlock}><h1 style={{ fontSize: 24 }}>学生端{session?.scope.student_id ? ` · ${session.scope.student_id}` : ""}</h1><span className={styles.subtitle}>查看自己的学习情况与下一步任务</span></div><DemoBadge synthetic={isDemo || session?.scope.synthetic === true} /><button type="button" className={styles.compactSignOut} onClick={signOut}>退出并重选身份</button></>}
           </div>
 
           <Outlet />

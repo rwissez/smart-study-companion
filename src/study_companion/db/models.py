@@ -158,3 +158,29 @@ class DemoSession(Base):
     dataset_id: Mapped[str | None] = mapped_column(ForeignKey("datasets.id"), nullable=True)
     student_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
     expires_at: Mapped[str] = mapped_column(String(40), nullable=False)
+
+
+class RecommendationResult(Base):
+    __tablename__ = "recommendation_results"
+    run_id: Mapped[str] = mapped_column(ForeignKey("analysis_runs.id"), primary_key=True)
+    student_id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    node_id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    payload_json: Mapped[dict[str, Any]] = mapped_column(_json(), nullable=False)
+
+
+class Job(Base):
+    __tablename__ = "jobs"
+    id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    dataset_id: Mapped[str] = mapped_column(ForeignKey("datasets.id"), nullable=False)
+    student_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    status: Mapped[str] = mapped_column(String(32), nullable=False)
+    result_json: Mapped[dict[str, Any] | None] = mapped_column(_json(), nullable=True)
+    error_json: Mapped[dict[str, Any] | None] = mapped_column(_json(), nullable=True)
+
+
+class IdempotencyRecord(Base):
+    __tablename__ = "idempotency_records"
+    operation: Mapped[str] = mapped_column(String(32), primary_key=True)
+    key: Mapped[str] = mapped_column(String(128), primary_key=True)
+    fingerprint: Mapped[str] = mapped_column(String(64), nullable=False)
+    result_json: Mapped[dict[str, Any]] = mapped_column(_json(), nullable=False)

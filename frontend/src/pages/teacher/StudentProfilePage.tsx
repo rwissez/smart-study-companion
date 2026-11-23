@@ -1,7 +1,8 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useParams, useSearchParams } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { demoRecommendationHistory, demoSaveRecommendation, isDemo, getCatalog, getRecommendations, getStudentResult } from "../../api/service";
+import { demoRecommendationHistory, demoSaveRecommendation, isDemo, getCatalog, getRecommendations, getStudentResult, generateRecommendations, reviseRecommendation } from "../../api/service";
+import { HttpError } from "../../api/client";
 import { queryKeys } from "../../api/queryKeys";
 import { useScope } from "../../app/scope";
 import { useSession } from "../../app/session";
@@ -26,11 +27,15 @@ export function StudentProfilePage() {
   const [tab, setTab] = useState<"overview" | "records" | "recommendations">("overview");
   const [indicator, setIndicator] = useState<string | null>(null);
   const [evidence, setEvidence] = useState<EvidenceTarget | null>(null);
+  const [generating, setGenerating] = useState(false);
+  const [generationError, setGenerationError] = useState<string | null>(null);
+  const generationRequestId = useRef(crypto.randomUUID());
 
   useEffect(() => {
     setEvidence(null);
     setIndicator(null);
     setTab("overview");
+    generationRequestId.current = crypto.randomUUID();
   }, [runId, nodeId, studentId]);
 
   const studentQuery = useQuery({
@@ -105,8 +110,8 @@ export function StudentProfilePage() {
         <div className={view.panelHeader}><h2>关联作答记录</h2></div>
         <p className={view.muted}>当前展示分析结果引用的作答记录；完整名录待接口提供。</p>
         {records.length === 0 && <StatePanel kind="empty" title="暂无可查看的作答引用" />}
-        {records.map((ref) => <div className={view.findingTop} key={ref.id}>
-          <strong>{ref.id}</strong><button onClick={() => setEvidence(ref)}>查看作答 ›</button></div>)}
+        {records.map((ref, index) => <div className={view.findingTop} key={ref.id}>
+          <strong>作答记录 {index + 1}</strong><button onClick={() => setEvidence(ref)}>查看作答 ›</button></div>)}
       </section>}
 
       {!ready ? <StatePanel kind="loading" title="正在确定运行与节点" /> : null}
@@ -144,19 +149,77 @@ export function StudentProfilePage() {
             <section className={page.section}>
               <div className={page.sectionHead}>
                 <h2>学习建议</h2>
+                {!isDemo && !Object.keys(recommendQuery.data?.revisions ?? {}).length && <button className={styles.button} disabled={generating || !runId || !nodeId} onClick={async () => {
+                  if (!runId || !nodeId || !studentId) return;
+                  setGenerating(true);
+                  setGenerationError(null);
+                  try {
+                    await generateRecommendations(runId, studentId, nodeId, generationRequestId.current);
+                    generationRequestId.current = crypto.randomUUID();
+                    await recommendQuery.refetch();
+                  } catch (error) {
+                    setGenerationError(error instanceof Error ? error.message : "建议生成失败");
+                  } finally {
+                    setGenerating(false);
+                  }
+                }}>{generating ? "正在生成…" : recommendQuery.data ? "重新生成建议" : "生成学习建议"}</button>}
               </div>
 
+              {generationError && <p role="alert">{generationError}</p>}
+              {recommendQuery.data?.needs_regeneration && (
+                <StatePanel kind="info" title="已有旧版学习建议" message="点击重新生成建议，查看新版做法和材料。" />
+              )}
+              {recommendQuery.data && recommendQuery.data.validation_issues.length > 0 && (
+                <div role="status">
+                  <strong>复核提示</strong>
+                  <ul>{[...new Set(recommendQuery.data.validation_issues.map((issue) => issue.message))]
+                    .map((message) => <li key={message}>{message}</li>)}</ul>
+                </div>
+              )}
+
               {recommendQuery.isLoading ? <StatePanel kind="loading" title="正在读取建议" /> : null}
-              {recommendQuery.error ? (
+              {recommendQuery.error instanceof HttpError && recommendQuery.error.code === "RESULT_NOT_READY" ? (
+                <StatePanel kind="empty" title="还没有学习建议" message="点击生成学习建议，再核对和发布。" />
+              ) : recommendQuery.error ? (
                 <StatePanel
                   kind="error"
                   message={(recommendQuery.error as Error).message}
                   onRetry={() => recommendQuery.refetch()}
                 />
               ) : null}
-              {recommendQuery.data ? (
+              {recommendQuery.data && !recommendQuery.data.needs_regeneration ? (
                 <RecommendationList
                   recommendations={recommendQuery.data.recommendations}
+                  materials={catalogQuery.data?.materials}
+                  teacher
+                  renderActions={(recommendation) => {
+                    const bundle = recommendQuery.data;
+                    if (!bundle) return null;
+                    const history = isDemo
+                      ? demoRecommendationHistory(bundle, recommendation.recommendation_id)
+                      : bundle.revisions?.[recommendation.recommendation_id] ?? [];
+                    return <RecommendationEditor
+                      key={`${runId}:${studentId}:${nodeId}:${recommendation.recommendation_id}`}
+                      recommendation={recommendation}
+                      history={history}
+                      materials={catalogQuery.data?.materials?.filter((material) =>
+                        !bundle.available_material_ids || bundle.available_material_ids.includes(material.material_id))}
+                      demo={isDemo}
+                      onSave={async (next, reason, revision, publish) => {
+                        if (isDemo) {
+                          queryClient.setQueryData(recommendationKey, demoSaveRecommendation(bundle, next, reason));
+                        } else {
+                          try {
+                            await reviseRecommendation(bundle, next, reason, revision, publish);
+                          } catch (failure) {
+                            if (failure instanceof HttpError && failure.status === 409) await recommendQuery.refetch();
+                            throw failure;
+                          }
+                          await recommendQuery.refetch();
+                        }
+                      }}
+                    />;
+                  }}
                   onOpenMaterial={(materialId) => setEvidence({ kind: "material", id: materialId })}
                   onOpenFinding={(id) => {
                     setIndicator(null);
@@ -165,17 +228,6 @@ export function StudentProfilePage() {
                   curriculumLink={(id) => `/teacher/curriculum?${new URLSearchParams({ indicatorId: id })}`}
                 />
               ) : null}
-              {isDemo && recommendQuery.data?.recommendations.map((recommendation) => (
-                <RecommendationEditor key={`${runId}:${studentId}:${nodeId}:${recommendation.recommendation_id}`}
-                  recommendation={recommendation}
-                  history={demoRecommendationHistory(recommendQuery.data, recommendation.recommendation_id)}
-                  onSave={(next, reason) => {
-                    const bundle = recommendQuery.data;
-                    if (!bundle) return [];
-                    queryClient.setQueryData(recommendationKey, demoSaveRecommendation(bundle, next, reason));
-                    return demoRecommendationHistory(bundle, next.recommendation_id);
-                  }} />
-              ))}
             </section>
 
           </div>

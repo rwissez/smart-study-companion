@@ -34,6 +34,10 @@ def trim_material(payload: dict[str, Any], scope: SessionScope) -> dict[str, Any
     return {k: v for k, v in payload.items() if k not in TEACHER_ONLY_MATERIAL_FIELDS}
 
 
+def material_summary(payload: dict[str, Any]) -> dict[str, Any]:
+    return {key: payload[key] for key in ("material_id", "material_type", "indicator_ids", "content", "options") if key in payload}
+
+
 def _resolve_catalog_version(db: DbSession, scope: SessionScope, requested: str | None) -> str:
     if requested is not None:
         row = db.get(models.Catalog, requested)
@@ -67,18 +71,20 @@ def get_catalog(
         .where(models.Indicator.catalog_version == version)
         .order_by(models.Indicator.indicator_id)
     ).all()
-    topics: dict[str, dict[str, Any]] = {}
-    for row in indicators:
-        topic_id = row.payload_json.get("topic_id")
-        if topic_id and topic_id not in topics:
-            topics[topic_id] = {"topic_id": topic_id}
-    return success(
-        {
-            "catalog_version": version,
-            "topics": list(topics.values()),
-            "indicators": [row.payload_json for row in indicators],
-        }
-    )
+    catalog = db.get(models.Catalog, version)
+    payload = {
+        "catalog_version": version,
+        "topics": catalog.payload_json.get("topics", []),
+        "indicators": [row.payload_json for row in indicators],
+        "links": catalog.payload_json.get("links", []),
+    }
+    if scope.role == "teacher":
+        material_rows = db.scalars(
+            select(models.Material).where(models.Material.catalog_version == version)
+            .order_by(models.Material.material_id)
+        )
+        payload["materials"] = [material_summary(row.payload_json) for row in material_rows]
+    return success(payload)
 
 
 @router.get("/materials/{material_id}")

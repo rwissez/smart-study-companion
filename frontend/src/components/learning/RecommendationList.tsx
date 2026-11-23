@@ -1,11 +1,14 @@
 import { Link } from "react-router-dom";
-import { useState } from "react";
-import type { Recommendation } from "../../api/types";
+import { useState, type ReactNode } from "react";
+import type { Catalog, Recommendation } from "../../api/types";
 import { generationMethodLabel, reviewStatusLabel } from "../../lib/format";
 import styles from "../../styles/ui.module.css";
 
 interface Props {
   recommendations: Recommendation[];
+  materials?: Catalog["materials"];
+  teacher?: boolean;
+  renderActions?: (recommendation: Recommendation) => ReactNode;
   onOpenMaterial: (materialId: string) => void;
   onOpenFinding?: (findingId: string) => void;
   curriculumLink?: (indicatorId: string) => string;
@@ -15,7 +18,7 @@ interface Props {
  * 建议列表：按 order 显示材料、用途、分步提示与观察条件。
  * 提示按层级逐步展开，一次只多给一条，不直接给答案。
  */
-export function RecommendationList({ recommendations, onOpenMaterial, onOpenFinding, curriculumLink }: Props) {
+export function RecommendationList({ recommendations, materials, teacher, renderActions, onOpenMaterial, onOpenFinding, curriculumLink }: Props) {
   const [hints, setHints] = useState<Record<string, number>>({});
 
   if (recommendations.length === 0) {
@@ -39,9 +42,9 @@ export function RecommendationList({ recommendations, onOpenMaterial, onOpenFind
             <div className={styles.rowBetween}>
               <span className={styles.cardTitle}>{rec.goal}</span>
               <div className={styles.row}>
-                <span className={`${styles.badge} ${styles.badgeNeutral}`}>
-                  {reviewStatusLabel[rec.review_status]}
-                </span>
+                {teacher && <span className={`${styles.badge} ${styles.badgeNeutral}`}>
+                  {rec.review_status === "validated" ? "已发布" : reviewStatusLabel[rec.review_status]}
+                </span>}
                 <span className={`${styles.badge} ${styles.badgeInfo}`}>
                   {generationMethodLabel[rec.generation_method]}
                 </span>
@@ -50,13 +53,14 @@ export function RecommendationList({ recommendations, onOpenMaterial, onOpenFind
 
             <p className={styles.muted}>{rec.reason}</p>
             {(onOpenFinding || curriculumLink) && <div className={styles.row}>
-              {onOpenFinding && rec.finding_ids.map((id) =>
-                <button key={id} className={styles.button} onClick={() => onOpenFinding(id)}>查看关联诊断 · {id}</button>)}
+              {onOpenFinding && rec.finding_ids.map((id, index) =>
+                <button key={id} className={styles.button} onClick={() => onOpenFinding(id)}>查看关联诊断{rec.finding_ids.length > 1 ? " " + (index + 1) : ""}</button>)}
               {curriculumLink && <Link to={curriculumLink(rec.indicator_id)}>查看课程要求</Link>}
             </div>}
 
             <ol className={styles.steps} style={{ paddingLeft: 18 }}>
               {rec.activities.map((activity) => {
+                const material = materials?.find((item) => item.material_id === activity.material_id);
                 const hintKey = `${rec.recommendation_id}:${activity.order}`;
                 const activityShown = hints[hintKey] ?? 0;
                 return (
@@ -67,13 +71,15 @@ export function RecommendationList({ recommendations, onOpenMaterial, onOpenFind
                         className={`${styles.button} ${styles.buttonGhost}`}
                         onClick={() => onOpenMaterial(activity.material_id)}
                       >
-                        打开材料 {activity.material_id}
+                        {material?.material_type === "question" ? "查看题目" : "打开学习材料"}
                       </button>
                       {activity.previously_attempted ? (
                         <span className={`${styles.badge} ${styles.badgeWarn}`}>已做过</span>
                       ) : null}
                     </div>
                     <p style={{ margin: "4px 0" }}>{activity.purpose}</p>
+                    {material && <p><strong>{material.content.length > 160 ? material.content.slice(0, 160) + "…" : material.content}</strong></p>}
+                    {material?.options?.map((option) => <div key={option}>{option}</div>)}
 
                     {activity.hint_levels.length > 0 ? (
                       <div className={styles.stack}>
@@ -105,6 +111,7 @@ export function RecommendationList({ recommendations, onOpenMaterial, onOpenFind
                 );
               })}
             </ol>
+            {rec.activities.length === 0 && <p>暂无对应材料，等待教师补充。</p>}
 
             {rec.adjustment_conditions.length > 0 ? (
               <div className={styles.stack}>
@@ -118,6 +125,7 @@ export function RecommendationList({ recommendations, onOpenMaterial, onOpenFind
                 </ul>
               </div>
             ) : null}
+            {renderActions?.(rec)}
           </article>
         );
       })}

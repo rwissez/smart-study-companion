@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
-import { Link, useNavigate, useSearchParams } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
+import type { Metric } from "../../api/types";
 import { getCatalog, getClassResult, listClasses, listRoster } from "../../api/service";
 import { queryKeys } from "../../api/queryKeys";
 import { useScope } from "../../app/scope";
@@ -9,7 +10,7 @@ import { IndicatorRadar } from "../../components/learning/IndicatorRadar";
 import { ClassComparison } from "../../components/learning/ClassComparison";
 import { EvidencePanel, type EvidenceTarget } from "../../components/evidence/EvidencePanel";
 import { StatePanel } from "../../components/feedback/StatePanel";
-import { formatRatio } from "../../lib/format";
+import { evidenceStatusLabel, formatFindingTitle, formatMetricName, formatRatio } from "../../lib/format";
 import ui from "../../styles/ui.module.css";
 import view from "../../components/learning/TeacherViews.module.css";
 
@@ -20,6 +21,7 @@ export function ClassesPage() {
   const [search, setSearch] = useSearchParams();
   const [filter, setFilter] = useState("");
   const [page, setPage] = useState(1);
+  const [selectedIndicator, setSelectedIndicator] = useState("");
   const [evidence, setEvidence] = useState<EvidenceTarget | null>(null);
   const { session } = useSession();
   const { datasetId, runId, nodeId, ready, bootstrapError } = useScope();
@@ -36,9 +38,47 @@ export function ClassesPage() {
   const roster = useQuery({ queryKey: queryKeys.roster(session, datasetId, classId, page), queryFn: () => listRoster(datasetId!, classId, page), enabled: Boolean(session && datasetId && classId), retry: false });
   const catalog = useQuery({ queryKey: queryKeys.catalog(result.data?.catalog_version ?? null), queryFn: () => getCatalog(result.data?.catalog_version), enabled: Boolean(result.data?.catalog_version), retry: false });
   const names = Object.fromEntries((catalog.data?.indicators ?? []).map((item) => [item.indicator_id, item.description]));
+  const metricsByIndicator = new Map<string, Metric[]>();
+  for (const metric of result.data?.metrics ?? []) {
+    const id = metric.scope.indicator_id ?? "";
+    const group = metricsByIndicator.get(id) ?? [];
+    group.push(metric);
+    metricsByIndicator.set(id, group);
+  }
+  const indicatorOptions = [...metricsByIndicator.keys()];
+  const activeIndicator = metricsByIndicator.has(selectedIndicator) ? selectedIndicator : indicatorOptions[0];
   const visible = (roster.data?.items ?? []).filter((item) => item.student_id.toUpperCase().includes(filter.trim().toUpperCase()));
   const title = classNames[classId ?? ""] ?? classId ?? "班级";
   const goStudent = (id: string) => navigate(`/teacher/students/${encodeURIComponent(id)}?${new URLSearchParams({ classId: classId ?? "" })}`);
+  const allFindings = result.data?.findings ?? [];
+  const findings = detail ? allFindings : allFindings.filter(
+    (finding) => finding.performance !== "observed_strength" || finding.evidence_status !== "sufficient",
+  );
+  const findingList = (
+    <>
+      {result.data && findings.length === 0 && (
+        <p className={view.muted}>
+          {allFindings.length === 0 ? "暂无诊断发现" : "本次未发现需要特别关注的学习要求"}
+        </p>
+      )}
+      {findings.map((finding) => {
+        const evidenceRef = finding.evidence_refs[0];
+        const responseRef = finding.evidence_refs.find((item) => item.kind === "record");
+        return (
+          <div className={view.finding} key={finding.finding_id}>
+            <div className={view.findingTop}>
+              <strong>{formatFindingTitle(finding, names[finding.indicator_id])}</strong>
+              {evidenceRef && <button onClick={() => setEvidence(evidenceRef)}>查看依据 ›</button>}
+              {responseRef && responseRef !== evidenceRef && <button onClick={() => setEvidence(responseRef)}>查看相关作答 ›</button>}
+            </div>
+            <p>{finding.description}</p>
+            <span className={view.muted}>{evidenceStatusLabel[finding.evidence_status]}</span>
+          </div>
+        );
+      })}
+      {result.data?.limitations.map((limitation) => <p key={limitation} className={view.muted}>{limitation}</p>)}
+    </>
+  );
 
   if (bootstrapError) return <StatePanel kind="error" title="范围没有建立起来" message={bootstrapError} />;
   return <div className={ui.stackLg}>
@@ -60,27 +100,29 @@ export function ClassesPage() {
           {result.data && (detail ? <IndicatorRadar metrics={result.data.metrics} names={names} /> : <>
             <div className={view.stats}><div className={view.stat}>名册人数<strong>{result.data.roster_count} 人</strong></div>
               <div className={view.stat}>有效观测<strong>{result.data.observed_student_count} / {result.data.roster_count} 人</strong></div></div>
-            <strong>观察指标表现</strong>
-            {result.data.metrics.length === 0 && <p className={view.muted}>暂无可用统计</p>}
-            {result.data.metrics.map((metric) => <div className={view.barItem} key={metric.metric_id}>
-              <div className={view.barTop}><span>{names[metric.scope.indicator_id ?? ""] ?? metric.name}</span><strong>{metric.unit === "ratio" ? formatRatio(metric.value) : metric.value ?? "—"}</strong></div>
+            <div className={view.panelHeader}>
+              <strong>观察指标表现</strong>
+              {indicatorOptions.length > 0 && <select className={`${ui.select} ${view.indicatorSelect}`} aria-label="切换观察指标"
+                value={activeIndicator} onChange={(event) => setSelectedIndicator(event.target.value)}>
+                {indicatorOptions.map((id) => <option key={id} value={id}>{names[id] ?? (id || "班级整体")}</option>)}
+              </select>}
+            </div>
+            {activeIndicator === undefined ? <p className={view.muted}>暂无可用统计</p> :
+              <div className={`${ui.card} ${ui.cardPad} ${ui.stack}`}>
+            {metricsByIndicator.get(activeIndicator)?.map((metric) => <div className={view.barItem} key={metric.metric_id}>
+              <div className={view.barTop}><span>{formatMetricName(metric.name)}</span><strong>{metric.unit === "ratio" ? formatRatio(metric.value) : metric.value ?? "—"}</strong></div>
               {metric.unit === "ratio" && metric.value !== null && <div className={view.track}><div className={view.fill} style={{ width: `${Math.min(100, Math.max(0, metric.value * 100))}%` }} /></div>}
-              <small className={view.muted}>{metric.name} · {metric.numerator ?? "—"} / {metric.denominator ?? "—"}</small>
+              <small className={view.muted}>{metric.numerator ?? "—"} / {metric.denominator ?? "—"}</small>
             </div>)}
+              </div>}
           </>)}
         </section>
         {!detail && <section className={view.panel}><div className={view.panelHeader}><h2>需要关注</h2><button className={ui.button} onClick={() => setSearch({ classId: classId!, view: "detail" })}>查看全部</button></div>
-          {(result.data?.findings ?? []).length === 0 && <span className={view.muted}>暂无诊断发现</span>}
-          {result.data?.findings.map((finding) => <div className={view.finding} key={finding.finding_id}><div className={view.findingTop}>
-            <strong>{names[finding.indicator_id] ?? finding.indicator_id}</strong>
-            {finding.evidence_refs[0] && <button onClick={() => setEvidence(finding.evidence_refs[0])}>查看依据 ›</button>}
-          </div><p>{finding.description}</p><span className={view.muted}>{finding.evidence_status === "insufficient" ? "证据不足" : finding.evidence_status === "conflicting" ? "证据冲突" : "证据充足"}</span></div>)}
+          {findingList}
         </section>}
       </div>
       {detail ? <section className={view.panel}><div className={view.panelHeader}><h2>班级问题与依据</h2></div>
-        {(result.data?.findings ?? []).length === 0 && <span className={view.muted}>暂无诊断发现</span>}
-        {result.data?.findings.map((finding) => <div className={view.finding} key={finding.finding_id}><div className={view.findingTop}><strong>{names[finding.indicator_id] ?? finding.indicator_id}</strong>
-          {finding.evidence_refs[0] && <button onClick={() => setEvidence(finding.evidence_refs[0])}>查看依据 ›</button>}</div><p>{finding.description}</p><span className={view.muted}>{finding.evidence_status === "insufficient" ? "证据不足" : finding.evidence_status === "conflicting" ? "证据冲突" : "证据充足"}</span></div>)}</section>
+        {findingList}</section>
       : <section className={view.panel}><div className={view.panelHeader}><h2>学生名册</h2><div className={view.tabs}>{classes.map((item) => <button key={item.class_id} aria-pressed={item.class_id === classId} className={`${view.tab} ${item.class_id === classId ? view.tabActive : ""}`} onClick={() => setClass(item.class_id)}>{classNames[item.class_id] ?? item.class_id}</button>)}</div>
         <input className={ui.input} placeholder="搜索学生编号" aria-label="按学生编号过滤名册" value={filter} onChange={(event) => setFilter(event.target.value)} /></div>
         {roster.isLoading && <StatePanel kind="loading" title="正在读取名册" />}

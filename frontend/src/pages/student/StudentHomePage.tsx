@@ -99,12 +99,12 @@ export function StudentHomePage() {
           </section>
 
           <section className={styles.stack}>
-            <h3>需要继续观察</h3>
+            <h3>本次测验的学习发现</h3>
             {result.data.findings.length === 0 ? (
               <StatePanel kind="empty" title="暂时没有需要特别关注的内容" />
             ) : (
               <div className={styles.stack}>
-                {result.data.findings.slice(0, 2).map((finding) => (
+                {result.data.findings.map((finding) => (
                   <FindingCard key={finding.finding_id} finding={finding} indicatorName={indicatorNames[finding.indicator_id]} />
                 ))}
               </div>

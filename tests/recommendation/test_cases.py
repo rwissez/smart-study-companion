@@ -57,6 +57,9 @@ def test_case(case: dict):
 
     assert len(bundle.recommendations) == 1
     rec = bundle.recommendations[0]
+    indicator = next(item for item in catalog.indicators if item.indicator_id == rec.indicator_id)
+    assert indicator.description in rec.goal
+    assert all(finding_id not in rec.reason for finding_id in rec.finding_ids)
 
     # 分类必须与案例设定一致
     assert classify_finding(analysis.findings[0]) == expect["kind"]
@@ -78,7 +81,7 @@ def test_case(case: dict):
         )
 
     if expect.get("require_thinking_task"):
-        assert any("思想迁移" in a.purpose for a in rec.activities), (
+        assert any("共用的方法" in a.purpose for a in rec.activities), (
             f"{case['case_id']} 缺少思想迁移总结任务"
         )
 

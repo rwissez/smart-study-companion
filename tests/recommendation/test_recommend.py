@@ -162,18 +162,18 @@ def test_recommend_1a_path():
     bundle = recommend_rules(make_analysis([finding_1a()]), make_catalog(), make_context(), RecommendationConfig())
     assert len(bundle.recommendations) == 1
     rec = bundle.recommendations[0]
-    assert "倾听式" in rec.reason
+    assert "回看已有步骤" in rec.reason
     assert len(rec.activities) == 2
     assert all(a.material_id in {"M001", "M002"} for a in rec.activities)
     validation = validate_recommendations(bundle, make_analysis([finding_1a()]), make_catalog())
     assert validation.valid, [i.message for i in validation.issues]
 
 
-def test_recommend_1b_declares_revision_limit():
+def test_recommend_1b_starts_with_a_worked_example():
     bundle = recommend_rules(make_analysis([finding_1b()]), make_catalog(), make_context(), RecommendationConfig())
     rec = bundle.recommendations[0]
     # 回头题限制必须如实声明，不编造原题引用
-    assert "服务端" in rec.reason or "教师可先从记录列表指定" in rec.reason
+    assert "用自己的话" in rec.activities[0].purpose
     # 扶 + 练：扶用卡片/教材，练用题目
     assert rec.activities[0].material_id in {"M003", "M004"}
     assert rec.activities[1].material_id in {"M001", "M002"}
@@ -185,7 +185,7 @@ def test_recommend_type3_observations_no_verdict():
     bundle = recommend_rules(make_analysis([finding_type3()]), make_catalog(), make_context(), RecommendationConfig())
     rec = bundle.recommendations[0]
     # 剧本红线：证据不足时不输出会/不会式结论
-    assert "不输出会/不会结论" in rec.reason
+    assert "不足以判断表现" in rec.reason
     assert len(rec.activities) == 2  # T01I2 下 M005/M006 两道观察题，覆盖两种变式
     validation = validate_recommendations(bundle, make_analysis([finding_type3()]), make_catalog())
     assert validation.valid, [i.message for i in validation.issues]
@@ -194,8 +194,8 @@ def test_recommend_type3_observations_no_verdict():
 def test_recommend_type2_two_levels():
     bundle = recommend_rules(make_analysis([finding_type2()]), make_catalog(), make_context(), RecommendationConfig())
     rec = bundle.recommendations[0]
-    assert "思想迁移" in rec.activities[1].purpose
-    assert "数形结合" in rec.reason or "思想迁移" in rec.reason
+    assert "共用的方法" in rec.activities[1].purpose
+    assert "换一道题" in rec.reason
     validation = validate_recommendations(bundle, make_analysis([finding_type2()]), make_catalog())
     assert validation.valid, [i.message for i in validation.issues]
 
@@ -292,7 +292,7 @@ def test_validate_rejects_hint_leaking_answer():
     assert not result.valid
     leak_issues = [i for i in result.issues if i.code == "HINT_LEAKS_ANSWER"]
     assert leak_issues, [i.code for i in result.issues]
-    assert "needs_review" in leak_issues[0].message
+    assert "再发布" in leak_issues[0].message
 
 
 def test_validate_accepts_hints_when_no_reference_answer():

@@ -1,5 +1,9 @@
 import { useState } from "react";
 import { Link } from "react-router-dom";
+import { useQuery } from "@tanstack/react-query";
+import { getModelSettings, isDemo, sendChat, type ChatContext, type ChatMessage } from "../../api/service";
+import { useSession } from "../../app/session";
+import { ModelSettingsForm } from "./ModelSettingsForm";
 import styles from "../../styles/ui.module.css";
 
 interface Props {
@@ -7,65 +11,76 @@ interface Props {
   targetLabel: string;
   nodeName: string;
   backTo: { label: string; to: string };
+  analysisContext?: ChatContext;
 }
 
-/**
- * 双端共用对话视图。
- * 模型未配置时不产生任何回答，也不显示虚构的工具轨迹。
- */
-export function ChatPanel({ role, targetLabel, nodeName, backTo }: Props) {
+export function ChatPanel({ role, targetLabel, nodeName, backTo, analysisContext }: Props) {
+  const { session } = useSession();
+  const settings = useQuery({
+    queryKey: ["model-settings", session?.session_id],
+    queryFn: getModelSettings,
+    enabled: Boolean(session),
+  });
   const [draft, setDraft] = useState("");
-  const configured = false;
+  const [messages, setMessages] = useState<ChatMessage[]>([]);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+  const [includeAnalysis, setIncludeAnalysis] = useState(false);
+  const configured = settings.data?.configured === true;
+  const canIncludeAnalysis = Boolean(settings.data?.analysis_context_available && analysisContext);
 
-  return (
+  return <div className={styles.stack}>
+    {role === "teacher" && !isDemo && settings.data && <ModelSettingsForm current={settings.data} />}
+    {settings.error && <p role="alert">{settings.error.message}</p>}
     <div className={`${styles.card} ${styles.stack}`}>
       <div className={styles.cardHead}>
         <div className={styles.row}>
-          <span className={styles.cardTitle}>
-            {role === "teacher" ? "教师对话" : "学习对话"}
-          </span>
-          <span className={`${styles.badge} ${styles.badgeNeutral}`}>对象：{targetLabel}</span>
-          <span className={`${styles.badge} ${styles.badgeNeutral}`}>节点：{nodeName}</span>
+          <span className={styles.cardTitle}>{role === "teacher" ? "教师对话" : "学习对话"}</span>
+          <span className={styles.small}>{targetLabel} · {nodeName}</span>
         </div>
-        <span className={`${styles.badge} ${styles.badgeWarn}`}>模型服务尚未配置</span>
+        {!configured && <span className={styles.badge}>模型服务尚未配置</span>}
       </div>
-
-      <div className={styles.cardBody}>
-        <div className={`${styles.state} ${styles.stateEmpty}`} role="status">
-          <span className={styles.stateTitle}>暂无可对话内容</span>
-          <span>
-            当前构建没有接入模型服务，提问后会返回“模型服务尚未配置”。学情分析、证据和学习建议不受影响，
-            可以直接在对应页面查看。
-          </span>
-          <div className={styles.row}>
-            <Link className={styles.button} to={backTo.to}>
-              {backTo.label}
-            </Link>
-          </div>
+      <div className={`${styles.cardBody} ${styles.stack}`}>
+        <p className={styles.small}>消息会发给所配置的模型。只有连接本机模型时，才可选择附上当前学情摘要。</p>
+        <Link to={backTo.to}>{backTo.label}</Link>
+        <div aria-live="polite" className={styles.stack}>
+          {messages.map((message, index) => <div key={index}>
+            <strong>{message.role === "user" ? "你" : "AI 助手"}</strong>
+            <p style={{ whiteSpace: "pre-wrap" }}>{message.content}</p>
+          </div>)}
         </div>
-      </div>
-
-      <div className={styles.cardBody} style={{ borderTop: "1px solid var(--border)" }}>
-        <label className={styles.field}>
-          <span className={styles.fieldLabel}>你的问题</span>
-          <textarea
-            className={styles.input}
-            style={{ minHeight: 88, padding: 10, resize: "vertical" }}
-            value={draft}
-            onChange={(e) => setDraft(e.target.value)}
-            placeholder="例如：这名学生在移项上主要卡在哪一步？"
-            disabled={!configured}
-          />
-        </label>
-        <div className={styles.row} style={{ marginTop: "var(--space-3)" }}>
-          <button type="button" className={`${styles.button} ${styles.buttonPrimary}`} disabled>
-            发送
+        {error && <p role="alert">{error}</p>}
+        <form className={styles.stack} onSubmit={async (event) => {
+          event.preventDefault();
+          const text = draft.trim();
+          if (!configured || busy || !text) return;
+          const next: ChatMessage[] = [...messages.slice(-38), { role: "user", content: text }];
+          setBusy(true);
+          setError("");
+          try {
+            const reply = await sendChat(next, includeAnalysis && canIncludeAnalysis ? analysisContext : undefined);
+            setMessages([...next, { role: "assistant", content: reply.text }]);
+            setDraft("");
+          } catch (failure) {
+            setError(failure instanceof Error ? failure.message : "发送失败，请重试。");
+          } finally {
+            setBusy(false);
+          }
+        }}>
+          <label className={styles.field}>你的问题
+            <textarea className={styles.input} rows={3} value={draft} disabled={!configured || busy}
+              maxLength={8000} onChange={(e) => setDraft(e.target.value)} />
+          </label>
+          {canIncludeAnalysis && <label className={styles.row}>
+            <input type="checkbox" checked={includeAnalysis} disabled={busy}
+              onChange={(event) => setIncludeAnalysis(event.target.checked)} />
+            附上当前学情摘要和已发布学习目标
+          </label>}
+          <button className={`${styles.button} ${styles.buttonPrimary}`} disabled={!configured || busy || !draft.trim()}>
+            {busy ? "等待回复…" : "发送"}
           </button>
-          <span className={`${styles.small} ${styles.muted}`}>
-            模型未配置，输入框暂不可用；配置接入后再开放提问。
-          </span>
-        </div>
+        </form>
       </div>
     </div>
-  );
+  </div>;
 }

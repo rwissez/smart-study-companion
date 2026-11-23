@@ -112,8 +112,15 @@ export function CurriculumPage() {
                       <td className={styles.num}>{item.indicator_id}</td>
                       <td>{item.description}</td>
                       <td className={styles.num}>{item.curriculum_ref}</td>
-                      <td>{item.curriculum_page}</td>
-                      <td>{item.textbook_pages}</td>
+                      <td>{item.curriculum_page ? `课程标准（2022 年版）· 文件页／正文页 ${item.curriculum_page}（赛方表列）` : "暂无页码"}</td>
+                      <td>
+                        <div>{item.textbook_pages || "暂无正文页码"}</div>
+                        {item.textbook_refs?.map((source) => (
+                          <div key={`${source.source_file}:${source.pdf_page}`}>
+                            {source.source_file.split("/").at(-1)} · 文件第 {source.pdf_page} 页
+                          </div>
+                        ))}
+                      </td>
                     </tr>
                   ))}
                 </tbody>
@@ -146,7 +153,7 @@ export function CurriculumPage() {
                       <span aria-hidden="true">→</span>
                       <strong>{indicatorName(link.to_id)}</strong>
                     </div>
-                    <p className={`${styles.small} ${styles.muted}`}>依据：{link.basis}</p>
+                    <p className={`${styles.small} ${styles.muted}`}>{link.description ?? link.basis}</p>
                   </div>
                 ))
               )}

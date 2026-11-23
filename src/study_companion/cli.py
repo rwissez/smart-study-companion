@@ -57,6 +57,14 @@ def _load_fixture(path: Path) -> dict[str, Any]:
 
 def _clear_dataset(session: Session, dataset_id: str) -> None:
     """Delete one dataset's rows, children first, for an idempotent reseed."""
+    session.execute(delete(models.Job).where(models.Job.dataset_id == dataset_id))
+    session.execute(
+        delete(models.RecommendationResult).where(
+            models.RecommendationResult.run_id.in_(
+                select(models.AnalysisRun.id).where(models.AnalysisRun.dataset_id == dataset_id)
+            )
+        )
+    )
     session.execute(
         delete(models.AnalysisResult).where(
             models.AnalysisResult.run_id.in_(

@@ -24,6 +24,9 @@ from study_companion.contracts import (
     RunContext,
     StudentResult,
 )
+from study_companion.curriculum.builder import parse_rubric_scores
+
+RubricObservations = dict[str, list[tuple[str, bool]]]
 
 # 表现较好判定线（得分率 >= 该值记 observed_strength）；阈值随 rule_version 可追溯
 STRENGTH_THRESHOLD = 0.8
@@ -45,10 +48,12 @@ def analyze_dataset(
     material_indicators: dict[str, set[str]] = {}
     indicator_materials: dict[str, set[str]] = defaultdict(set)
     reviewed_variants: dict[str, set[str]] = defaultdict(set)
+    questions = {material.material_id for material in catalog.materials if material.material_type == "question"}
     for material in catalog.materials:
         material_indicators[material.material_id] = set(material.indicator_ids)
         for iid in material.indicator_ids:
-            indicator_materials[iid].add(material.material_id)
+            if material.material_id in questions:
+                indicator_materials[iid].add(material.material_id)
             if material.reviewed_variant_tag:
                 reviewed_variants[iid].add(material.material_id)
 
@@ -56,10 +61,35 @@ def analyze_dataset(
     unmapped = sorted({e.material_id for e in data.selected_events if e.material_id not in material_indicators})
 
     events_by_key: dict[tuple[str, str], list[AnswerEvent]] = defaultdict(list)
+    allowed = {
+        node.node_id: set(node.available_question_ids)
+        for node in data.nodes if node.available_question_ids is not None
+    }
+    excluded_by_node: dict[str, int] = defaultdict(int)
     for event in data.selected_events:
+        if event.node_id in allowed and event.material_id not in allowed[event.node_id]:
+            excluded_by_node[event.node_id] += 1
+            continue
         events_by_key[(event.student_id, event.node_id)].append(event)
 
-    class_of = {s.student_id: s.class_id for s in data.students}
+    raw_by_id = {record.record_id: record.payload for record in data.raw_records if record.table_name == "records"}
+    rubric_by_material = {material.material_id: material.rubric_points for material in catalog.materials}
+    observations = {}
+    for events in events_by_key.values():
+        for event in _valid_events(events):
+            points = rubric_by_material.get(event.material_id, [])
+            raw = raw_by_id.get(event.selected_record_id, {})
+            scores = parse_rubric_scores(raw.get("评分点得分") or "", points)
+            if len(scores) == len(points) and sum(scores.values()) == event.score:
+                observations[event.event_id] = [
+                    (point.description, scores[point.point_id] < point.max_score)
+                    for point in points if point.description not in {"答案正确", "结果正确"}
+                ]
+    coverage_by_node = {
+        node.node_id: {key: values & allowed[node.node_id] for key, values in indicator_materials.items()}
+        if node.node_id in allowed else indicator_materials
+        for node in data.nodes
+    }
     roster_classes: list[str] = []
     for student in data.students:
         if student.class_id not in roster_classes:
@@ -75,8 +105,8 @@ def analyze_dataset(
                 _student_result(
                     student.student_id, student.class_id, node_id,
                     events_by_key.get((student.student_id, node_id), []),
-                    indicator_ids, material_indicators, indicator_materials,
-                    reviewed_variants, context, config, unmapped, multi_node,
+                    indicator_ids, material_indicators, coverage_by_node[node_id],
+                    reviewed_variants, context, config, unmapped, multi_node, observations, node_id in allowed,
                 )
             )
 
@@ -90,8 +120,8 @@ def analyze_dataset(
             class_results.append(
                 _class_result(
                     class_id, node_id, roster, class_events,
-                    indicator_ids, material_indicators, indicator_materials,
-                    reviewed_variants, context, config, unmapped,
+                    indicator_ids, material_indicators, coverage_by_node[node_id],
+                    reviewed_variants, context, config, unmapped, observations, node_id in allowed,
                 )
             )
 
@@ -103,7 +133,7 @@ def analyze_dataset(
         config=config,
         student_results=student_results,
         class_results=class_results,
-        quality_summary=_quality_summary(data),
+        quality_summary={**_quality_summary(data), "outside_node_scope": sum(excluded_by_node.values())},
     )
 
 
@@ -123,6 +153,7 @@ def _metrics_for_events(
     indicator_id: str,
     indicator_materials: dict[str, set[str]],
     reviewed_variants: dict[str, set[str]],
+    node_scope_known: bool,
     context: RunContext,
     config: AnalysisConfig,
 ) -> list[Metric]:
@@ -181,7 +212,7 @@ def _metrics_for_events(
             unit="ratio", scope=scope, evidence_refs=refs,
             excluded_event_count=excluded_count,
             limitations=list(common_limitations)
-            + ["衡量观测覆盖，不意味着所有可用题均被布置；目录未含节点可用题目集合，按指标全集计算"],
+            + ["分母为本次测验可用的同项题目" if node_scope_known else "未提供本次可用题目，按目录中该项全部题目计算"],
         ),
     ]
     reviewed = len(reviewed_variants.get(indicator_id, set()))
@@ -200,11 +231,13 @@ def _finding_for_indicator(
     context: RunContext,
     config: AnalysisConfig,
     finding_id: str,
+    observations: RubricObservations,
 ) -> Finding:
     valid = _valid_events(events)
     distinct_items = {e.material_id for e in valid}
     quarantined = [e for e in events if e.disposition == "quarantine_event"]
     score_ratio = metrics_by_name[SCORE_RATIO]
+    class_coverage = metrics_by_name.get(STUDENT_RATE)
     refs = [
         EvidenceRef(kind="metric", id=m.metric_id, run_id=context.run_id)
         for m in metrics_by_name.values()
@@ -216,6 +249,8 @@ def _finding_for_indicator(
     elif len(distinct_items) < config.min_valid_distinct_items:
         status, performance = "insufficient", "undetermined"
         description = f"有效不同样题仅{len(distinct_items)}道，低于配置下限{config.min_valid_distinct_items}道，证据不足不定论"
+    elif class_coverage and (class_coverage.numerator or 0) < 2:
+        status, performance, description = "insufficient", "undetermined", "该项的有效作答只来自一名学生，暂不能判断班级共性。"
     else:
         status = "sufficient"
         performance = "observed_strength" if score_ratio.value >= STRENGTH_THRESHOLD else "needs_practice"
@@ -225,6 +260,25 @@ def _finding_for_indicator(
             f"有效不同样题{len(distinct_items)}道"
         )
         limitations.append(f"表现判定阈值{STRENGTH_THRESHOLD}，规则版本{context.rule_version}")
+    rubric_focus = None
+    if score_ratio.value is not None and not quarantined:
+        observed: dict[str, set[str]] = defaultdict(set)
+        missed: dict[str, dict[str, str]] = defaultdict(dict)
+        for event in valid:
+            if not event.selected_record_id:
+                continue
+            subject = event.student_id if class_coverage else event.selected_record_id
+            for label, lost_points in observations.get(event.event_id, []):
+                observed[label].add(subject)
+                if lost_points:
+                    missed[label][subject] = event.selected_record_id
+        common = [label for label, entries in missed.items() if len(entries) >= (2 if class_coverage else 1)]
+        if common:
+            rubric_focus = max(common, key=lambda label: (len(missed[label]), len(missed[label]) / len(observed[label]), label))
+            unit = "人" if class_coverage else "条作答"
+            description += f"。在记录了「{rubric_focus}」这一评分点的 {len(observed[rubric_focus])} {unit}中，{len(missed[rubric_focus])} {unit}未拿满该评分点。"
+            refs.extend(EvidenceRef(kind="record", id=record_id, run_id=context.run_id)
+                        for record_id in list(missed[rubric_focus].values())[:5])
     if quarantined:
         status = "conflicting"
         limitations.append(f"{len(quarantined)}个事件因记录冲突被隔离，判定基于其余有效记录")
@@ -233,6 +287,7 @@ def _finding_for_indicator(
         finding_id=finding_id,
         indicator_id=indicator_id,
         description=description,
+        rubric_focus=rubric_focus,
         evidence_status=status,
         performance=performance,
         evidence_refs=refs,
@@ -252,7 +307,7 @@ def _student_result(
     indicator_materials: dict[str, set[str]],
     reviewed_variants: dict[str, set[str]],
     context: RunContext, config: AnalysisConfig,
-    unmapped: list[str], multi_node: bool,
+    unmapped: list[str], multi_node: bool, observations: RubricObservations, node_scope_known: bool,
 ) -> StudentResult:
     metrics: list[Metric] = []
     findings: list[Finding] = []
@@ -264,11 +319,11 @@ def _student_result(
             continue
         scope = MetricScope(student_id=student_id, node_id=node_id, indicator_id=iid)
         ind_metrics = _metrics_for_events(
-            scope, "STU", scoped, iid, indicator_materials, reviewed_variants, context, config
+            scope, "STU", scoped, iid, indicator_materials, reviewed_variants, node_scope_known, context, config
         )
         metrics.extend(ind_metrics)
         by_name = {m.name: m for m in ind_metrics}
-        findings.append(_finding_for_indicator(iid, scoped, by_name, context, config, f"F-STU-{student_id}-{node_id}-{iid}"))
+        findings.append(_finding_for_indicator(iid, scoped, by_name, context, config, f"F-STU-{student_id}-{node_id}-{iid}", observations))
 
     if not events:
         limitations.append("该节点无作答记录")
@@ -292,7 +347,7 @@ def _class_result(
     indicator_materials: dict[str, set[str]],
     reviewed_variants: dict[str, set[str]],
     context: RunContext, config: AnalysisConfig,
-    unmapped: list[str],
+    unmapped: list[str], observations: RubricObservations, node_scope_known: bool,
 ) -> ClassResult:
     metrics: list[Metric] = []
     findings: list[Finding] = []
@@ -305,16 +360,17 @@ def _class_result(
             continue
         scope = MetricScope(class_id=class_id, node_id=node_id, indicator_id=iid)
         ind_metrics = _metrics_for_events(
-            scope, "CLS", scoped, iid, indicator_materials, reviewed_variants, context, config
+            scope, "CLS", scoped, iid, indicator_materials, reviewed_variants, node_scope_known, context, config
         )
         # 学生观测率：分母固定为班级名册人数，保留无记录学生
         roster_count = len(roster)
+        indicator_students = {event.student_id for event in _valid_events(scoped)}
         ind_metrics.append(
             Metric(
                 metric_id=f"M-CLS-{class_id}-{node_id}-{iid}-{STUDENT_RATE}",
                 name=STUDENT_RATE,
-                value=len(observed_students) / roster_count if roster_count else None,
-                numerator=len(observed_students), denominator=roster_count,
+                value=len(indicator_students) / roster_count if roster_count else None,
+                numerator=len(indicator_students), denominator=roster_count,
                 unit="ratio", scope=scope,
                 evidence_refs=[
                     EvidenceRef(kind="record", id=e.selected_record_id, run_id=context.run_id)
@@ -325,7 +381,7 @@ def _class_result(
         )
         metrics.extend(ind_metrics)
         by_name = {m.name: m for m in ind_metrics}
-        findings.append(_finding_for_indicator(iid, scoped, by_name, context, config, f"F-CLS-{class_id}-{node_id}-{iid}"))
+        findings.append(_finding_for_indicator(iid, scoped, by_name, context, config, f"F-CLS-{class_id}-{node_id}-{iid}", observations))
 
     if len(observed_students) < len(roster):
         limitations.append(f"名册{len(roster)}人中仅{len(observed_students)}人有有效记录，不能推断全班整体表现")

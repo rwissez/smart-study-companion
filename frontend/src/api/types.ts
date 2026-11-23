@@ -120,6 +120,7 @@ export interface Material {
   topic_ids: string[];
   indicator_ids: string[];
   content: string;
+  options?: string[];
   source_locator: SourceLocator;
   reference_answer?: string | null;
   reference_explanation?: string | null;
@@ -169,6 +170,7 @@ export interface Indicator {
   curriculum_ref: string;
   curriculum_page: string;
   textbook_pages: string;
+  textbook_refs?: SourceLocator[];
 }
 
 export interface CatalogLink {
@@ -176,9 +178,11 @@ export interface CatalogLink {
   to_id: string;
   relation: "supports" | "prerequisite";
   basis: string;
+  description?: string;
 }
 
 export interface Catalog {
+  materials?: Array<Pick<Material, "material_id" | "material_type" | "indicator_ids" | "content" | "options">>;
   catalog_version: string;
   topics: Topic[];
   indicators: Indicator[];
@@ -220,6 +224,19 @@ export interface RecommendationBundle {
   node_id: string;
   recommendations: Recommendation[];
   validation_issues: Array<{ code: string; message: string }>;
+  pending_review?: boolean;
+  needs_regeneration?: boolean;
+  available_material_ids?: string[];
+  materials?: Catalog["materials"];
+  revisions?: Record<string, RecommendationRevision[]>;
+}
+
+export interface RecommendationRevision {
+  recommendation: Recommendation;
+  reason: string;
+  revision?: number;
+  published?: boolean;
+  created_at?: string;
 }
 
 /** 11：数据集、运行与状态 */
@@ -229,6 +246,7 @@ export interface DatasetSummary {
   status: "ready" | "ready_with_issues" | "blocked";
   student_count: number;
   record_count: number;
+  synthetic?: boolean;
 }
 
 export interface RunSummary {
@@ -264,6 +282,7 @@ export interface Page<T> {
 export interface SessionScope {
   dataset_id: string | null;
   student_id: string | null;
+  synthetic?: boolean | null;
 }
 
 export interface SessionInfo {

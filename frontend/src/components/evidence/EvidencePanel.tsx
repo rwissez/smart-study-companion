@@ -5,7 +5,7 @@ import type { EvidenceKind, EvidenceRecord, Material, Metric } from "../../api/t
 import { getMaterial, readEvidence } from "../../api/service";
 import { queryKeys } from "../../api/queryKeys";
 import { useSession } from "../../app/session";
-import { formatDateTime, formatRatio, gradingStatusLabel } from "../../lib/format";
+import { formatDateTime, formatEvidenceLabel, formatMetricName, formatRatio, gradingStatusLabel } from "../../lib/format";
 import { StatePanel } from "../feedback/StatePanel";
 import styles from "../../styles/ui.module.css";
 
@@ -96,7 +96,10 @@ function OpenEvidencePanel({ initial, runId, catalogVersion, onClose }: Props & 
         <div className={styles.drawerHead}>
           <div>
             <span className={styles.cardTitle}>{titleOf[target.kind]}</span>
-            <div className={`${styles.small} ${styles.muted}`}>{target.id}</div>
+            <details className={`${styles.small} ${styles.muted}`}>
+              <summary>查看来源编号</summary>
+              <div>{target.id}</div>
+            </details>
           </div>
           <button
             type="button"
@@ -132,7 +135,9 @@ function OpenEvidencePanel({ initial, runId, catalogVersion, onClose }: Props & 
             <div className={styles.stackLg}>
               <section>
                 <strong>原题</strong>
-                {materialDetail ? <p>{materialDetail.content}</p> : <p>{material.isLoading ? "正在读取原题…" : "暂无可用题面"}</p>}
+                {materialDetail ? <><p>{materialDetail.content}</p>
+                  {materialDetail.options?.map((option) => <div key={option}>{option}</div>)}
+                </> : <p>{material.isLoading ? "正在读取原题…" : "暂无可用题面"}</p>}
               </section>
               <RecordDetail record={evidence.data} material={materialDetail} />
             </div>
@@ -232,7 +237,7 @@ function MetricDetail({ metric, onOpen }: { metric: Metric; onOpen: (target: Evi
     <div className={styles.stackLg}>
       <dl className={styles.kv}>
         <dt>名称</dt>
-        <dd>{metric.name}</dd>
+        <dd>{formatMetricName(metric.name)}</dd>
         <dt>数值</dt>
         <dd className={styles.num}>
           {metric.unit === "ratio" ? formatRatio(metric.value) : (metric.value ?? "无可用结果")}
@@ -261,10 +266,10 @@ function MetricDetail({ metric, onOpen }: { metric: Metric; onOpen: (target: Evi
       <div>
         <span className={styles.label}>相关记录</span>
         <ul className={styles.steps}>
-          {metric.evidence_refs.map((ref) => (
+          {metric.evidence_refs.map((ref, index) => (
             <li key={`${ref.kind}-${ref.id}`}>
               <button type="button" className={styles.button} onClick={() => onOpen(ref)}>
-                {titleOf[ref.kind]} · {ref.id}
+                {formatEvidenceLabel(ref, index + 1)}
               </button>
             </li>
           ))}
@@ -279,8 +284,6 @@ function MaterialDetail({ material }: { material: Material }) {
   return (
     <div className={styles.stackLg}>
       <dl className={styles.kv}>
-        <dt>编号</dt>
-        <dd>{material.material_id}</dd>
         <dt>类型</dt>
         <dd>
           {material.material_type === "question"
@@ -302,6 +305,7 @@ function MaterialDetail({ material }: { material: Material }) {
       <div>
         <span className={styles.label}>内容</span>
         <p style={{ whiteSpace: "pre-wrap" }}>{material.content}</p>
+        {material.options?.map((option) => <div key={option}>{option}</div>)}
       </div>
 
       {material.reference_explanation ? (

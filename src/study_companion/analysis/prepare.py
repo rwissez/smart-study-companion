@@ -8,6 +8,8 @@
 
 from __future__ import annotations
 
+import re
+
 import hashlib
 import json
 
@@ -104,6 +106,12 @@ def _to_int(value: str | None) -> int | None:
         return None
 
 
+def parse_node_questions(value: str | None) -> list[str] | None:
+    if value is None or not value.strip():
+        return None
+    return [item for item in re.split(r"[、,，;；\s]+", value.strip()) if item]
+
+
 def _require_columns(
     table_name: str,
     rows: list[RawRow],
@@ -145,7 +153,15 @@ def prepare_dataset(tables: RawTables, config: ImportConfig) -> PreparedDataset:
     _require_columns("records", tables.records, RECORDS_COLUMNS, ("record_id", "student_id", "material_id", "node_id"))
 
     students = _build_students(tables.students)
-    nodes = [Node(node_id=row_id) for row_id in _table_ids(tables.nodes, NODES_COLUMNS["node_id"])]
+    nodes_by_id = {}
+    for row in tables.nodes:
+        node_id = _pick(row, NODES_COLUMNS["node_id"])
+        if node_id:
+            nodes_by_id.setdefault(node_id, Node(
+                node_id=node_id, label=row.get("说明"),
+                available_question_ids=parse_node_questions(row.get("可用题目编号")),
+            ))
+    nodes = list(nodes_by_id.values())
 
     # 2. 保存全部原始行（含 source_row_number，保证可追溯）
     #    records 表保留原始记录编号（与 selected_record_id/quality_issues 的引用一致）；
@@ -175,6 +191,16 @@ def prepare_dataset(tables: RawTables, config: ImportConfig) -> PreparedDataset:
 
     parsed = _parse_records(tables.records, next_issue_id, issues)
     selected_events = _select_events(parsed, config, next_issue_id, issues)
+    question_scope = {node.node_id: set(node.available_question_ids) for node in nodes if node.available_question_ids is not None}
+    for event in selected_events:
+        if event.node_id in question_scope and event.material_id not in question_scope[event.node_id]:
+            issues.append(QualityIssue(
+                issue_id=next_issue_id(), code="OUTSIDE_NODE_SCOPE", severity="warning",
+                record_ids=[event.selected_record_id] if event.selected_record_id else [],
+                event_id=event.event_id,
+                message="作答所用题目不在该测验节点的可用清单中。保留原记录，学情分析排除此条。",
+                action="retain", rule_version=config.rule_version,
+            ))
 
     manifest = SourceManifest(
         dataset_id=_dataset_id(tables),

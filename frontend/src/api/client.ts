@@ -2,7 +2,6 @@ import type { ApiEnvelope, ApiErrorBody } from "./types";
 
 /** 08 的错误码到页面提示的映射，未列出的码用服务返回的 message */
 const FALLBACK_MESSAGES: Record<string, string> = {
-  VALIDATION_ERROR: "输入内容不符合要求。",
   FORBIDDEN: "当前身份不能查看这部分内容。",
   NOT_FOUND: "请求的内容不存在。",
   CONFLICT: "内容已更新，请读取最新版本。",
@@ -37,7 +36,7 @@ export async function request<T>(
 ): Promise<T> {
   const headers = new Headers(init.headers);
   headers.set("Accept", "application/json");
-  if (init.body && !headers.has("Content-Type")) {
+  if (init.body && !(init.body instanceof FormData) && !headers.has("Content-Type")) {
     headers.set("Content-Type", "application/json");
   }
   if (authToken) {
@@ -57,6 +56,17 @@ export async function request<T>(
   }
 
   return (payload as ApiEnvelope<T>).data;
+}
+
+export async function requestFile(path: string): Promise<Blob> {
+  const response = await fetch(`${BASE}${path}`, {
+    headers: authToken ? { Authorization: `Bearer ${authToken}` } : {},
+  });
+  if (!response.ok) {
+    const body = await response.json().catch(() => null) as ApiErrorBody | null;
+    throw new HttpError(body?.error?.code ?? "DOWNLOAD_ERROR", body?.error?.message ?? "下载失败。", response.status);
+  }
+  return response.blob();
 }
 
 export function toMessage(error: unknown): string {

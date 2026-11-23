@@ -66,3 +66,4 @@
 .student strong { font-size:15px; }
 .tab { cursor:pointer; }
 @media(max-width:1200px) { .layout,.profileLayout { grid-template-columns:1fr; } }
+.indicatorSelect { min-width: 0; max-width: 65%; text-overflow: ellipsis; }

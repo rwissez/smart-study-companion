@@ -43,7 +43,7 @@ export function IdentityPage() {
       <header className={page.identityHead}>
         <div className={styles.row}>
           <h1>智慧学伴</h1>
-          <DemoBadge />
+          {(isDemo || identities.data) && <DemoBadge synthetic={isDemo || identities.data?.dataset.synthetic === true} />}
         </div>
         <p className={styles.muted}>
           学情诊断与个性化学习演示界面。选择身份进入对应的教师工作台或学生学习空间。
@@ -112,7 +112,7 @@ export function IdentityPage() {
 
       <footer className={`${styles.small} ${styles.muted}`}>
         数据来源：{isDemo ? "固定示例数据（不是真实学生）" : "本地服务接口"}　·　
-        模型服务：尚未配置　·　会话刷新后需重新选择身份
+        会话刷新后需重新选择身份
       </footer>
     </div>
   );

@@ -27,6 +27,8 @@ STATUS_BY_CODE: dict[str, int] = {
     "UNPROCESSABLE": 422,
     "MODEL_NOT_CONFIGURED": 503,
     "SERVICE_UNAVAILABLE": 503,
+    "MATERIAL_NOT_FOUND": 422,
+    "CONTEXT_MISMATCH": 409,
 }
 
 CODE_BY_STATUS: dict[int, str] = {
@@ -54,7 +56,7 @@ def install_error_handlers(app: FastAPI) -> None:
         )
 
     @app.exception_handler(RequestValidationError)
-    async def _validation_error(_request: Request, exc: RequestValidationError) -> JSONResponse:
+    async def _validation_error(request: Request, exc: RequestValidationError) -> JSONResponse:
         details = [
             {
                 "field": ".".join(str(part) for part in error.get("loc", ())[1:]) or "body",
@@ -62,9 +64,10 @@ def install_error_handlers(app: FastAPI) -> None:
             }
             for error in exc.errors()
         ]
+        is_upload = request.method == "POST" and request.url.path == "/api/v1/datasets"
         return JSONResponse(
-            status_code=400,
-            content=failure("VALIDATION_ERROR", "输入字段不符合要求", details),
+            status_code=422 if is_upload else 400,
+            content=failure("UNPROCESSABLE" if is_upload else "VALIDATION_ERROR", "输入字段不符合要求", details),
         )
 
     @app.exception_handler(StarletteHTTPException)

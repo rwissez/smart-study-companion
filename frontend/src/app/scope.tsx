@@ -40,10 +40,11 @@ export function ScopeProvider({ children }: { children: ReactNode }) {
   const datasets = useQuery({
     queryKey: queryKeys.datasets(session),
     queryFn: async () => {
+      if (session?.role === "student" && session.scope.dataset_id) {
+        return [{ dataset_id: session.scope.dataset_id, status: "已选择" }];
+      }
       const options = await listDatasets();
-      return session?.scope.dataset_id && session.role === "student"
-        ? options.filter((item) => item.dataset_id === session.scope.dataset_id)
-        : options;
+      return options;
     },
     enabled: Boolean(session),
     staleTime: 60_000,

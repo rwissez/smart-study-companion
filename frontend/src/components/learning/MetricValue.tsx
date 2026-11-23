@@ -1,5 +1,5 @@
 import type { Metric } from "../../api/types";
-import { formatFraction, formatRatio } from "../../lib/format";
+import { formatFraction, formatMetricName, formatRatio } from "../../lib/format";
 import styles from "../../styles/ui.module.css";
 
 /** 单个统计项：数值、分子分母、范围与限制都摆出来，不做二次计算 */
@@ -14,7 +14,7 @@ export function MetricValue({ metric }: { metric: Metric }) {
 
   return (
     <div className={`${styles.card} ${styles.cardPad} ${styles.stack}`}>
-      <span className={styles.label}>{metric.name}</span>
+      <span className={styles.label}>{formatMetricName(metric.name)}</span>
       <span className={isNull ? styles.metricValueNull : styles.metricValue}>
         {isNull ? "无可用结果" : display}
       </span>

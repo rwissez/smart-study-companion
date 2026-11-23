@@ -18,6 +18,7 @@
 
 # Python environment and generated files
 .venv/
+.local-tools/
 __pycache__/
 *.py[cod]
 *.egg-info/

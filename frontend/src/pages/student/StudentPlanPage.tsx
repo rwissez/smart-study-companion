@@ -1,7 +1,7 @@
 ﻿import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
-import { getRecommendations } from "../../api/service";
+import { getCatalog, getRecommendations, isDemo } from "../../api/service";
 import { queryKeys } from "../../api/queryKeys";
 import { useScope } from "../../app/scope";
 import { useSession } from "../../app/session";
@@ -25,6 +25,12 @@ export function StudentPlanPage() {
     retry: false,
   });
 
+  const catalogVersion = recommendations.data?.catalog_version;
+  const catalog = useQuery({
+    queryKey: queryKeys.catalog(catalogVersion ?? null),
+    queryFn: () => getCatalog(catalogVersion),
+    enabled: isDemo && Boolean(catalogVersion),
+  });
   const nodeName = nodes.find((n) => n.node_id === nodeId)?.name ?? "未选择节点";
 
   return (
@@ -67,11 +73,16 @@ export function StudentPlanPage() {
       ) : null}
 
       {recommendations.data ? (
+        recommendations.data.pending_review && recommendations.data.recommendations.length === 0 ? (
+          <StatePanel kind="info" title="学习建议正在复核" message="教师核对材料和建议后，才能在这里查看。" />
+        ) : (
         <RecommendationList
           key={`${runId}:${nodeId}:${studentId}`}
           recommendations={recommendations.data.recommendations}
+          materials={recommendations.data.materials ?? catalog.data?.materials}
           onOpenMaterial={(materialId) => setEvidence({ kind: "material", id: materialId })}
         />
+        )
       ) : null}
       <div className={styles.row}>
         <Link className={styles.button} to="/student/chat">就我的学习计划提问</Link>

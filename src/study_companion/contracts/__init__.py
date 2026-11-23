@@ -45,6 +45,7 @@ class Student(Contract):
 class Node(Contract):
     node_id: str
     label: str | None = None
+    available_question_ids: list[str] | None = None
 
 
 class SourceRecord(Contract):
@@ -91,12 +92,17 @@ class SourceLocator(Contract):
 class Topic(Contract):
     topic_id: str
     title: str
+    goal: str = ""
 
 
 class Indicator(Contract):
     indicator_id: str
     topic_id: str
     description: str
+    curriculum_ref: str = ""
+    curriculum_page: str = ""
+    textbook_pages: str = ""
+    textbook_refs: list[SourceLocator] = Field(default_factory=list)
 
 
 class RubricPoint(Contract):
@@ -111,6 +117,7 @@ class Material(Contract):
     topic_ids: list[str]
     indicator_ids: list[str]
     content: str
+    options: list[str] = Field(default_factory=list)
     source_locator: SourceLocator
     reference_answer: str | None = None
     reference_explanation: str | None = None
@@ -180,6 +187,7 @@ class Finding(Contract):
     finding_id: str
     indicator_id: str
     description: str
+    rubric_focus: str | None = None
     evidence_status: Literal["sufficient", "insufficient", "conflicting"]
     performance: Literal["observed_strength", "needs_practice", "undetermined"]
     evidence_refs: list[EvidenceRef]

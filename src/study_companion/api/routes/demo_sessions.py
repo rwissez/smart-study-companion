@@ -43,6 +43,7 @@ def create_demo_session(
     token, scope, expires_at = create_session(
         db, payload.role, payload.dataset_id, payload.student_id
     )
+    db.commit()
     response.status_code = status.HTTP_201_CREATED
     return success(
         {
@@ -54,6 +55,7 @@ def create_demo_session(
                 "dataset_id": scope.dataset_id,
                 "student_id": scope.student_id,
                 "bootstrap": scope.is_bootstrap,
+                "synthetic": bool(db.get(models.Dataset, scope.dataset_id).manifest_json.get("synthetic", False)) if scope.dataset_id else None,
                 "capabilities": list(scope.capabilities),
             },
         }
@@ -63,7 +65,10 @@ def create_demo_session(
 @router.get("/datasets")
 def list_datasets(db: DbSession, scope: Scope) -> dict:
     scope.require("list_datasets")
-    rows = db.scalars(select(models.Dataset).order_by(models.Dataset.created_at.desc())).all()
+    query = select(models.Dataset)
+    if scope.dataset_id is not None:
+        query = query.where(models.Dataset.id == scope.dataset_id)
+    rows = db.scalars(query.order_by(models.Dataset.created_at.desc())).all()
     counts = dict(
         db.execute(
             select(models.Student.dataset_id, func.count())
@@ -87,7 +92,8 @@ def list_datasets(db: DbSession, scope: Scope) -> dict:
 
 @router.get("/datasets/{dataset_id}/runs")
 def list_dataset_runs(dataset_id: str, db: DbSession, scope: Scope) -> dict:
-    scope.require("list_datasets")
+    if scope.role != "student":
+        scope.require("list_datasets")
     if scope.dataset_id is not None:
         scope.require_dataset(dataset_id)
     if db.get(models.Dataset, dataset_id) is None:
