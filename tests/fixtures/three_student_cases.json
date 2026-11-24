@@ -86,7 +86,7 @@
       },
       "expect": {
         "kind": "1b",
-        "reason_contains": ["递减干预"],
+        "reason_contains": ["接住即停"],
         "support_first": ["M003", "M004"]
       }
     },
@@ -171,7 +171,7 @@
       },
       "expect": {
         "kind": "type3",
-        "reason_contains": ["不输出会/不会结论"]
+        "reason_contains": ["会或不会"]
       }
     }
   ]

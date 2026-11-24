@@ -47,6 +47,7 @@
 | 重复建议（同 finding 多条） | DUPLICATE_RECOMMENDATION | ✅ |
 | 重复材料（跨建议） | DUPLICATE_MATERIAL | ✅ |
 | 负荷超限（需传 config） | LOAD_LIMIT_EXCEEDED | ✅ |
+| 目标表述重复（呈现层去重兜底） | DUPLICATE_GOAL | ✅ |
 | 提示泄答 | HINT_LEAKS_ANSWER | ✅（置 needs_review，不得 validated 保存） |
 | 空话禁令 | VAGUE_REASON | ✅ |
 | 活动顺序 / 提示 / 观察点 / 调整条件缺失 | ACTIVITY_ORDER_INVALID / HINT_MISSING / OBSERVATION_MISSING / ADJUSTMENT_MISSING | ✅ |

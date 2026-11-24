@@ -168,6 +168,12 @@ def _activity(
     )
 
 
+def _excerpt(material, limit: int = 24) -> str:
+    """材料题干摘要（织入文案，治模板死板）：超长截断。"""
+    text = (material.content or "").strip().replace("\n", " ")
+    return text[:limit] + ("…" if len(text) > limit else "")
+
+
 # ---------------------------------------------------------------------------
 # 四类建议生成（剧本 v4）
 # ---------------------------------------------------------------------------
@@ -182,8 +188,12 @@ def _build_type3(finding: Finding, catalog: Catalog, rec_id: str, exclude: froze
         _activity(
             m,
             i,
-            purpose=f"观察用题组第 {i} 题：收集证据，不判定会或不会",
-            hints=("这几道小题帮我们看看你的思路，不着急，做完可以自己检查",),
+            purpose=f"观察题第 {i} 题（{_excerpt(m)}）：看这一问下思路是否走通，不判定会或不会",
+            hints=(
+                "这道题不用赶时间，按你的想法往下走；卡住了也没关系，跟我说说卡在哪就行"
+                if i == 1
+                else "继续按你的思路走，做完这道再看下一道",
+            ),
             points=(
                 "完成度与过程完整度",
                 f"错误是否集中在同一位置（对照诊断 {finding.finding_id}）",
@@ -195,10 +205,21 @@ def _build_type3(finding: Finding, catalog: Catalog, rec_id: str, exclude: froze
         recommendation_id=rec_id,
         indicator_id=indicator_id,
         finding_ids=[finding.finding_id],
-        goal=f"针对指标 {indicator_id} 补齐观察证据，再定学习安排",
+        goal=f"用 {len(materials)} 道覆盖不同问法的题，看清学生在指标 {indicator_id} 上的真实掌握情况",
         reason=(
-            f"诊断 {finding.finding_id} 判定证据不足（{finding.evidence_status}）。"
-            "按剧本红线不输出会/不会结论，先安排覆盖不同变式的观察题组收集证据。"
+            (
+                f"诊断 {finding.finding_id} 的记录之间说法互相冲突。"
+                f"现在下结论为时过早，先安排 {len(materials)} 道覆盖不同问法的观察题，让证据自己说话。"
+            )
+            if finding.evidence_status == "conflicting"
+            else (
+                f"诊断 {finding.finding_id} 判定证据不足（{finding.evidence_status}）：{finding.description} "
+                f"现有信息还撑不起“会或不会”的判断，先安排 {len(materials)} 道覆盖不同问法的观察题补齐证据。"
+            )
+        ),
+        student_intro=(
+            "今天先来几道小题。不是考试，就是想听听你的想法：慢慢做，"
+            "卡住了也没关系，跟我说说卡在哪就好。"
         ),
         activities=activities,
         adjustment_conditions=[
@@ -226,8 +247,8 @@ def _build_type2(finding: Finding, catalog: Catalog, rec_id: str, exclude: froze
         _activity(
             variants[0],
             1,
-            purpose="知识迁移：变式或综合题，检验换问法后是否仍能识别",
-            hints=("这道题和你之前做的比，有什么不一样的地方",),
+            purpose=f"知识迁移（{_excerpt(variants[0])}）：换了个问法，看还能不能一眼认出来",
+            hints=("这道题和你之前做的比，有什么不一样的地方？如果你觉得它变了，是哪一步变了？",),
             points=(
                 "是否主动识别变化点",
                 "每步依据哪条性质说得清",
@@ -258,13 +279,31 @@ def _build_type2(finding: Finding, catalog: Catalog, rec_id: str, exclude: froze
         recommendation_id=rec_id,
         indicator_id=indicator_id,
         finding_ids=[finding.finding_id],
-        goal=f"在指标 {indicator_id} 上完成知识与思想两级迁移，说清每步依据",
+        goal=(
+            f"在指标 {indicator_id} 上完成知识迁移（说清每步依据）与思想迁移（选并解释一个数学思想）"
+            if len(variants) > 1
+            else f"在指标 {indicator_id} 上完成知识迁移，说清每步依据"
+        ),
         reason=(
-            f"诊断 {finding.finding_id} 判定表现较好。"
-            "不追加刷题量：先用变式确认知识迁移，"
-            "再用思想辨识选择（学生选、学伴解释）落实思想迁移。"
-            "思想辨识为低频环节：同一思想每周至多一次，"
-            "三个思想可轮换；学生表现持续稳定的不重复安排。"
+            (
+                f"诊断 {finding.finding_id} 判定表现较好（{finding.description}）。"
+                "不追加刷题量：先用变式确认换问法后是否仍能识别，"
+                "再用思想辨识选择（学生选、学伴解释）做思想迁移。"
+                "思想辨识是低频环节：同一思想每周至多一次，三个思想可轮换，"
+                "学生表现持续稳定的不重复安排。"
+            )
+            if len(variants) > 1
+            else (
+                f"诊断 {finding.finding_id} 判定表现较好（{finding.description}）。"
+                "不追加刷题量：本轮先用变式确认知识迁移；思想辨识环节需要配套选题，"
+                "留到材料齐备时再做，不为凑环节硬安排。"
+            )
+        ),
+        student_intro=(
+            "最近这些题你做得挺稳的。今天不刷题，来点不太一样的："
+            "先做一道变着花样的题，然后有个小选择想听听你的想法。"
+            if len(variants) > 1
+            else "最近这些题你做得挺稳的。今天不刷题，就一道变着花样的题，看看换个问法你还认识它吗。"
         ),
         activities=activities,
         adjustment_conditions=[
@@ -304,8 +343,8 @@ def _build_1a(finding: Finding, catalog: Catalog, rec_id: str, exclude: frozense
         _activity(
             m,
             i,
-            purpose="按修正后思路独立完成同类题，并用代入检验自查（倾听式引导后的巩固）",
-            hints=("先独立完成，再把答案代回原式检查一遍",),
+            purpose=f"倾听式引导后的巩固（{_excerpt(m)}）：按修正后的思路独立走完，再代入检验",
+            hints=("按你刚才修正的思路从头走一遍，走完把答案代回去，看看式子还成立吗",),
             points=(
                 "修正点（如方向处理）是否稳定",
                 "检验是否主动发生",
@@ -317,11 +356,15 @@ def _build_1a(finding: Finding, catalog: Catalog, rec_id: str, exclude: frozense
         recommendation_id=rec_id,
         indicator_id=indicator_id,
         finding_ids=[finding.finding_id],
-        goal=f"按修正后思路独立完成指标 {indicator_id} 的同类题，并保持代入检验习惯",
+        goal=f"按修正后思路独立完成指标 {indicator_id} 的 {len(consolidations)} 道同类题，并保持代入检验习惯",
         reason=(
-            f"诊断 {finding.finding_id}：{finding.description}。"
-            "思路完整、失败点集中，按倾听式四步引导"
-            "（复述确认→定位分岔→引导自撞→修正重走），只安排巩固，不追加新课。"
+            f"诊断 {finding.finding_id}：{finding.description} "
+            f"思路完整、失败点集中。学伴先按倾听式四步（复述确认→定位分岔→引导自撞→修正重走）"
+            f"听学生讲当时的想法，走通后只安排 {len(consolidations)} 道巩固题，不追加新课。"
+        ),
+        student_intro=(
+            "我看了你的解题过程，里面的想法挺有意思的。我想听你讲讲当时是怎么想的——"
+            "咱们从一道差不多的题开始，你来说，我听。"
         ),
         activities=activities,
         adjustment_conditions=[
@@ -370,9 +413,9 @@ def _build_1b(finding: Finding, catalog: Catalog, rec_id: str, config: Recommend
             _activity(
                 m,
                 i,
-                purpose="独立走完整流程，提示上限随扶助接住层级递减",
+                purpose=f"独立走完整流程（{_excerpt(m)}）：提示上限随扶助接住层级递减",
                 hints=(
-                    "解完以后，用自己的办法检查一遍",
+                    "解完以后，用自己的办法检查一遍；拿不准检查什么的话，先想想这题最容易错的是哪一步",
                     "把你的答案代回原式，看不等式还成立吗",
                 ),
                 points=(
@@ -387,12 +430,27 @@ def _build_1b(finding: Finding, catalog: Catalog, rec_id: str, config: Recommend
         recommendation_id=rec_id,
         indicator_id=indicator_id,
         finding_ids=[finding.finding_id],
-        goal=f"在指标 {indicator_id} 上补齐基础台阶，独立完成求解并自查",
+        goal=f"在指标 {indicator_id} 上补齐基础台阶，独立完成 {len(practices)} 道同类题并自查",
         reason=(
-            f"诊断 {finding.finding_id}：{finding.description}。"
-            "采用递减干预扶练：先扶助后练习，接住即放手。"
-            "系统默认安排同类题；若想让学生重做自己的原错题，"
-            "教师可在记录列表中指定那道题。"
+            (
+                f"诊断 {finding.finding_id}：{finding.description} "
+                "先用学习卡从方向层补台阶（L1→L2→L3 逐层、接住即停），"
+                f"再做 {len(practices)} 道同类题；扶的目的是尽早放手，"
+                "接住的层级越浅，练习的提示上限越低。"
+                "若想让学生重做自己的原错题，教师可在记录列表中指定那道题。"
+            )
+            if support
+            else (
+                f"诊断 {finding.finding_id}：{finding.description} "
+                f"本轮目录内暂无配套学习卡，直接安排 {len(practices)} 道同类题观察独立完成度，教师可视情况补讲。"
+                "若想让学生重做自己的原错题，教师可在记录列表中指定那道题。"
+            )
+        ),
+        student_intro=(
+            "这道题确实有点绕，咱们不着急，一步步来：先从最简单的地方下手，"
+            "能走多远走多远，我就在旁边。"
+            if support
+            else "咱们直接试试这道题，按你的想法走，卡住了跟我说，我们一起看。"
         ),
         activities=activities,
         adjustment_conditions=[
@@ -545,6 +603,7 @@ def validate_recommendations(
     - 重复建议阻断：同一 finding 不得出现在多条建议
     - 重复材料阻断：同一 material 不得出现在多条建议（不让学生刷同一题两遍）
     - 负荷超限阻断：建议条数超过 max_recommendations（需传入 config 启用）
+    - 表述去重：同一建议包内目标（goal）完全相同 → DUPLICATE_GOAL（呈现层去重兜底）
     """
     issues: list[ValidationIssue] = []
 
@@ -593,6 +652,22 @@ def validate_recommendations(
                 )
             else:
                 seen_material[act.material_id] = rec.recommendation_id
+    # 表述层去重（呈现去重兜底）：同一包内 goal 完全相同视为重复呈现
+    seen_goal: dict[str, str] = {}
+    for rec in bundle.recommendations:
+        if rec.goal in seen_goal:
+            issues.append(
+                ValidationIssue(
+                    code="DUPLICATE_GOAL",
+                    message=(
+                        f"建议 {rec.recommendation_id} 与 {seen_goal[rec.goal]} 的目标表述完全相同；"
+                        "同一建议包内不应出现重复目标"
+                    ),
+                    recommendation_id=rec.recommendation_id,
+                )
+            )
+        else:
+            seen_goal[rec.goal] = rec.recommendation_id
     if config is not None and len(bundle.recommendations) > config.max_recommendations:
         issues.append(
             ValidationIssue(

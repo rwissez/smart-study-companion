@@ -186,7 +186,8 @@ def test_recommend_type3_observations_no_verdict():
     bundle = recommend_rules(make_analysis([finding_type3()]), make_catalog(), make_context(), RecommendationConfig())
     rec = bundle.recommendations[0]
     # 剧本红线：证据不足时不输出会/不会式结论
-    assert "不输出会/不会结论" in rec.reason
+    # 剧本红线改述（2026-11-24 文案变体化）：理由须表达"不下会/不会结论"
+    assert "会或不会" in rec.reason
     assert len(rec.activities) == 2  # T01I2 下 M005/M006 两道观察题，覆盖两种变式
     validation = validate_recommendations(bundle, make_analysis([finding_type3()]), make_catalog())
     assert validation.valid, [i.message for i in validation.issues]

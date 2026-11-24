@@ -250,6 +250,8 @@ class Recommendation(Contract):
     finding_ids: list[str]
     goal: str
     reason: str
+    # 学伴开场白（学生端呈现，2026-11-24）：学生语气，说清今天为什么安排这些；教师端字段不受影响
+    student_intro: str = ""
     activities: list[Activity]
     adjustment_conditions: list[AdjustmentCondition]
     review_status: Literal["draft", "validated", "needs_review"]

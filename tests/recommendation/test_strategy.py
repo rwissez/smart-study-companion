@@ -386,3 +386,54 @@ def test_materials_not_reused_across_recommendations():
     assert len(all_materials) == len(set(all_materials))  # 无重复材料
     last = bundle.recommendations[-1]
     assert any("T01I1" in c.next_action and "材料" in c.next_action for c in last.adjustment_conditions)
+
+
+# ---------------------------------------------------------------------------
+# 学生端加强 + 文案变体（2026-11-24 主人反馈：前端死板、学生版薄弱、表述去重）
+# ---------------------------------------------------------------------------
+
+def test_student_intro_present_for_all_kinds():
+    """四类建议都带学伴开场白（student_intro），学生端不再只有提示层级。"""
+    for f in (finding_type3(), finding_type2(), finding_1a(), finding_1b()):
+        rec = recommend_rules(
+            make_analysis([f]), make_catalog(), make_context(), RecommendationConfig()
+        ).recommendations[0]
+        assert rec.student_intro.strip(), f"{f.finding_id} 缺 student_intro"
+
+
+def test_reason_varies_with_evidence_status():
+    """文案变体：同类型不同证据状态生成不同 reason（治模板死板）。"""
+    base = recommend_rules(
+        make_analysis([finding_type3()]), make_catalog(), make_context(), RecommendationConfig()
+    ).recommendations[0]
+    conflicting = recommend_rules(
+        make_analysis([finding_type3().model_copy(update={"evidence_status": "conflicting"})]),
+        make_catalog(),
+        make_context(),
+        RecommendationConfig(),
+    ).recommendations[0]
+    assert base.reason != conflicting.reason
+    assert "冲突" in conflicting.reason
+
+
+def test_purpose_quotes_material_excerpt():
+    """证据织入：活动目的引用材料题干摘要，不同材料的活动目的互不相同。"""
+    rec = recommend_rules(
+        make_analysis([finding_type3()]), make_catalog(), make_context(), RecommendationConfig()
+    ).recommendations[0]
+    purposes = [a.purpose for a in rec.activities]
+    assert len(purposes) >= 2
+    assert len(set(purposes)) == len(purposes), "活动目的出现完全重复（模板死板）"
+
+
+def test_validate_blocks_duplicate_goal():
+    """表述去重：同一包内 goal 完全相同 → DUPLICATE_GOAL。"""
+    rec_a = _bare_rec("rec-A", ["F001"], ["M003"])
+    rec_b = _bare_rec("rec-B", ["F002"], ["M001", "M002"])
+    rec_b = rec_b.model_copy(update={"goal": rec_a.goal})
+    bundle = _bare_bundle([rec_a, rec_b])
+    result = validate_recommendations(
+        bundle, make_analysis([finding_1a(), finding_1b()]), make_catalog()
+    )
+    codes = [i.code for i in result.issues]
+    assert "DUPLICATE_GOAL" in codes
