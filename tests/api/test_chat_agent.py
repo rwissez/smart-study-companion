@@ -106,7 +106,9 @@ def test_teacher_chat_replans_from_analysis_to_answer_evidence(
     assert response.status_code == 200, response.text
     data = response.json()["data"]
     assert data["stopped_reason"] == "model_finished"
-    assert data["prompt_version"] == "teacher-style-v1"
+    assert data["prompt_version"] == "task-student-loss-v1+teacher-style-v1"
+    assert data["task_type"] == "student_loss_explanation"
+    assert data["route_source"] == "rule"
     assert "R01" in data["text"] and "M_S01" in data["text"]
     assert [item["tool_name"] for item in data["tool_trace"]] == [
         "get_student_analysis", "get_answer_evidence"
