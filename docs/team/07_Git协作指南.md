@@ -123,6 +123,7 @@ git merge origin/main
 | main误写了代码但未提交 | 在当前位置git switch -c创建任务分支，再提交 |
 | 合并后功能出错 | 先定位有问题的提交，用修复PR；需要撤销已共享提交时由A使用revert产生新提交 |
 | 多人修改共享接口 | 暂停各自字段更名，由A统一契约及迁移 |
+| Alembic出现多个head | 先保留已经发布的revision；实际合并两条历史后新增merge revision，父节点填写两个真实head；只有确认未发布时才允许重排线性历史，不得伪造缺失的父迁移 |
 
 ## 如何与Codex配合
 

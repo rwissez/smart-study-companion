@@ -58,14 +58,28 @@ def _server_context(db: DbSession, scope, run_id: str, student_id: str | None) -
         class_results=[row.payload_json for row in results if row.subject_type == "class"],
         quality_summary={},
     )
-    events = db.scalars(select(models.AnswerEvent).where(models.AnswerEvent.dataset_id == scope.dataset_id)).all()
-    raw_rows = db.scalars(select(models.SourceRow).where(models.SourceRow.dataset_id == scope.dataset_id)).all()
+    events = db.scalars(
+        select(models.AnswerEvent)
+        .where(models.AnswerEvent.dataset_id == scope.dataset_id)
+        .order_by(models.AnswerEvent.event_id)
+    ).all()
+    raw_rows = db.scalars(
+        select(models.SourceRow)
+        .where(models.SourceRow.dataset_id == scope.dataset_id)
+        .order_by(models.SourceRow.table_name, models.SourceRow.row_number)
+    ).all()
+    quality_issues = db.scalars(
+        select(models.QualityIssue)
+        .where(models.QualityIssue.dataset_id == scope.dataset_id)
+        .order_by(models.QualityIssue.id)
+    ).all()
     students = [row.payload_json if hasattr(row, "payload_json") else {"student_id": row.student_id, "class_id": row.class_id, "grade": row.grade} for row in student_rows]
     nodes = [row.payload_json for row in db.scalars(select(models.Node).where(models.Node.dataset_id == scope.dataset_id)).all()]
     prepared = PreparedDataset(
         students=students, nodes=nodes,
         raw_records=[{"record_id": row.payload_json.get("记录编号", row.id), "table_name": row.table_name, "source_row_number": row.row_number, "payload": row.payload_json} for row in raw_rows if row.table_name == "records"],
-        selected_events=[row.payload_json for row in events], quality_issues=[],
+        selected_events=[row.payload_json for row in events],
+        quality_issues=[row.payload_json for row in quality_issues],
         source_manifest={"dataset_id": scope.dataset_id, "table_row_counts": {}, "synthetic": False},
     )
     return ServerContext(run_id, scope.dataset_id, run.catalog_version, allowed, bundle, prepared)

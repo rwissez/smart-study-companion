@@ -9,6 +9,7 @@ from __future__ import annotations
 from typing import Any
 
 from study_companion.agent.loop import RegisteredTool, ToolRegistry
+from study_companion.contracts import DomainError
 from study_companion.tools.b_analysis import (
     ServerContext,
     get_answer_evidence,
@@ -25,6 +26,20 @@ def _schema(name: str, description: str, properties: dict[str, Any], required: l
 
 def build_b_registry(ctx: ServerContext, role: str) -> ToolRegistry:
     tools: list[RegisteredTool] = []
+    bound_student_id = next(iter(ctx.allowed_student_ids)) if role == "student" and len(ctx.allowed_student_ids) == 1 else None
+
+    def quality_query(args: dict[str, Any]):
+        if role == "student" and bound_student_id is None:
+            raise DomainError("CONTEXT_MISMATCH", "学生质量查询缺少唯一会话范围")
+        requested_student_id = args.get("student_id")
+        if role == "student" and requested_student_id is None:
+            requested_student_id = bound_student_id
+        return get_quality_issues(
+            ctx,
+            args.get("_call_id", "model"),
+            requested_student_id,
+            args.get("page", 1),
+        )
     tools.append(RegisteredTool(
         _schema("get_student_analysis", "读取当前范围内学生的确定性分析结果",
                 {"student_id": {"type": "string"}, "node_id": {"type": "string"}},
@@ -39,7 +54,7 @@ def build_b_registry(ctx: ServerContext, role: str) -> ToolRegistry:
     tools.append(RegisteredTool(
         _schema("get_quality_issues", "读取当前范围内的数据质量问题",
                 {"student_id": {"type": "string"}, "page": {"type": "integer"}}, []),
-        lambda args: get_quality_issues(ctx, args.get("_call_id", "model"), args.get("student_id"), args.get("page", 1)),
+        quality_query,
     ))
     if role == "teacher":
         tools.append(RegisteredTool(

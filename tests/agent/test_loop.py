@@ -1,9 +1,12 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
+from copy import deepcopy
+from dataclasses import dataclass, field
+import json
 from typing import Any
 
 import pytest
+from pydantic import BaseModel
 
 from study_companion.agent import AgentLoop, AgentLoopConfig, ModelTurn, PromptRegistry, RegisteredTool, ToolRegistry, ToolCall
 from study_companion.contracts import DomainError
@@ -23,9 +26,11 @@ SCHEMA = {
 class ScriptedProvider:
     turns: list[ModelTurn]
     seen_tools: list[list[dict[str, Any]]]
+    seen_messages: list[list[dict[str, Any]]] = field(default_factory=list)
 
     def generate(self, messages, tools=None, response_schema=None):
         self.seen_tools.append(tools or [])
+        self.seen_messages.append(deepcopy(messages))
         return self.turns.pop(0)
 
 
@@ -42,6 +47,44 @@ def test_loop_observes_tool_and_replans():
     assert result.state.evidence_refs == [{"kind": "metric", "id": "m1"}]
     assert result.tool_trace[0].status == "succeeded"
     assert provider.seen_tools[0][0]["function"]["name"] == "read_fact"
+
+
+class NestedResult(BaseModel):
+    value: str
+
+
+class ToolEnvelope(BaseModel):
+    status: str = "succeeded"
+    data: NestedResult
+    evidence_refs: list[dict[str, str]]
+
+
+def test_loop_sends_openai_compatible_tool_history_with_json_results():
+    provider = ScriptedProvider([
+        ModelTurn(tool_calls=[ToolCall("c1", "read_fact", {"key": "证据"})]),
+        ModelTurn(text="完成"),
+    ], [])
+    registry = ToolRegistry([RegisteredTool(
+        SCHEMA,
+        lambda _: ToolEnvelope(data=NestedResult(value="已核对"), evidence_refs=[{"kind": "metric", "id": "m1"}]),
+    )])
+
+    result = AgentLoop(provider, registry).run([{"role": "user", "content": "分析"}], "分析")
+
+    assistant = provider.seen_messages[1][-2]
+    assert assistant["content"] is None
+    assert assistant["tool_calls"] == [{
+        "id": "c1",
+        "type": "function",
+        "function": {"name": "read_fact", "arguments": json.dumps({"key": "证据"}, ensure_ascii=False, separators=(",", ":"))},
+    }]
+    tool_message = provider.seen_messages[1][-1]
+    assert set(tool_message) == {"role", "tool_call_id", "content"}
+    assert tool_message["role"] == "tool"
+    assert tool_message["tool_call_id"] == "c1"
+    assert json.loads(tool_message["content"])["data"] == {"value": "已核对"}
+    assert result.tool_trace[0].result == {"value": "已核对"}
+    assert result.state.evidence_refs == [{"kind": "metric", "id": "m1"}]
 
 
 def test_loop_rejects_unknown_tool_without_expanding_scope():
