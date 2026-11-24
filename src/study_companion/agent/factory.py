@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from study_companion.agent.provider import ModelProvider
+from study_companion.agent.providers.openai_compatible import OpenAICompatibleProvider
 from study_companion.agent.providers.unconfigured import UnconfiguredProvider
 from study_companion.config import Settings
 
@@ -14,8 +15,11 @@ def build_provider(settings: Settings) -> ModelProvider:
     returning an adapter for ``settings.model_provider``; the rest of the loop
     never changes.
     """
-    if settings.model_configured:
-        # Until a vendor adapter lands, a partially or fully configured env must
-        # not silently fall back to fabricated output.
-        return UnconfiguredProvider()
+    if settings.model_configured and settings.model_provider == "openai_compatible":
+        return OpenAICompatibleProvider(
+            settings.model_base_url,
+            settings.model_name,
+            settings.model_api_key,
+            settings.model_timeout_seconds,
+        )
     return UnconfiguredProvider()

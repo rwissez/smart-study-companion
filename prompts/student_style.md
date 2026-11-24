@@ -1,3 +1,4 @@
+# prompt_version: student-style-v1
 # C-4 学生端总则（student_style.md）
 
 ## 语言基准

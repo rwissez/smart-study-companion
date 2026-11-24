@@ -123,22 +123,38 @@ def get_quality_issues(ctx: ServerContext, call_id: str,
         return _fail(call_id, "get_quality_issues", "SCOPE_DENIED",
                      f"学生 {student_id} 不在当前会话允许范围内")
 
+    records = {r.record_id: r for r in ctx.dataset.raw_records}
+    event_students = {
+        event.selected_record_id: event.student_id
+        for event in ctx.dataset.selected_events
+        if event.selected_record_id is not None
+    }
+
+    def record_student(record_id: str) -> str | None:
+        if record_id in event_students:
+            return event_students[record_id]
+        record = records.get(record_id)
+        if record is None:
+            return None
+        return record.payload.get("学生编号") or record.payload.get("学号") or record.payload.get("student_id")
+
     issues: list[QualityIssue] = []
     for issue in ctx.dataset.quality_issues:
         if student_id is None:
             issues.append(issue)
             continue
-        # 关联学生过滤：质量问题通过关联记录归属学生
-        records = {r.record_id: r for r in ctx.dataset.raw_records}
-        related = [rid for rid in issue.record_ids if rid in records]
-        if any(records[rid].payload.get("学生编号") == student_id for rid in related):
+        if any(record_student(record_id) == student_id for record_id in issue.record_ids):
             issues.append(issue)
 
     start = (page - 1) * PAGE_SIZE
     chunk = issues[start:start + PAGE_SIZE]
+    record_ids = {
+        record_id for issue in chunk for record_id in issue.record_ids
+        if student_id is None or record_student(record_id) == student_id
+    }
     return _ok(call_id, "get_quality_issues", chunk or [],
-               [{"kind": "record", "id": rid, "run_id": ctx.run_id}
-                for issue in chunk for rid in issue.record_ids])
+               [{"kind": "record", "id": record_id, "run_id": ctx.run_id}
+                for record_id in sorted(record_ids)])
 
 
 def get_answer_evidence(ctx: ServerContext, call_id: str,
@@ -156,11 +172,14 @@ def get_answer_evidence(ctx: ServerContext, call_id: str,
         if record is None:
             return _fail(call_id, "get_answer_evidence", "NOT_FOUND",
                          f"记录 {record_id} 不存在")
-        student_id = record.payload.get("学生编号")
+        event = events_by_record.get(record_id)
+        student_id = (
+            event.student_id if event else
+            record.payload.get("学生编号") or record.payload.get("学号") or record.payload.get("student_id")
+        )
         if student_id not in ctx.allowed_student_ids:
             return _fail(call_id, "get_answer_evidence", "SCOPE_DENIED",
                          f"记录 {record_id} 属于范围外学生，拒绝访问")
-        event = events_by_record.get(record_id)
         evidence.append(AnswerEvidenceItem(
             record_id=record_id,
             payload=record.payload,

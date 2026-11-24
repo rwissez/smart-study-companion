@@ -1,3 +1,4 @@
+# prompt_version: teacher-style-v1
 # C-3 教师端呈现指引（teacher_style.md）
 
 ## 核心比例
