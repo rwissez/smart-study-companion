@@ -4,6 +4,7 @@
 """
 
 from study_companion.analysis.prepare import prepare_dataset
+from study_companion.analysis.rubric_loss import compute_class_rubric_losses, common_loss_issues
 from study_companion.analysis.service import analyze_dataset
 from study_companion.analysis.strategy_signal import (
     StrategySignal,
@@ -17,4 +18,6 @@ __all__ = [
     "StrategySignal",
     "build_strategy_signals",
     "aggregate_signals_by_topic",
+    "compute_class_rubric_losses",
+    "common_loss_issues",
 ]

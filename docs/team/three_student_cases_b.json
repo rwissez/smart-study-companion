@@ -1,0 +1,2046 @@
+{
+  "说明": "B交付的3个答辩代表案例（真实数据：指标->事件信号->主题聚合完整链条，每个判断可追溯）",
+  "案例1_错误丰富": {
+    "选择依据": "确认错误类型最多，展示完整诊断链条",
+    "student_id": "D30",
+    "class_id": "DC02",
+    "分析结果": [
+      {
+        "node_id": "N01",
+        "metrics": [
+          {
+            "name": "valid_score_ratio",
+            "value": 0.2857142857142857,
+            "numerator": 2,
+            "denominator": 7
+          },
+          {
+            "name": "full_score_ratio",
+            "value": 0.0,
+            "numerator": 0,
+            "denominator": 3
+          },
+          {
+            "name": "observed_response_ratio",
+            "value": 1.0,
+            "numerator": 3,
+            "denominator": 3
+          },
+          {
+            "name": "item_coverage",
+            "value": 0.42857142857142855,
+            "numerator": 3,
+            "denominator": 7
+          },
+          {
+            "name": "valid_score_ratio",
+            "value": 0.3,
+            "numerator": 3,
+            "denominator": 10
+          },
+          {
+            "name": "full_score_ratio",
+            "value": 0.16666666666666666,
+            "numerator": 1,
+            "denominator": 6
+          },
+          {
+            "name": "observed_response_ratio",
+            "value": 1.0,
+            "numerator": 6,
+            "denominator": 6
+          },
+          {
+            "name": "item_coverage",
+            "value": 0.5454545454545454,
+            "numerator": 6,
+            "denominator": 11
+          },
+          {
+            "name": "valid_score_ratio",
+            "value": 0.3333333333333333,
+            "numerator": 2,
+            "denominator": 6
+          },
+          {
+            "name": "full_score_ratio",
+            "value": 0.0,
+            "numerator": 0,
+            "denominator": 2
+          },
+          {
+            "name": "observed_response_ratio",
+            "value": 1.0,
+            "numerator": 2,
+            "denominator": 2
+          },
+          {
+            "name": "item_coverage",
+            "value": 0.6666666666666666,
+            "numerator": 2,
+            "denominator": 3
+          },
+          {
+            "name": "valid_score_ratio",
+            "value": 0.0,
+            "numerator": 0,
+            "denominator": 5
+          },
+          {
+            "name": "full_score_ratio",
+            "value": 0.0,
+            "numerator": 0,
+            "denominator": 3
+          },
+          {
+            "name": "observed_response_ratio",
+            "value": 1.0,
+            "numerator": 3,
+            "denominator": 3
+          },
+          {
+            "name": "item_coverage",
+            "value": 0.3333333333333333,
+            "numerator": 3,
+            "denominator": 9
+          }
+        ],
+        "findings": [
+          {
+            "indicator": "T01I1",
+            "status": "sufficient",
+            "performance": "needs_practice"
+          },
+          {
+            "indicator": "T01I2",
+            "status": "sufficient",
+            "performance": "needs_practice"
+          },
+          {
+            "indicator": "T01I3",
+            "status": "insufficient",
+            "performance": "undetermined"
+          },
+          {
+            "indicator": "T02I1",
+            "status": "sufficient",
+            "performance": "needs_practice"
+          }
+        ]
+      },
+      {
+        "node_id": "N02",
+        "metrics": [
+          {
+            "name": "valid_score_ratio",
+            "value": 0.6666666666666666,
+            "numerator": 2,
+            "denominator": 3
+          },
+          {
+            "name": "full_score_ratio",
+            "value": 0.6666666666666666,
+            "numerator": 2,
+            "denominator": 3
+          },
+          {
+            "name": "observed_response_ratio",
+            "value": 1.0,
+            "numerator": 3,
+            "denominator": 3
+          },
+          {
+            "name": "item_coverage",
+            "value": 0.2727272727272727,
+            "numerator": 3,
+            "denominator": 11
+          },
+          {
+            "name": "valid_score_ratio",
+            "value": 0.6666666666666666,
+            "numerator": 2,
+            "denominator": 3
+          },
+          {
+            "name": "full_score_ratio",
+            "value": 0.0,
+            "numerator": 0,
+            "denominator": 1
+          },
+          {
+            "name": "observed_response_ratio",
+            "value": 1.0,
+            "numerator": 1,
+            "denominator": 1
+          },
+          {
+            "name": "item_coverage",
+            "value": 0.3333333333333333,
+            "numerator": 1,
+            "denominator": 3
+          },
+          {
+            "name": "valid_score_ratio",
+            "value": 0.0,
+            "numerator": 0,
+            "denominator": 1
+          },
+          {
+            "name": "full_score_ratio",
+            "value": 0.0,
+            "numerator": 0,
+            "denominator": 1
+          },
+          {
+            "name": "observed_response_ratio",
+            "value": 1.0,
+            "numerator": 1,
+            "denominator": 1
+          },
+          {
+            "name": "item_coverage",
+            "value": 0.14285714285714285,
+            "numerator": 1,
+            "denominator": 7
+          },
+          {
+            "name": "valid_score_ratio",
+            "value": 0.3333333333333333,
+            "numerator": 1,
+            "denominator": 3
+          },
+          {
+            "name": "full_score_ratio",
+            "value": 0.0,
+            "numerator": 0,
+            "denominator": 1
+          },
+          {
+            "name": "observed_response_ratio",
+            "value": 1.0,
+            "numerator": 1,
+            "denominator": 1
+          },
+          {
+            "name": "item_coverage",
+            "value": 0.2,
+            "numerator": 1,
+            "denominator": 5
+          },
+          {
+            "name": "valid_score_ratio",
+            "value": 1.0,
+            "numerator": 1,
+            "denominator": 1
+          },
+          {
+            "name": "full_score_ratio",
+            "value": 1.0,
+            "numerator": 1,
+            "denominator": 1
+          },
+          {
+            "name": "observed_response_ratio",
+            "value": 1.0,
+            "numerator": 1,
+            "denominator": 1
+          },
+          {
+            "name": "item_coverage",
+            "value": 0.125,
+            "numerator": 1,
+            "denominator": 8
+          },
+          {
+            "name": "valid_score_ratio",
+            "value": 1.0,
+            "numerator": 3,
+            "denominator": 3
+          },
+          {
+            "name": "full_score_ratio",
+            "value": 1.0,
+            "numerator": 3,
+            "denominator": 3
+          },
+          {
+            "name": "observed_response_ratio",
+            "value": 1.0,
+            "numerator": 3,
+            "denominator": 3
+          },
+          {
+            "name": "item_coverage",
+            "value": 0.375,
+            "numerator": 3,
+            "denominator": 8
+          }
+        ],
+        "findings": [
+          {
+            "indicator": "T01I2",
+            "status": "sufficient",
+            "performance": "needs_practice"
+          },
+          {
+            "indicator": "T01I3",
+            "status": "insufficient",
+            "performance": "undetermined"
+          },
+          {
+            "indicator": "T02I2",
+            "status": "insufficient",
+            "performance": "undetermined"
+          },
+          {
+            "indicator": "T02I3",
+            "status": "insufficient",
+            "performance": "undetermined"
+          },
+          {
+            "indicator": "T03I1",
+            "status": "insufficient",
+            "performance": "undetermined"
+          },
+          {
+            "indicator": "T03I2",
+            "status": "sufficient",
+            "performance": "observed_strength"
+          }
+        ]
+      }
+    ],
+    "事件信号": [
+      {
+        "material": "Q022",
+        "type": "解答题",
+        "stage": "modeling",
+        "etype": "step_error",
+        "focus": [
+          "Q022P1",
+          "Q022P2",
+          "Q022P3"
+        ],
+        "status": "sufficient",
+        "reason": "首评分点丢失且无过程得分：Q022P1,Q022P2,Q022P3，建模或起步步骤失败"
+      },
+      {
+        "material": "Q009",
+        "type": "解答题",
+        "stage": "modeling",
+        "etype": "step_error",
+        "focus": [
+          "Q009P1",
+          "Q009P2",
+          "Q009P3"
+        ],
+        "status": "sufficient",
+        "reason": "首评分点丢失且无过程得分：Q009P1,Q009P2,Q009P3，建模或起步步骤失败"
+      },
+      {
+        "material": "Q007",
+        "type": "填空题",
+        "stage": "undetermined",
+        "etype": "insufficient_evidence",
+        "focus": [
+          "Q007P1"
+        ],
+        "status": "insufficient",
+        "reason": "客观题答案错误（丢失点：Q007P1），无解答过程，无法区分概念错误与计算错误"
+      },
+      {
+        "material": "Q011",
+        "type": "解答题",
+        "stage": "concept_understanding",
+        "etype": "concept_error",
+        "focus": [
+          "Q011P3"
+        ],
+        "status": "sufficient",
+        "reason": "概念类评分点丢失：Q011P3，但起步点已得分"
+      },
+      {
+        "material": "Q026",
+        "type": "填空题",
+        "stage": "undetermined",
+        "etype": "insufficient_evidence",
+        "focus": [
+          "Q026P1"
+        ],
+        "status": "insufficient",
+        "reason": "客观题答案错误（丢失点：Q026P1），无解答过程，无法区分概念错误与计算错误"
+      },
+      {
+        "material": "Q017",
+        "type": "填空题",
+        "stage": "none",
+        "etype": "none",
+        "focus": [],
+        "status": "sufficient",
+        "reason": "满分 1/1，无失分"
+      },
+      {
+        "material": "Q023",
+        "type": "填空题",
+        "stage": "undetermined",
+        "etype": "insufficient_evidence",
+        "focus": [
+          "Q023P1"
+        ],
+        "status": "insufficient",
+        "reason": "客观题答案错误（丢失点：Q023P1），无解答过程，无法区分概念错误与计算错误"
+      },
+      {
+        "material": "Q006",
+        "type": "解答题",
+        "stage": "key_step",
+        "etype": "step_error",
+        "focus": [
+          "Q006P3"
+        ],
+        "status": "sufficient",
+        "reason": "中段步骤评分点丢失：Q006P3，起步与结果正常"
+      },
+      {
+        "material": "Q003",
+        "type": "选择题",
+        "stage": "undetermined",
+        "etype": "insufficient_evidence",
+        "focus": [
+          "Q003P1"
+        ],
+        "status": "insufficient",
+        "reason": "客观题答案错误（丢失点：Q003P1），无解答过程，无法区分概念错误与计算错误"
+      },
+      {
+        "material": "Q016",
+        "type": "填空题",
+        "stage": "undetermined",
+        "etype": "insufficient_evidence",
+        "focus": [
+          "Q016P1"
+        ],
+        "status": "insufficient",
+        "reason": "客观题答案错误（丢失点：Q016P1），无解答过程，无法区分概念错误与计算错误"
+      },
+      {
+        "material": "Q018",
+        "type": "解答题",
+        "stage": "modeling",
+        "etype": "concept_error",
+        "focus": [
+          "Q018P1",
+          "Q018P2",
+          "Q018P3"
+        ],
+        "status": "sufficient",
+        "reason": "首评分点（概念/建模类）丢失：Q018P1,Q018P2,Q018P3，起步即失分"
+      },
+      {
+        "material": "Q012",
+        "type": "填空题",
+        "stage": "undetermined",
+        "etype": "insufficient_evidence",
+        "focus": [
+          "Q012P1"
+        ],
+        "status": "insufficient",
+        "reason": "客观题答案错误（丢失点：Q012P1），无解答过程，无法区分概念错误与计算错误"
+      },
+      {
+        "material": "Q015",
+        "type": "解答题",
+        "stage": "calculation",
+        "etype": "calculation_error",
+        "focus": [
+          "Q015P3"
+        ],
+        "status": "sufficient",
+        "reason": "起步与步骤点已得分，仅计算结果类点丢失（Q015P3）"
+      },
+      {
+        "material": "Q014",
+        "type": "解答题",
+        "stage": "concept_understanding",
+        "etype": "concept_error",
+        "focus": [
+          "Q014P1",
+          "Q014P2",
+          "Q014P3"
+        ],
+        "status": "sufficient",
+        "reason": "首评分点（概念/建模类）丢失：Q014P1,Q014P2,Q014P3，起步即失分"
+      },
+      {
+        "material": "Q017",
+        "type": "填空题",
+        "stage": "none",
+        "etype": "none",
+        "focus": [],
+        "status": "sufficient",
+        "reason": "满分 1/1，无失分"
+      },
+      {
+        "material": "Q047",
+        "type": "填空题",
+        "stage": "none",
+        "etype": "none",
+        "focus": [],
+        "status": "sufficient",
+        "reason": "满分 1/1，无失分"
+      },
+      {
+        "material": "Q034",
+        "type": "解答题",
+        "stage": "key_step",
+        "etype": "step_error",
+        "focus": [
+          "Q034P2",
+          "Q034P3"
+        ],
+        "status": "sufficient",
+        "reason": "中段步骤评分点丢失：Q034P2,Q034P3，起步与结果正常"
+      },
+      {
+        "material": "Q010",
+        "type": "填空题",
+        "stage": "undetermined",
+        "etype": "insufficient_evidence",
+        "focus": [
+          "Q010P1"
+        ],
+        "status": "insufficient",
+        "reason": "客观题答案错误（丢失点：Q010P1），无解答过程，无法区分概念错误与计算错误"
+      },
+      {
+        "material": "Q039",
+        "type": "填空题",
+        "stage": "none",
+        "etype": "none",
+        "focus": [],
+        "status": "sufficient",
+        "reason": "满分 1/1，无失分"
+      },
+      {
+        "material": "Q008",
+        "type": "填空题",
+        "stage": "none",
+        "etype": "none",
+        "focus": [],
+        "status": "sufficient",
+        "reason": "满分 1/1，无失分"
+      },
+      {
+        "material": "Q030",
+        "type": "填空题",
+        "stage": "undetermined",
+        "etype": "insufficient_evidence",
+        "focus": [
+          "Q030P1"
+        ],
+        "status": "insufficient",
+        "reason": "客观题答案错误（丢失点：Q030P1），无解答过程，无法区分概念错误与计算错误"
+      },
+      {
+        "material": "Q053",
+        "type": "填空题",
+        "stage": "none",
+        "etype": "none",
+        "focus": [],
+        "status": "sufficient",
+        "reason": "满分 1/1，无失分"
+      },
+      {
+        "material": "Q044",
+        "type": "选择题",
+        "stage": "none",
+        "etype": "none",
+        "focus": [],
+        "status": "sufficient",
+        "reason": "满分 1/1，无失分"
+      },
+      {
+        "material": "Q018",
+        "type": "解答题",
+        "stage": "concept_understanding",
+        "etype": "concept_error",
+        "focus": [
+          "Q018P3"
+        ],
+        "status": "sufficient",
+        "reason": "概念类评分点丢失：Q018P3，但起步点已得分"
+      }
+    ],
+    "主题聚合": [
+      {
+        "student_id": "D30",
+        "node_id": "N01",
+        "topic_id": "T02",
+        "valid_material_count": 1,
+        "solution_material_count": 1,
+        "confirmed_error_types": {},
+        "unconfirmed_error_types": {
+          "step_error": [
+            "Q022"
+          ]
+        },
+        "rubric_focus": [
+          "Q022P1",
+          "Q022P2",
+          "Q022P3",
+          "Q023P1",
+          "Q026P1"
+        ],
+        "evidence_status": "insufficient",
+        "insufficient_signal_count": 2
+      },
+      {
+        "student_id": "D30",
+        "node_id": "N01",
+        "topic_id": "T01",
+        "valid_material_count": 7,
+        "solution_material_count": 6,
+        "confirmed_error_types": {
+          "step_error": [
+            "Q009",
+            "Q006"
+          ],
+          "concept_error": [
+            "Q011",
+            "Q018",
+            "Q014"
+          ]
+        },
+        "unconfirmed_error_types": {
+          "calculation_error": [
+            "Q015"
+          ]
+        },
+        "rubric_focus": [
+          "Q003P1",
+          "Q006P3",
+          "Q007P1",
+          "Q009P1",
+          "Q009P2",
+          "Q009P3",
+          "Q011P3",
+          "Q012P1",
+          "Q014P1",
+          "Q014P2",
+          "Q014P3",
+          "Q015P3",
+          "Q016P1",
+          "Q018P1",
+          "Q018P2",
+          "Q018P3"
+        ],
+        "evidence_status": "sufficient",
+        "insufficient_signal_count": 4
+      },
+      {
+        "student_id": "D30",
+        "node_id": "N02",
+        "topic_id": "T01",
+        "valid_material_count": 3,
+        "solution_material_count": 1,
+        "confirmed_error_types": {},
+        "unconfirmed_error_types": {
+          "concept_error": [
+            "Q018"
+          ]
+        },
+        "rubric_focus": [
+          "Q010P1",
+          "Q018P3"
+        ],
+        "evidence_status": "sufficient",
+        "insufficient_signal_count": 1
+      },
+      {
+        "student_id": "D30",
+        "node_id": "N02",
+        "topic_id": "T03",
+        "valid_material_count": 4,
+        "solution_material_count": 0,
+        "confirmed_error_types": {},
+        "unconfirmed_error_types": {},
+        "rubric_focus": [],
+        "evidence_status": "insufficient",
+        "insufficient_signal_count": 0
+      },
+      {
+        "student_id": "D30",
+        "node_id": "N02",
+        "topic_id": "T02",
+        "valid_material_count": 1,
+        "solution_material_count": 1,
+        "confirmed_error_types": {},
+        "unconfirmed_error_types": {
+          "step_error": [
+            "Q034"
+          ]
+        },
+        "rubric_focus": [
+          "Q030P1",
+          "Q034P2",
+          "Q034P3"
+        ],
+        "evidence_status": "insufficient",
+        "insufficient_signal_count": 1
+      }
+    ],
+    "焦点主题": "T01",
+    "焦点主题名称": "代数式与代入求值"
+  },
+  "案例2_证据不足": {
+    "选择依据": "主题有效题仅1道，展示保守判定与补充观察建议",
+    "student_id": "D01",
+    "class_id": "DC01",
+    "分析结果": [
+      {
+        "node_id": "N01",
+        "metrics": [
+          {
+            "name": "valid_score_ratio",
+            "value": 0.2,
+            "numerator": 1,
+            "denominator": 5
+          },
+          {
+            "name": "full_score_ratio",
+            "value": 0.3333333333333333,
+            "numerator": 1,
+            "denominator": 3
+          },
+          {
+            "name": "observed_response_ratio",
+            "value": 1.0,
+            "numerator": 3,
+            "denominator": 3
+          },
+          {
+            "name": "item_coverage",
+            "value": 0.42857142857142855,
+            "numerator": 3,
+            "denominator": 7
+          },
+          {
+            "name": "valid_score_ratio",
+            "value": 0.6666666666666666,
+            "numerator": 2,
+            "denominator": 3
+          },
+          {
+            "name": "full_score_ratio",
+            "value": 0.0,
+            "numerator": 0,
+            "denominator": 1
+          },
+          {
+            "name": "observed_response_ratio",
+            "value": 1.0,
+            "numerator": 1,
+            "denominator": 1
+          },
+          {
+            "name": "item_coverage",
+            "value": 0.09090909090909091,
+            "numerator": 1,
+            "denominator": 11
+          },
+          {
+            "name": "valid_score_ratio",
+            "value": 0.6666666666666666,
+            "numerator": 4,
+            "denominator": 6
+          },
+          {
+            "name": "full_score_ratio",
+            "value": 0.0,
+            "numerator": 0,
+            "denominator": 2
+          },
+          {
+            "name": "observed_response_ratio",
+            "value": 1.0,
+            "numerator": 2,
+            "denominator": 2
+          },
+          {
+            "name": "item_coverage",
+            "value": 0.6666666666666666,
+            "numerator": 2,
+            "denominator": 3
+          },
+          {
+            "name": "valid_score_ratio",
+            "value": 0.5555555555555556,
+            "numerator": 5,
+            "denominator": 9
+          },
+          {
+            "name": "full_score_ratio",
+            "value": 0.4,
+            "numerator": 2,
+            "denominator": 5
+          },
+          {
+            "name": "observed_response_ratio",
+            "value": 1.0,
+            "numerator": 5,
+            "denominator": 5
+          },
+          {
+            "name": "item_coverage",
+            "value": 0.5555555555555556,
+            "numerator": 5,
+            "denominator": 9
+          },
+          {
+            "name": "valid_score_ratio",
+            "value": 1.0,
+            "numerator": 1,
+            "denominator": 1
+          },
+          {
+            "name": "full_score_ratio",
+            "value": 1.0,
+            "numerator": 1,
+            "denominator": 1
+          },
+          {
+            "name": "observed_response_ratio",
+            "value": 1.0,
+            "numerator": 1,
+            "denominator": 1
+          },
+          {
+            "name": "item_coverage",
+            "value": 0.2,
+            "numerator": 1,
+            "denominator": 5
+          }
+        ],
+        "findings": [
+          {
+            "indicator": "T01I1",
+            "status": "sufficient",
+            "performance": "needs_practice"
+          },
+          {
+            "indicator": "T01I2",
+            "status": "insufficient",
+            "performance": "undetermined"
+          },
+          {
+            "indicator": "T01I3",
+            "status": "insufficient",
+            "performance": "undetermined"
+          },
+          {
+            "indicator": "T02I1",
+            "status": "sufficient",
+            "performance": "needs_practice"
+          },
+          {
+            "indicator": "T02I3",
+            "status": "insufficient",
+            "performance": "undetermined"
+          }
+        ]
+      },
+      {
+        "node_id": "N02",
+        "metrics": [
+          {
+            "name": "valid_score_ratio",
+            "value": 1.0,
+            "numerator": 1,
+            "denominator": 1
+          },
+          {
+            "name": "full_score_ratio",
+            "value": 1.0,
+            "numerator": 1,
+            "denominator": 1
+          },
+          {
+            "name": "observed_response_ratio",
+            "value": 1.0,
+            "numerator": 1,
+            "denominator": 1
+          },
+          {
+            "name": "item_coverage",
+            "value": 0.14285714285714285,
+            "numerator": 1,
+            "denominator": 7
+          },
+          {
+            "name": "valid_score_ratio",
+            "value": 0.3333333333333333,
+            "numerator": 1,
+            "denominator": 3
+          },
+          {
+            "name": "full_score_ratio",
+            "value": 0.0,
+            "numerator": 0,
+            "denominator": 1
+          },
+          {
+            "name": "observed_response_ratio",
+            "value": 1.0,
+            "numerator": 1,
+            "denominator": 1
+          },
+          {
+            "name": "item_coverage",
+            "value": 0.3333333333333333,
+            "numerator": 1,
+            "denominator": 3
+          },
+          {
+            "name": "valid_score_ratio",
+            "value": 0.0,
+            "numerator": 0,
+            "denominator": 1
+          },
+          {
+            "name": "full_score_ratio",
+            "value": 0.0,
+            "numerator": 0,
+            "denominator": 1
+          },
+          {
+            "name": "observed_response_ratio",
+            "value": 0.5,
+            "numerator": 1,
+            "denominator": 2
+          },
+          {
+            "name": "item_coverage",
+            "value": 0.14285714285714285,
+            "numerator": 1,
+            "denominator": 7
+          },
+          {
+            "name": "valid_score_ratio",
+            "value": 0.3333333333333333,
+            "numerator": 2,
+            "denominator": 6
+          },
+          {
+            "name": "full_score_ratio",
+            "value": 0.25,
+            "numerator": 1,
+            "denominator": 4
+          },
+          {
+            "name": "observed_response_ratio",
+            "value": 1.0,
+            "numerator": 4,
+            "denominator": 4
+          },
+          {
+            "name": "item_coverage",
+            "value": 0.5,
+            "numerator": 4,
+            "denominator": 8
+          },
+          {
+            "name": "valid_score_ratio",
+            "value": 0.5,
+            "numerator": 1,
+            "denominator": 2
+          },
+          {
+            "name": "full_score_ratio",
+            "value": 0.5,
+            "numerator": 1,
+            "denominator": 2
+          },
+          {
+            "name": "observed_response_ratio",
+            "value": 1.0,
+            "numerator": 2,
+            "denominator": 2
+          },
+          {
+            "name": "item_coverage",
+            "value": 0.25,
+            "numerator": 2,
+            "denominator": 8
+          }
+        ],
+        "findings": [
+          {
+            "indicator": "T01I1",
+            "status": "insufficient",
+            "performance": "undetermined"
+          },
+          {
+            "indicator": "T01I3",
+            "status": "insufficient",
+            "performance": "undetermined"
+          },
+          {
+            "indicator": "T02I2",
+            "status": "insufficient",
+            "performance": "undetermined"
+          },
+          {
+            "indicator": "T03I1",
+            "status": "sufficient",
+            "performance": "needs_practice"
+          },
+          {
+            "indicator": "T03I2",
+            "status": "insufficient",
+            "performance": "undetermined"
+          }
+        ]
+      }
+    ],
+    "事件信号": [
+      {
+        "material": "Q015",
+        "type": "解答题",
+        "stage": "calculation",
+        "etype": "calculation_error",
+        "focus": [
+          "Q015P3"
+        ],
+        "status": "sufficient",
+        "reason": "起步与步骤点已得分，仅计算结果类点丢失（Q015P3）"
+      },
+      {
+        "material": "Q027",
+        "type": "填空题",
+        "stage": "none",
+        "etype": "none",
+        "focus": [],
+        "status": "sufficient",
+        "reason": "满分 1/1，无失分"
+      },
+      {
+        "material": "Q025",
+        "type": "解答题",
+        "stage": "none",
+        "etype": "none",
+        "focus": [],
+        "status": "sufficient",
+        "reason": "满分 3/3，无失分"
+      },
+      {
+        "material": "Q019",
+        "type": "填空题",
+        "stage": "undetermined",
+        "etype": "insufficient_evidence",
+        "focus": [
+          "Q019P1"
+        ],
+        "status": "insufficient",
+        "reason": "客观题答案错误（丢失点：Q019P1），无解答过程，无法区分概念错误与计算错误"
+      },
+      {
+        "material": "Q014",
+        "type": "解答题",
+        "stage": "concept_understanding",
+        "etype": "concept_error",
+        "focus": [
+          "Q014P1",
+          "Q014P2",
+          "Q014P3"
+        ],
+        "status": "sufficient",
+        "reason": "首评分点（概念/建模类）丢失：Q014P1,Q014P2,Q014P3，起步即失分"
+      },
+      {
+        "material": "Q002",
+        "type": "填空题",
+        "stage": "undetermined",
+        "etype": "insufficient_evidence",
+        "focus": [
+          "Q002P1"
+        ],
+        "status": "insufficient",
+        "reason": "客观题答案错误（丢失点：Q002P1），无解答过程，无法区分概念错误与计算错误"
+      },
+      {
+        "material": "Q022",
+        "type": "解答题",
+        "stage": "key_step",
+        "etype": "step_error",
+        "focus": [
+          "Q022P2",
+          "Q022P3"
+        ],
+        "status": "sufficient",
+        "reason": "中段步骤评分点丢失：Q022P2,Q022P3，起步与结果正常"
+      },
+      {
+        "material": "Q024",
+        "type": "填空题",
+        "stage": "none",
+        "etype": "none",
+        "focus": [],
+        "status": "sufficient",
+        "reason": "满分 1/1，无失分"
+      },
+      {
+        "material": "Q018",
+        "type": "解答题",
+        "stage": "concept_understanding",
+        "etype": "concept_error",
+        "focus": [
+          "Q018P3"
+        ],
+        "status": "sufficient",
+        "reason": "概念类评分点丢失：Q018P3，但起步点已得分"
+      },
+      {
+        "material": "Q013",
+        "type": "填空题",
+        "stage": "none",
+        "etype": "none",
+        "focus": [],
+        "status": "sufficient",
+        "reason": "满分 1/1，无失分"
+      },
+      {
+        "material": "Q021",
+        "type": "选择题",
+        "stage": "undetermined",
+        "etype": "insufficient_evidence",
+        "focus": [
+          "Q021P1"
+        ],
+        "status": "insufficient",
+        "reason": "客观题答案错误（丢失点：Q021P1），无解答过程，无法区分概念错误与计算错误"
+      },
+      {
+        "material": "Q011",
+        "type": "解答题",
+        "stage": "concept_understanding",
+        "etype": "concept_error",
+        "focus": [
+          "Q011P3"
+        ],
+        "status": "sufficient",
+        "reason": "概念类评分点丢失：Q011P3，但起步点已得分"
+      },
+      {
+        "material": "Q041",
+        "type": "填空题",
+        "stage": "undetermined",
+        "etype": "insufficient_evidence",
+        "focus": [
+          "Q041P1"
+        ],
+        "status": "insufficient",
+        "reason": "客观题答案错误（丢失点：Q041P1），无解答过程，无法区分概念错误与计算错误"
+      },
+      {
+        "material": "Q011",
+        "type": "解答题",
+        "stage": "concept_understanding",
+        "etype": "concept_error",
+        "focus": [
+          "Q011P2",
+          "Q011P3"
+        ],
+        "status": "sufficient",
+        "reason": "概念类评分点丢失：Q011P2,Q011P3，但起步点已得分"
+      },
+      {
+        "material": "Q044",
+        "type": "选择题",
+        "stage": "undetermined",
+        "etype": "insufficient_evidence",
+        "focus": [
+          "Q044P1"
+        ],
+        "status": "insufficient",
+        "reason": "客观题答案错误（丢失点：Q044P1），无解答过程，无法区分概念错误与计算错误"
+      },
+      {
+        "material": "Q030",
+        "type": "填空题",
+        "stage": "undetermined",
+        "etype": "insufficient_evidence",
+        "focus": [
+          "Q030P1"
+        ],
+        "status": "insufficient",
+        "reason": "客观题答案错误（丢失点：Q030P1），无解答过程，无法区分概念错误与计算错误"
+      },
+      {
+        "material": "Q029",
+        "type": "填空题",
+        "stage": "cannot_start",
+        "etype": "insufficient_evidence",
+        "focus": [],
+        "status": "insufficient",
+        "reason": "记录状态为未作答，无作答内容与过程，判定为不会开始"
+      },
+      {
+        "material": "Q043",
+        "type": "解答题",
+        "stage": "concept_understanding",
+        "etype": "concept_error",
+        "focus": [
+          "Q043P2",
+          "Q043P3"
+        ],
+        "status": "sufficient",
+        "reason": "概念类评分点丢失：Q043P2,Q043P3，但起步点已得分"
+      },
+      {
+        "material": "Q002",
+        "type": "填空题",
+        "stage": "none",
+        "etype": "none",
+        "focus": [],
+        "status": "sufficient",
+        "reason": "满分 1/1，无失分"
+      },
+      {
+        "material": "Q037",
+        "type": "填空题",
+        "stage": "undetermined",
+        "etype": "insufficient_evidence",
+        "focus": [
+          "Q037P1"
+        ],
+        "status": "insufficient",
+        "reason": "客观题答案错误（丢失点：Q037P1），无解答过程，无法区分概念错误与计算错误"
+      },
+      {
+        "material": "Q039",
+        "type": "填空题",
+        "stage": "none",
+        "etype": "none",
+        "focus": [],
+        "status": "sufficient",
+        "reason": "满分 1/1，无失分"
+      },
+      {
+        "material": "Q045",
+        "type": "填空题",
+        "stage": "none",
+        "etype": "none",
+        "focus": [],
+        "status": "sufficient",
+        "reason": "满分 1/1，无失分"
+      }
+    ],
+    "主题聚合": [
+      {
+        "student_id": "D01",
+        "node_id": "N01",
+        "topic_id": "T01",
+        "valid_material_count": 5,
+        "solution_material_count": 4,
+        "confirmed_error_types": {
+          "concept_error": [
+            "Q014",
+            "Q018",
+            "Q011"
+          ]
+        },
+        "unconfirmed_error_types": {
+          "calculation_error": [
+            "Q015"
+          ]
+        },
+        "rubric_focus": [
+          "Q002P1",
+          "Q011P3",
+          "Q014P1",
+          "Q014P2",
+          "Q014P3",
+          "Q015P3",
+          "Q018P3"
+        ],
+        "evidence_status": "sufficient",
+        "insufficient_signal_count": 1
+      },
+      {
+        "student_id": "D01",
+        "node_id": "N01",
+        "topic_id": "T02",
+        "valid_material_count": 4,
+        "solution_material_count": 2,
+        "confirmed_error_types": {},
+        "unconfirmed_error_types": {
+          "step_error": [
+            "Q022"
+          ]
+        },
+        "rubric_focus": [
+          "Q019P1",
+          "Q021P1",
+          "Q022P2",
+          "Q022P3"
+        ],
+        "evidence_status": "sufficient",
+        "insufficient_signal_count": 2
+      },
+      {
+        "student_id": "D01",
+        "node_id": "N02",
+        "topic_id": "T03",
+        "valid_material_count": 3,
+        "solution_material_count": 1,
+        "confirmed_error_types": {},
+        "unconfirmed_error_types": {
+          "concept_error": [
+            "Q043"
+          ]
+        },
+        "rubric_focus": [
+          "Q037P1",
+          "Q041P1",
+          "Q043P2",
+          "Q043P3",
+          "Q044P1"
+        ],
+        "evidence_status": "sufficient",
+        "insufficient_signal_count": 3
+      },
+      {
+        "student_id": "D01",
+        "node_id": "N02",
+        "topic_id": "T01",
+        "valid_material_count": 2,
+        "solution_material_count": 1,
+        "confirmed_error_types": {},
+        "unconfirmed_error_types": {
+          "concept_error": [
+            "Q011"
+          ]
+        },
+        "rubric_focus": [
+          "Q011P2",
+          "Q011P3"
+        ],
+        "evidence_status": "insufficient",
+        "insufficient_signal_count": 0
+      },
+      {
+        "student_id": "D01",
+        "node_id": "N02",
+        "topic_id": "T02",
+        "valid_material_count": 1,
+        "solution_material_count": 0,
+        "confirmed_error_types": {},
+        "unconfirmed_error_types": {},
+        "rubric_focus": [
+          "Q030P1"
+        ],
+        "evidence_status": "insufficient",
+        "insufficient_signal_count": 2
+      }
+    ],
+    "焦点主题": "T02",
+    "焦点主题名称": "一元一次方程/方程组"
+  },
+  "案例3_表现较好": {
+    "选择依据": "9道有效题无确认错误，展示表现较好证据",
+    "student_id": "D12",
+    "class_id": "DC01",
+    "分析结果": [
+      {
+        "node_id": "N01",
+        "metrics": [
+          {
+            "name": "valid_score_ratio",
+            "value": 0.42857142857142855,
+            "numerator": 3,
+            "denominator": 7
+          },
+          {
+            "name": "full_score_ratio",
+            "value": 0.3333333333333333,
+            "numerator": 1,
+            "denominator": 3
+          },
+          {
+            "name": "observed_response_ratio",
+            "value": 1.0,
+            "numerator": 3,
+            "denominator": 3
+          },
+          {
+            "name": "item_coverage",
+            "value": 0.42857142857142855,
+            "numerator": 3,
+            "denominator": 7
+          },
+          {
+            "name": "valid_score_ratio",
+            "value": 0.875,
+            "numerator": 7,
+            "denominator": 8
+          },
+          {
+            "name": "full_score_ratio",
+            "value": 0.8333333333333334,
+            "numerator": 5,
+            "denominator": 6
+          },
+          {
+            "name": "observed_response_ratio",
+            "value": 1.0,
+            "numerator": 6,
+            "denominator": 6
+          },
+          {
+            "name": "item_coverage",
+            "value": 0.5454545454545454,
+            "numerator": 6,
+            "denominator": 11
+          },
+          {
+            "name": "valid_score_ratio",
+            "value": 1.0,
+            "numerator": 3,
+            "denominator": 3
+          },
+          {
+            "name": "full_score_ratio",
+            "value": 1.0,
+            "numerator": 1,
+            "denominator": 1
+          },
+          {
+            "name": "observed_response_ratio",
+            "value": 1.0,
+            "numerator": 1,
+            "denominator": 1
+          },
+          {
+            "name": "item_coverage",
+            "value": 0.3333333333333333,
+            "numerator": 1,
+            "denominator": 3
+          },
+          {
+            "name": "valid_score_ratio",
+            "value": 1.0,
+            "numerator": 1,
+            "denominator": 1
+          },
+          {
+            "name": "full_score_ratio",
+            "value": 1.0,
+            "numerator": 1,
+            "denominator": 1
+          },
+          {
+            "name": "observed_response_ratio",
+            "value": 1.0,
+            "numerator": 1,
+            "denominator": 1
+          },
+          {
+            "name": "item_coverage",
+            "value": 0.1111111111111111,
+            "numerator": 1,
+            "denominator": 9
+          },
+          {
+            "name": "valid_score_ratio",
+            "value": 0.0,
+            "numerator": 0,
+            "denominator": 1
+          },
+          {
+            "name": "full_score_ratio",
+            "value": 0.0,
+            "numerator": 0,
+            "denominator": 1
+          },
+          {
+            "name": "observed_response_ratio",
+            "value": 1.0,
+            "numerator": 1,
+            "denominator": 1
+          },
+          {
+            "name": "item_coverage",
+            "value": 0.2,
+            "numerator": 1,
+            "denominator": 5
+          }
+        ],
+        "findings": [
+          {
+            "indicator": "T01I1",
+            "status": "sufficient",
+            "performance": "needs_practice"
+          },
+          {
+            "indicator": "T01I2",
+            "status": "sufficient",
+            "performance": "observed_strength"
+          },
+          {
+            "indicator": "T01I3",
+            "status": "insufficient",
+            "performance": "undetermined"
+          },
+          {
+            "indicator": "T02I1",
+            "status": "insufficient",
+            "performance": "undetermined"
+          },
+          {
+            "indicator": "T02I3",
+            "status": "insufficient",
+            "performance": "undetermined"
+          }
+        ]
+      },
+      {
+        "node_id": "N02",
+        "metrics": [
+          {
+            "name": "valid_score_ratio",
+            "value": 0.75,
+            "numerator": 3,
+            "denominator": 4
+          },
+          {
+            "name": "full_score_ratio",
+            "value": 0.5,
+            "numerator": 1,
+            "denominator": 2
+          },
+          {
+            "name": "observed_response_ratio",
+            "value": 1.0,
+            "numerator": 2,
+            "denominator": 2
+          },
+          {
+            "name": "item_coverage",
+            "value": 0.2857142857142857,
+            "numerator": 2,
+            "denominator": 7
+          },
+          {
+            "name": "valid_score_ratio",
+            "value": 1.0,
+            "numerator": 2,
+            "denominator": 2
+          },
+          {
+            "name": "full_score_ratio",
+            "value": 1.0,
+            "numerator": 2,
+            "denominator": 2
+          },
+          {
+            "name": "observed_response_ratio",
+            "value": 1.0,
+            "numerator": 2,
+            "denominator": 2
+          },
+          {
+            "name": "item_coverage",
+            "value": 0.18181818181818182,
+            "numerator": 2,
+            "denominator": 11
+          },
+          {
+            "name": "valid_score_ratio",
+            "value": 0.8,
+            "numerator": 4,
+            "denominator": 5
+          },
+          {
+            "name": "full_score_ratio",
+            "value": 0.6666666666666666,
+            "numerator": 2,
+            "denominator": 3
+          },
+          {
+            "name": "observed_response_ratio",
+            "value": 1.0,
+            "numerator": 3,
+            "denominator": 3
+          },
+          {
+            "name": "item_coverage",
+            "value": 0.42857142857142855,
+            "numerator": 3,
+            "denominator": 7
+          },
+          {
+            "name": "valid_score_ratio",
+            "value": 0.6,
+            "numerator": 3,
+            "denominator": 5
+          },
+          {
+            "name": "full_score_ratio",
+            "value": 0.6666666666666666,
+            "numerator": 2,
+            "denominator": 3
+          },
+          {
+            "name": "observed_response_ratio",
+            "value": 1.0,
+            "numerator": 3,
+            "denominator": 3
+          },
+          {
+            "name": "item_coverage",
+            "value": 0.375,
+            "numerator": 3,
+            "denominator": 8
+          },
+          {
+            "name": "valid_score_ratio",
+            "value": 1.0,
+            "numerator": 5,
+            "denominator": 5
+          },
+          {
+            "name": "full_score_ratio",
+            "value": 1.0,
+            "numerator": 3,
+            "denominator": 3
+          },
+          {
+            "name": "observed_response_ratio",
+            "value": 1.0,
+            "numerator": 3,
+            "denominator": 3
+          },
+          {
+            "name": "item_coverage",
+            "value": 0.375,
+            "numerator": 3,
+            "denominator": 8
+          },
+          {
+            "name": "valid_score_ratio",
+            "value": 0.3333333333333333,
+            "numerator": 1,
+            "denominator": 3
+          },
+          {
+            "name": "full_score_ratio",
+            "value": 0.0,
+            "numerator": 0,
+            "denominator": 1
+          },
+          {
+            "name": "observed_response_ratio",
+            "value": 1.0,
+            "numerator": 1,
+            "denominator": 1
+          },
+          {
+            "name": "item_coverage",
+            "value": 0.2,
+            "numerator": 1,
+            "denominator": 5
+          }
+        ],
+        "findings": [
+          {
+            "indicator": "T01I1",
+            "status": "insufficient",
+            "performance": "undetermined"
+          },
+          {
+            "indicator": "T01I2",
+            "status": "insufficient",
+            "performance": "undetermined"
+          },
+          {
+            "indicator": "T02I2",
+            "status": "sufficient",
+            "performance": "observed_strength"
+          },
+          {
+            "indicator": "T03I1",
+            "status": "sufficient",
+            "performance": "needs_practice"
+          },
+          {
+            "indicator": "T03I2",
+            "status": "sufficient",
+            "performance": "observed_strength"
+          },
+          {
+            "indicator": "T03I3",
+            "status": "insufficient",
+            "performance": "undetermined"
+          }
+        ]
+      }
+    ],
+    "事件信号": [
+      {
+        "material": "Q027",
+        "type": "填空题",
+        "stage": "undetermined",
+        "etype": "insufficient_evidence",
+        "focus": [
+          "Q027P1"
+        ],
+        "status": "insufficient",
+        "reason": "客观题答案错误（丢失点：Q027P1），无解答过程，无法区分概念错误与计算错误"
+      },
+      {
+        "material": "Q009",
+        "type": "解答题",
+        "stage": "none",
+        "etype": "none",
+        "focus": [],
+        "status": "sufficient",
+        "reason": "满分 3/3，无失分"
+      },
+      {
+        "material": "Q006",
+        "type": "解答题",
+        "stage": "key_step",
+        "etype": "step_error",
+        "focus": [
+          "Q006P3"
+        ],
+        "status": "sufficient",
+        "reason": "中段步骤评分点丢失：Q006P3，起步与结果正常"
+      },
+      {
+        "material": "Q014",
+        "type": "解答题",
+        "stage": "concept_understanding",
+        "etype": "concept_error",
+        "focus": [
+          "Q014P1",
+          "Q014P2",
+          "Q014P3"
+        ],
+        "status": "sufficient",
+        "reason": "首评分点（概念/建模类）丢失：Q014P1,Q014P2,Q014P3，起步即失分"
+      },
+      {
+        "material": "Q017",
+        "type": "填空题",
+        "stage": "none",
+        "etype": "none",
+        "focus": [],
+        "status": "sufficient",
+        "reason": "满分 1/1，无失分"
+      },
+      {
+        "material": "Q013",
+        "type": "填空题",
+        "stage": "none",
+        "etype": "none",
+        "focus": [],
+        "status": "sufficient",
+        "reason": "满分 1/1，无失分"
+      },
+      {
+        "material": "Q026",
+        "type": "填空题",
+        "stage": "none",
+        "etype": "none",
+        "focus": [],
+        "status": "sufficient",
+        "reason": "满分 1/1，无失分"
+      },
+      {
+        "material": "Q005",
+        "type": "填空题",
+        "stage": "undetermined",
+        "etype": "insufficient_evidence",
+        "focus": [
+          "Q005P1"
+        ],
+        "status": "insufficient",
+        "reason": "客观题答案错误（丢失点：Q005P1），无解答过程，无法区分概念错误与计算错误"
+      },
+      {
+        "material": "Q004",
+        "type": "填空题",
+        "stage": "none",
+        "etype": "none",
+        "focus": [],
+        "status": "sufficient",
+        "reason": "满分 1/1，无失分"
+      },
+      {
+        "material": "Q010",
+        "type": "填空题",
+        "stage": "none",
+        "etype": "none",
+        "focus": [],
+        "status": "sufficient",
+        "reason": "满分 1/1，无失分"
+      },
+      {
+        "material": "Q016",
+        "type": "填空题",
+        "stage": "none",
+        "etype": "none",
+        "focus": [],
+        "status": "sufficient",
+        "reason": "满分 1/1，无失分"
+      },
+      {
+        "material": "Q018",
+        "type": "解答题",
+        "stage": "none",
+        "etype": "none",
+        "focus": [],
+        "status": "sufficient",
+        "reason": "满分 3/3，无失分"
+      },
+      {
+        "material": "Q030",
+        "type": "填空题",
+        "stage": "none",
+        "etype": "none",
+        "focus": [],
+        "status": "sufficient",
+        "reason": "满分 1/1，无失分"
+      },
+      {
+        "material": "Q040",
+        "type": "解答题",
+        "stage": "concept_understanding",
+        "etype": "concept_error",
+        "focus": [
+          "Q040P2",
+          "Q040P3"
+        ],
+        "status": "sufficient",
+        "reason": "概念类评分点丢失：Q040P2,Q040P3，但起步点已得分"
+      },
+      {
+        "material": "Q006",
+        "type": "解答题",
+        "stage": "key_step",
+        "etype": "step_error",
+        "focus": [
+          "Q006P3"
+        ],
+        "status": "sufficient",
+        "reason": "中段步骤评分点丢失：Q006P3，起步与结果正常"
+      },
+      {
+        "material": "Q007",
+        "type": "填空题",
+        "stage": "none",
+        "etype": "none",
+        "focus": [],
+        "status": "sufficient",
+        "reason": "满分 1/1，无失分"
+      },
+      {
+        "material": "Q046",
+        "type": "解答题",
+        "stage": "none",
+        "etype": "none",
+        "focus": [],
+        "status": "sufficient",
+        "reason": "满分 3/3，无失分"
+      },
+      {
+        "material": "Q029",
+        "type": "填空题",
+        "stage": "none",
+        "etype": "none",
+        "focus": [],
+        "status": "sufficient",
+        "reason": "满分 1/1，无失分"
+      },
+      {
+        "material": "Q010",
+        "type": "填空题",
+        "stage": "none",
+        "etype": "none",
+        "focus": [],
+        "status": "sufficient",
+        "reason": "满分 1/1，无失分"
+      },
+      {
+        "material": "Q037",
+        "type": "填空题",
+        "stage": "none",
+        "etype": "none",
+        "focus": [],
+        "status": "sufficient",
+        "reason": "满分 1/1，无失分"
+      },
+      {
+        "material": "Q042",
+        "type": "填空题",
+        "stage": "none",
+        "etype": "none",
+        "focus": [],
+        "status": "sufficient",
+        "reason": "满分 1/1，无失分"
+      },
+      {
+        "material": "Q054",
+        "type": "解答题",
+        "stage": "concept_understanding",
+        "etype": "concept_error",
+        "focus": [
+          "Q054P1",
+          "Q054P3"
+        ],
+        "status": "sufficient",
+        "reason": "首评分点（概念/建模类）丢失：Q054P1,Q054P3，起步即失分"
+      },
+      {
+        "material": "Q031",
+        "type": "解答题",
+        "stage": "verification",
+        "etype": "missing_verification",
+        "focus": [
+          "Q031P3"
+        ],
+        "status": "sufficient",
+        "reason": "仅检验类评分点丢失（Q031P3），此前步骤已得分"
+      },
+      {
+        "material": "Q053",
+        "type": "填空题",
+        "stage": "none",
+        "etype": "none",
+        "focus": [],
+        "status": "sufficient",
+        "reason": "满分 1/1，无失分"
+      },
+      {
+        "material": "Q045",
+        "type": "填空题",
+        "stage": "none",
+        "etype": "none",
+        "focus": [],
+        "status": "sufficient",
+        "reason": "满分 1/1，无失分"
+      },
+      {
+        "material": "Q003",
+        "type": "选择题",
+        "stage": "none",
+        "etype": "none",
+        "focus": [],
+        "status": "sufficient",
+        "reason": "满分 1/1，无失分"
+      }
+    ],
+    "主题聚合": [
+      {
+        "student_id": "D12",
+        "node_id": "N01",
+        "topic_id": "T02",
+        "valid_material_count": 1,
+        "solution_material_count": 0,
+        "confirmed_error_types": {},
+        "unconfirmed_error_types": {},
+        "rubric_focus": [
+          "Q027P1"
+        ],
+        "evidence_status": "insufficient",
+        "insufficient_signal_count": 1
+      },
+      {
+        "student_id": "D12",
+        "node_id": "N01",
+        "topic_id": "T01",
+        "valid_material_count": 9,
+        "solution_material_count": 4,
+        "confirmed_error_types": {},
+        "unconfirmed_error_types": {
+          "step_error": [
+            "Q006"
+          ],
+          "concept_error": [
+            "Q014"
+          ]
+        },
+        "rubric_focus": [
+          "Q005P1",
+          "Q006P3",
+          "Q014P1",
+          "Q014P2",
+          "Q014P3"
+        ],
+        "evidence_status": "sufficient",
+        "insufficient_signal_count": 1
+      },
+      {
+        "student_id": "D12",
+        "node_id": "N02",
+        "topic_id": "T02",
+        "valid_material_count": 3,
+        "solution_material_count": 1,
+        "confirmed_error_types": {},
+        "unconfirmed_error_types": {
+          "missing_verification": [
+            "Q031"
+          ]
+        },
+        "rubric_focus": [
+          "Q031P3"
+        ],
+        "evidence_status": "sufficient",
+        "insufficient_signal_count": 0
+      },
+      {
+        "student_id": "D12",
+        "node_id": "N02",
+        "topic_id": "T03",
+        "valid_material_count": 7,
+        "solution_material_count": 3,
+        "confirmed_error_types": {
+          "concept_error": [
+            "Q040",
+            "Q054"
+          ]
+        },
+        "unconfirmed_error_types": {},
+        "rubric_focus": [
+          "Q040P2",
+          "Q040P3",
+          "Q054P1",
+          "Q054P3"
+        ],
+        "evidence_status": "sufficient",
+        "insufficient_signal_count": 0
+      },
+      {
+        "student_id": "D12",
+        "node_id": "N02",
+        "topic_id": "T01",
+        "valid_material_count": 4,
+        "solution_material_count": 1,
+        "confirmed_error_types": {},
+        "unconfirmed_error_types": {
+          "step_error": [
+            "Q006"
+          ]
+        },
+        "rubric_focus": [
+          "Q006P3"
+        ],
+        "evidence_status": "sufficient",
+        "insufficient_signal_count": 0
+      }
+    ],
+    "焦点主题": "T01",
+    "焦点主题名称": "代数式与代入求值"
+  }
+}
