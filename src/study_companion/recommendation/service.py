@@ -28,6 +28,7 @@ from study_companion.contracts import (
 )
 
 from study_companion.recommendation.leak_check import check_hint
+from study_companion.recommendation.strategy import choose_strategy
 
 RULE_VERSION = "c-rules-v1"
 
@@ -422,10 +423,16 @@ def recommend_rules(
     context: RunContext,
     config: RecommendationConfig,
 ) -> RecommendationBundle:
-    """基于已验证分析结果与材料目录，生成规则建议（剧本 v4 四类）。
+    """基于已验证分析结果与材料目录，生成规则建议（剧本 v4 四类 + 策略选择器）。
 
     红线：不重算统计；所有数字只转述 analysis 现有内容；
     每条建议挂材料编号与诊断编号；上下文不一致直接拒绝。
+
+    策略选择器（2026-11-24 团队拍板落地）：
+    - 先归并（同指标同类诊断合并、前置链失分归并）再生成，不再逐条机械输出
+    - 优先级：证据不足先观察 > 尚未掌握先扶练 > 倾听式纠错 > 思想迁移
+    - 负荷上限 max_recommendations，超出暂缓并写进调整条件
+    - 前置检查结论写进理由（教师语言，只转述本批 findings，不产生新判断）
     """
     _context_check(analysis, context)
     if catalog.version != context.catalog_version:
@@ -435,11 +442,48 @@ def recommend_rules(
             [{"field": "catalog_version", "reason": f"目录为 {catalog.version}，上下文为 {context.catalog_version}"}],
         )
 
+    plan = choose_strategy(analysis.findings, catalog, config)
     recommendations: list[Recommendation] = []
-    for seq, finding in enumerate(analysis.findings, start=1):
-        kind = classify_finding(finding)
-        rec_id = f"rec-{analysis.student_id}-{analysis.node_id}-{finding.indicator_id}-{seq:02d}"
-        recommendations.append(_BUILDERS[kind](finding, catalog, rec_id, config))
+    for seq, entry in enumerate(plan.entries, start=1):
+        primary = entry.findings[0]
+        rec_id = f"rec-{analysis.student_id}-{analysis.node_id}-{primary.indicator_id}-{seq:02d}"
+        rec = _BUILDERS[entry.kind](primary, catalog, rec_id, config)
+
+        updates: dict[str, object] = {}
+        merged_ids = [f.finding_id for f in entry.findings[1:]]
+        reason = rec.reason
+        if merged_ids:
+            updates["finding_ids"] = rec.finding_ids + merged_ids
+            reason = (
+                reason
+                + f"（本条合并同指标同类诊断：{'、'.join(merged_ids)}，不重复安排两份练习）"
+            )
+        if entry.rationale:
+            reason = reason + f"策略说明：{entry.rationale}"
+        if reason != rec.reason:
+            updates["reason"] = reason
+
+        conditions = list(rec.adjustment_conditions)
+        for later_id in entry.follow_up_indicators:
+            conditions.append(
+                AdjustmentCondition(
+                    observable_condition=f"指标 {primary.indicator_id} 的补练完成且复评通过",
+                    next_action=f"再安排指标 {later_id} 的同类练习（此前暂缓，不与补练叠加）",
+                )
+            )
+        if entry.deferred_note:
+            conditions.append(
+                AdjustmentCondition(
+                    observable_condition="学生完成本轮全部活动",
+                    next_action=entry.deferred_note,
+                )
+            )
+        if conditions != rec.adjustment_conditions:
+            updates["adjustment_conditions"] = conditions
+
+        if updates:
+            rec = rec.model_copy(update=updates)
+        recommendations.append(rec)
 
     return RecommendationBundle(
         run_id=context.run_id,
@@ -560,6 +604,23 @@ def validate_recommendations(
                     ValidationIssue(
                         code="MATERIAL_SCOPE_INVALID",
                         message=f"建议 {rid} 活动 {act.order} 的材料不适配指标 {rec.indicator_id}",
+                        recommendation_id=rid,
+                    )
+                )
+
+            if (
+                material is not None
+                and material.source_locator.verification_status == "unverified"
+            ):
+                # 发布保护硬规则（A 建议⑤）：未核对材料不得进入将发布给学生的建议
+                issues.append(
+                    ValidationIssue(
+                        code="UNVERIFIED_MATERIAL_PUBLISHED",
+                        message=(
+                            f"建议 {rid} 活动 {act.order} 引用的材料 {material.material_id} "
+                            "未完成人工核对（verification_status=unverified）；"
+                            "未核对材料不得直接发布给学生，请教师核对后将状态更新为 verified"
+                        ),
                         recommendation_id=rid,
                     )
                 )
