@@ -401,6 +401,23 @@ def test_student_intro_present_for_all_kinds():
         assert rec.student_intro.strip(), f"{f.finding_id} 缺 student_intro"
 
 
+def test_scaffolded_intro_varies_with_frustration():
+    """1b 开场白按挫败信号分档：挫败接情绪（C/D 版），一般给行动起点（A/B 版）。"""
+    ctx, cfg = make_context(), RecommendationConfig()
+
+    def intro_for(desc: str) -> str:
+        f = finding_1b().model_copy(update={"description": desc})
+        return recommend_rules(make_analysis([f]), make_catalog(), ctx, cfg).recommendations[0].student_intro
+
+    frustrated = intro_for("该生三次作答均无有效解题步骤")
+    normal = intro_for("该生在移项处出现一次失误")
+
+    assert "错了也有用" in frustrated          # 挫败 + 有学习卡 → C 版
+    assert "把它拆小" not in frustrated        # 挫败档不再落一般档模板
+    assert "把它拆小" in normal                # 一般 + 有学习卡 → A 版
+    assert "错了也有用" not in normal
+
+
 def test_reason_varies_with_evidence_status():
     """文案变体：同类型不同证据状态生成不同 reason（治模板死板）。"""
     base = recommend_rules(

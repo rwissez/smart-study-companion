@@ -176,6 +176,18 @@ def _excerpt(material, limit: int = 24) -> str:
     return text[:limit] + ("…" if len(text) > limit else "")
 
 
+_FRUSTRATION_SIGNALS = ("均无有效", "多次", "连续", "仍未", "反复")
+
+
+def _is_frustrated(finding: Finding) -> bool:
+    """学生挫败信号的近似判定：基于诊断描述的文本特征。
+
+    B 的 StrategySignal 到位后替换为结构化字段；教师备注类观察事件
+    也可作为补充信号源。
+    """
+    return any(s in finding.description for s in _FRUSTRATION_SIGNALS)
+
+
 # ---------------------------------------------------------------------------
 # 四类建议生成（剧本 v4）
 # ---------------------------------------------------------------------------
@@ -304,10 +316,11 @@ def _build_type2(finding: Finding, catalog: Catalog, rec_id: str, exclude: froze
             )
         ),
         student_intro=(
-            "最近这些题你做得挺稳的。今天不刷题，来点不太一样的："
-            "先做一道变着花样的题，然后有个小选择想听听你的想法。"
+            "最近这些题你做得挺稳。今天为你准备了一道变式，问法换了个角度，核心没变；"
+            "做完有个小选择想听听你的想法。"
             if len(variants) > 1
-            else "最近这些题你做得挺稳的。今天不刷题，就一道变着花样的题，看看换个问法你还认识它吗。"
+            else "最近这些题你做得挺稳。今天为你准备了一道变式，问法换了个角度，"
+            "核心没变，看看你还能不能认出它。"
         ),
         activities=activities,
         adjustment_conditions=[
@@ -353,7 +366,13 @@ def _build_1a(finding: Finding, catalog: Catalog, rec_id: str, exclude: frozense
             m,
             i,
             purpose=f"倾听式引导后的巩固（{_excerpt(m)}）：按修正后的思路独立走完，再代入检验",
-            hints=("按你刚才修正的思路从头走一遍，走完把答案代回去，看看式子还成立吗",),
+            hints=(
+                (
+                    "按你刚才修正的思路从头走一遍，走完把答案代回去，看看式子还成立吗"
+                    if i == 1
+                    else "同样的路子再来一遍：先解，再把答案代回去验一验，看两头还对得上吗"
+                ),
+            ),
             points=(
                 "修正点（如方向处理）是否稳定",
                 "检验是否主动发生",
@@ -372,8 +391,8 @@ def _build_1a(finding: Finding, catalog: Catalog, rec_id: str, exclude: frozense
             f"听学生讲当时的想法，走通后只安排 {len(consolidations)} 道巩固题，不追加新课。"
         ),
         student_intro=(
-            "我看了你的解题过程，里面的想法挺有意思的。我想听你讲讲当时是怎么想的——"
-            "咱们从一道差不多的题开始，你来说，我听。"
+            "我看了你的解题过程，思路里有几处值得聊。"
+            "我想听你讲讲当时是怎么想的，咱们从一道差不多的题开始。"
         ),
         activities=activities,
         adjustment_conditions=[
@@ -458,10 +477,21 @@ def _build_1b(finding: Finding, catalog: Catalog, rec_id: str, config: Recommend
             )
         ),
         student_intro=(
-            "这道题确实有点绕，咱们不着急，一步步来：先从最简单的地方下手，"
-            "能走多远走多远，我就在旁边。"
+            (
+                "这题不怪你，它的步骤就是容易乱。我们从你最有把握的那小步开始，"
+                "走一步算一步；错了也有用，错的位置正是我们要找的。"
+                if _is_frustrated(finding)
+                else "这道题卡住很正常，它本身就是多步的。咱们把它拆小，"
+                "从你能确定的那一步做起，做完一层我看一层。"
+            )
             if support
-            else "咱们直接试试这道题，按你的想法走，卡住了跟我说，我们一起看。"
+            else (
+                "这题确实不好下手，硬啃没有意义。我先给个小台阶：从最基础的那条性质过一遍，"
+                "你觉得从哪一步开始没底，我们就从哪儿补。"
+                if _is_frustrated(finding)
+                else "先别急着完整解题，咱们只做第一步：把题目要求的量圈出来。"
+                "后面的我们一层一层来。"
+            )
         ),
         activities=activities,
         adjustment_conditions=[
