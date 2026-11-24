@@ -149,6 +149,30 @@ class AnalysisResult(Base):
     payload_json: Mapped[dict[str, Any]] = mapped_column(_json(), nullable=False)
 
 
+class LearningObservation(Base):
+    __tablename__ = "learning_observations"
+    __table_args__ = (
+        UniqueConstraint(
+            "run_id", "student_id", "activity_id", "sequence",
+            name="uq_learning_observation_sequence",
+        ),
+    )
+
+    id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    dataset_id: Mapped[str] = mapped_column(ForeignKey("datasets.id"), nullable=False, index=True)
+    run_id: Mapped[str] = mapped_column(ForeignKey("analysis_runs.id"), nullable=False, index=True)
+    student_id: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
+    node_id: Mapped[str] = mapped_column(String(64), nullable=False)
+    activity_id: Mapped[str] = mapped_column(String(64), nullable=False)
+    material_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    event_type: Mapped[str] = mapped_column(String(32), nullable=False)
+    sequence: Mapped[int] = mapped_column(nullable=False)
+    hint_level: Mapped[int | None] = mapped_column(nullable=True)
+    payload_json: Mapped[dict[str, Any]] = mapped_column(_json(), nullable=False, default=dict)
+    observed_at: Mapped[str] = mapped_column(String(40), nullable=False)
+    source: Mapped[str] = mapped_column(String(16), nullable=False)
+
+
 class DemoSession(Base):
     __tablename__ = "demo_sessions"
 
