@@ -5,5 +5,16 @@
 
 from study_companion.analysis.prepare import prepare_dataset
 from study_companion.analysis.service import analyze_dataset
+from study_companion.analysis.strategy_signal import (
+    StrategySignal,
+    aggregate_signals_by_topic,
+    build_strategy_signals,
+)
 
-__all__ = ["prepare_dataset", "analyze_dataset"]
+__all__ = [
+    "prepare_dataset",
+    "analyze_dataset",
+    "StrategySignal",
+    "build_strategy_signals",
+    "aggregate_signals_by_topic",
+]
