@@ -34,8 +34,13 @@ class ServerContext:
     dataset_id: str
     catalog_version: str
     allowed_student_ids: frozenset[str]
-    bundle: AnalysisBundle
+    bundle: AnalysisBundle | None
     dataset: PreparedDataset
+    bound_student_id: str | None = None
+    bound_class_id: str | None = None
+    bound_node_id: str | None = None
+    allowed_class_ids: frozenset[str] | None = None
+    allowed_record_ids: frozenset[str] | None = None
 
 
 class AnswerEvidenceItem(BaseModel):
@@ -76,9 +81,13 @@ def _ok(call_id: str, name: str, data, refs: list[dict[str, str]]) -> ToolResult
 def get_student_analysis(ctx: ServerContext, call_id: str,
                          student_id: str, node_id: str) -> ToolResult:
     """查询指定学生的分析结果（含版本信息）。"""
+    student_id = ctx.bound_student_id or student_id
+    node_id = ctx.bound_node_id or node_id
     if student_id not in ctx.allowed_student_ids:
         return _fail(call_id, "get_student_analysis", "SCOPE_DENIED",
                      f"学生 {student_id} 不在当前会话允许范围内")
+    if ctx.bundle is None:
+        return _fail(call_id, "get_student_analysis", "CONTEXT_MISMATCH", "当前任务没有分析运行")
     result = next(
         (r for r in ctx.bundle.student_results
          if r.student_id == student_id and r.node_id == node_id),
@@ -98,6 +107,12 @@ def get_student_analysis(ctx: ServerContext, call_id: str,
 def get_class_analysis(ctx: ServerContext, call_id: str,
                        class_id: str, node_id: str) -> ToolResult:
     """查询指定班级的分析结果（含版本信息）。学生角色会话不可调用。"""
+    class_id = ctx.bound_class_id or class_id
+    node_id = ctx.bound_node_id or node_id
+    if ctx.allowed_class_ids is not None and class_id not in ctx.allowed_class_ids:
+        return _fail(call_id, "get_class_analysis", "SCOPE_DENIED", "班级不在当前目标范围内")
+    if ctx.bundle is None:
+        return _fail(call_id, "get_class_analysis", "CONTEXT_MISMATCH", "当前任务没有分析运行")
     result = next(
         (r for r in ctx.bundle.class_results
          if r.class_id == class_id and r.node_id == node_id),
@@ -119,6 +134,10 @@ def get_quality_issues(ctx: ServerContext, call_id: str,
     """查询当前范围的质量问题，分页返回；student_id 可选过滤。"""
     if page < 1:
         return _fail(call_id, "get_quality_issues", "INVALID_ARGUMENT", "page 必须 >= 1")
+    if ctx.bound_student_id is not None:
+        if student_id not in (None, ctx.bound_student_id):
+            return _fail(call_id, "get_quality_issues", "SCOPE_DENIED", "学生质量查询目标与会话绑定不一致")
+        student_id = ctx.bound_student_id
     if student_id is not None and student_id not in ctx.allowed_student_ids:
         return _fail(call_id, "get_quality_issues", "SCOPE_DENIED",
                      f"学生 {student_id} 不在当前会话允许范围内")
@@ -143,15 +162,17 @@ def get_quality_issues(ctx: ServerContext, call_id: str,
         if student_id is None:
             issues.append(issue)
             continue
-        if any(record_student(record_id) == student_id for record_id in issue.record_ids):
-            issues.append(issue)
+        owned_ids = [record_id for record_id in issue.record_ids if record_student(record_id) == student_id]
+        if owned_ids:
+            mixed_ownership = len(owned_ids) != len(issue.record_ids)
+            issues.append(issue.model_copy(update={
+                "record_ids": owned_ids,
+                "event_id": None if mixed_ownership else issue.event_id,
+            }))
 
     start = (page - 1) * PAGE_SIZE
     chunk = issues[start:start + PAGE_SIZE]
-    record_ids = {
-        record_id for issue in chunk for record_id in issue.record_ids
-        if student_id is None or record_student(record_id) == student_id
-    }
+    record_ids = {record_id for issue in chunk for record_id in issue.record_ids}
     return _ok(call_id, "get_quality_issues", chunk or [],
                [{"kind": "record", "id": record_id, "run_id": ctx.run_id}
                 for record_id in sorted(record_ids)])
@@ -165,6 +186,10 @@ def get_answer_evidence(ctx: ServerContext, call_id: str,
 
     records = {r.record_id: r for r in ctx.dataset.raw_records}
     events_by_record = {e.selected_record_id: e for e in ctx.dataset.selected_events}
+
+    requested_ids = set(record_ids)
+    if ctx.allowed_record_ids is not None and not requested_ids <= ctx.allowed_record_ids:
+        return _fail(call_id, "get_answer_evidence", "SCOPE_DENIED", "作答证据不属于当前目标的已验证引用范围")
 
     evidence: list[AnswerEvidenceItem] = []
     for record_id in record_ids:
