@@ -133,13 +133,15 @@ def _materials_for(
     exclude: frozenset[str] | None = None,
 ) -> list[Material]:
     """按指标选材；exclude 为本建议包已使用的材料（A 任务单 C-4：同一材料不重复出现）。"""
+    # 过滤顺序（A 合并前反馈修复）：先全量取 → 排除本包已用 → 再截 limit；
+    # 旧顺序先截后排会让已用材料挤占名额，可用题白白变少
     found = search_materials(
         catalog,
-        MaterialSearch(indicator_ids=[indicator_id], material_types=list(types), limit=limit),
+        MaterialSearch(indicator_ids=[indicator_id], material_types=list(types), limit=200),
     )
     if exclude:
         found = [m for m in found if m.material_id not in exclude]
-    return found
+    return found[:limit]
 
 
 def _require_materials(catalog: Catalog, indicator_id: str, materials: list[Material]) -> None:
@@ -226,10 +228,12 @@ def _build_type3(finding: Finding, catalog: Catalog, rec_id: str, exclude: froze
             AdjustmentCondition(
                 observable_condition="题组证据齐备",
                 next_action="按证据归类到 1a/1b/类型二并重新生成建议",
+                group="advance",
             ),
             AdjustmentCondition(
                 observable_condition="学生未完成观察题组",
                 next_action="记录 limitation，不强行归因，教师端如实呈现该生未参与本轮观察",
+                group="wrap_up",
             ),
         ],
         review_status="draft",
@@ -310,22 +314,27 @@ def _build_type2(finding: Finding, catalog: Catalog, rec_id: str, exclude: froze
             AdjustmentCondition(
                 observable_condition="完成选择，反馈已呈现",
                 next_action="本指标收尾，选择记录为亮点证据（教师端展示）",
+                group="wrap_up",
             ),
             AdjustmentCondition(
                 observable_condition="学生对思想有进一步疑问",
                 next_action="学伴顺势延伸讨论，不设为必经环节；持续困惑则建议面谈",
+                group="escalate_teacher",
             ),
             AdjustmentCondition(
                 observable_condition="同一思想本周已出现过",
                 next_action="跳过该思想的本轮辨识，可轮换另一思想或直接收尾",
+                group="advance",
             ),
             AdjustmentCondition(
                 observable_condition="学生表现持续稳定无新变化",
                 next_action="不重复安排任务，仅更新亮点证据",
+                group="wrap_up",
             ),
             AdjustmentCondition(
                 observable_condition="变式题出错",
                 next_action="回落第一级补一道，思想任务顺延",
+                group="fall_back",
             ),
         ],
         review_status="draft",
@@ -371,10 +380,12 @@ def _build_1a(finding: Finding, catalog: Catalog, rec_id: str, exclude: frozense
             AdjustmentCondition(
                 observable_condition="巩固题全对",
                 next_action="记录修正证据，进入类型二两级迁移",
+                group="advance",
             ),
             AdjustmentCondition(
                 observable_condition="同类位置再次出错",
                 next_action="降级到 1b 递减干预，从对应性质补台阶",
+                group="fall_back",
             ),
         ],
         review_status="draft",
@@ -457,10 +468,12 @@ def _build_1b(finding: Finding, catalog: Catalog, rec_id: str, config: Recommend
             AdjustmentCondition(
                 observable_condition="回头重做原错题全对",
                 next_action="进入类型二两级迁移",
+                group="advance",
             ),
             AdjustmentCondition(
                 observable_condition="仍错",
                 next_action="记录新证据并提示教师介入",
+                group="escalate_teacher",
             ),
         ],
         review_status="draft",
@@ -564,7 +577,7 @@ def recommend_rules(
         recommendations[-1] = last.model_copy(
             update={
                 "adjustment_conditions": list(last.adjustment_conditions)
-                + [AdjustmentCondition(observable_condition="学生完成本轮全部活动", next_action=note)]
+                + [AdjustmentCondition(observable_condition="学生完成本轮全部活动", next_action=note, group="advance")]
             }
         )
 

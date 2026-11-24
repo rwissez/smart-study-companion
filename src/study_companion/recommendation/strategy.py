@@ -15,9 +15,13 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Literal
 
-from pydantic import BaseModel
-
-from study_companion.contracts import Catalog, Finding, RecommendationConfig
+from study_companion.contracts import (
+    Catalog,
+    Finding,
+    NextAction,
+    ObservationEvent,
+    RecommendationConfig,
+)
 
 # 优先级：证据不足先观察（不然没依据说话）→ 纯粹不懂先扶练 →
 # 思路对但失败点集中 → 已掌握做迁移（锦上添花，最缓）
@@ -150,42 +154,9 @@ def choose_strategy(
 # 建议④：学习观察事件（只追加，不修改原始成绩）
 # ---------------------------------------------------------------------------
 
-ObservationEventType = Literal[
-    "completed_independent",   # 独立完成
-    "completed_with_hints",    # 借助提示完成
-    "step_failed",             # 某一步卡住或做错
-    "not_completed",           # 未完成
-    "teacher_note",            # 教师观察备注
-    "effectiveness_assessed",  # 教师评估建议有效性
-]
-
-NextAction = Literal[
-    "advance",          # 推进下一知识点
-    "retry_same",       # 同级再练（提示减一档）
-    "fall_back",        # 回落扶助
-    "escalate_teacher", # 转教师介入
-    "pending",          # 信息不足，不臆测
-]
-
-
-class ObservationEvent(BaseModel):
-    """学习观察事件：学生练习/对话后的结构化观察记录。
-
-    红线：事件只追加；绝不修改原始作答成绩（原始数据是诊断证据链的根）。
-    供 A 的 API 层落库，回流 C 的诊断与策略。
-    """
-
-    event_id: str
-    run_id: str
-    student_id: str
-    recommendation_id: str
-    activity_order: int
-    material_id: str
-    event_type: ObservationEventType
-    hint_level_used: int | None = None
-    failed_step: str | None = None
-    teacher_note: str | None = None
-    created_at: str = ""
+# 事件契约已统一入 contracts（A 合并前反馈）：
+# ActionGroup / ObservationEventType / NextAction / ObservationEvent
+# 均从 study_companion.contracts 导入，本文件不再自带定义。
 
 
 def next_action_rule(events: list[ObservationEvent]) -> NextAction:

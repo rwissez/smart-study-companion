@@ -24,9 +24,9 @@ from study_companion.contracts import (
     Topic,
 )
 
+from study_companion.contracts import ObservationEvent
 from study_companion.recommendation.service import recommend_rules, validate_recommendations
 from study_companion.recommendation.strategy import (
-    ObservationEvent,
     choose_strategy,
     next_action_rule,
     prerequisite_sources,
@@ -437,3 +437,73 @@ def test_validate_blocks_duplicate_goal():
     )
     codes = [i.code for i in result.issues]
     assert "DUPLICATE_GOAL" in codes
+
+
+# ---------------------------------------------------------------------------
+# A 合并前四项反馈验证（2026-11-24）
+# ---------------------------------------------------------------------------
+
+def test_materials_scan_after_exclude():
+    """③ 材料过滤顺序：先全量取再排除再截断，已用材料不挤占名额。"""
+    data = load_fixture()["catalog"]
+    data["materials"].append(
+        Material(
+            material_id="M008",
+            material_type="question",
+            topic_ids=["T01"],
+            indicator_ids=["T01I1"],
+            content="解不等式 -3x>6，并说明方向变化。",
+            source_locator=SourceLocator(
+                source_file="demo.pdf", pdf_page=1, verification_status="verified"
+            ),
+        ).model_dump(mode="json")
+    )
+    cat = Catalog.model_validate(data)
+    bundle = recommend_rules(
+        make_analysis([finding_1b(), finding_1a()]), cat, make_context(), RecommendationConfig()
+    )
+    # 旧顺序（先截后排）：1b 用掉 M001/M002 后，1a 候选在截断阶段只剩这两道，排除后为空 → 转暂缓
+    # 新顺序：全量含 M008，排除后仍有题 → 1a 正常生成
+    assert len(bundle.recommendations) == 2, "排除后仍有可用材料却未生成第二条建议"
+
+
+def test_adjustment_condition_groups():
+    """② 后续动作分组：group 值合法且覆盖关键动作。"""
+    bundle = recommend_rules(
+        make_analysis([finding_type2(), finding_1b()]),
+        make_catalog(),
+        make_context(),
+        RecommendationConfig(),
+    )
+    groups = {c.group for r in bundle.recommendations for c in r.adjustment_conditions}
+    assert groups <= {"advance", "fall_back", "escalate_teacher", "wrap_up"}
+    assert "fall_back" in groups and "escalate_teacher" in groups
+
+
+def test_observation_event_in_contracts():
+    """①④ 事件契约统一：ObservationEvent 走 Contract 基类（strict+extra=forbid）。"""
+    ev = ObservationEvent(
+        event_id="E1",
+        run_id="run-demo-1",
+        student_id="S01",
+        recommendation_id="rec-1",
+        activity_order=1,
+        material_id="M001",
+        event_type="completed_independent",
+    )
+    assert ev.event_id == "E1"
+    raised = False
+    try:
+        ObservationEvent(
+            event_id="E2",
+            run_id="r",
+            student_id="S",
+            recommendation_id="rec",
+            activity_order=1,
+            material_id="M",
+            event_type="completed_independent",
+            unknown_field="x",
+        )
+    except Exception:
+        raised = True
+    assert raised, "extra=forbid 未生效：事件契约未走 Contract 基类"
