@@ -134,17 +134,18 @@ def test_strategy_merge_same_indicator():
 
 
 def test_strategy_priority_order():
-    # type3(观察) > 1b(扶练) > type2(迁移)
-    findings = [finding_type2(), finding_1b(), finding_type3()]
-    plan = choose_strategy(findings, make_catalog(), RecommendationConfig())
+    # type3(观察) > 1b(扶练) > type2(迁移)；上限放宽到 3 纯看排序
+    findings = [finding_type2("F004", "T01I3"), finding_1b(), finding_type3()]
+    plan = choose_strategy(findings, make_catalog(), RecommendationConfig(max_recommendations=3))
     assert [e.kind for e in plan.entries] == ["type3", "1b", "type2"]
 
-    bundle = recommend_rules(make_analysis(findings), make_catalog(), make_context(), RecommendationConfig())
-    kinds = [r.recommendation_id.split("-")[-2] for r in bundle.recommendations]
-    # rec_id 形如 rec-S01-N01-T01I2-01：观察类在前
+    bundle = recommend_rules(
+        make_analysis(findings), _catalog_with_extra_material(), make_context(), RecommendationConfig(max_recommendations=3)
+    )
+    # 观察类在前
     assert bundle.recommendations[0].indicator_id == "T01I2"
     assert bundle.recommendations[1].indicator_id == "T01I1"
-    assert len(kinds) == 3
+    assert len(bundle.recommendations) == 3
 
 
 # ---------------------------------------------------------------------------
@@ -152,18 +153,18 @@ def test_strategy_priority_order():
 # ---------------------------------------------------------------------------
 
 def test_strategy_load_limit():
-    # 上限 2：type3(T01I2) + 1b(T01I1) + type2(T01I2) → 保留 type3、1b，type2 暂缓
+    # 默认上限 2：type3(T01I2) + 1b(T01I1) + type2(T01I2) → 保留 type3、1b，type2 暂缓
     findings = [finding_type2(), finding_1b(), finding_type3()]
-    plan = choose_strategy(findings, make_catalog(), RecommendationConfig(max_recommendations=2))
+    plan = choose_strategy(findings, make_catalog(), RecommendationConfig())
     assert [e.kind for e in plan.entries] == ["type3", "1b"]
     assert plan.deferred_indicators == ["T01I2"]
-    # 暂缓说明写进最后保留条目，生成后进调整条件
-    assert "T01I2" in plan.entries[-1].deferred_note
 
-    bundle = recommend_rules(make_analysis(findings), make_catalog(), make_context(), RecommendationConfig(max_recommendations=2))
+    bundle = recommend_rules(make_analysis(findings), make_catalog(), make_context(), RecommendationConfig())
     assert len(bundle.recommendations) == 2
     last = bundle.recommendations[-1]
     assert any("T01I2" in c.observable_condition + c.next_action for c in last.adjustment_conditions)
+    # 暂缓话术点明减负上限
+    assert any("减负" in c.next_action for c in last.adjustment_conditions)
 
 
 # ---------------------------------------------------------------------------
@@ -222,7 +223,8 @@ def test_prerequisite_ok_keeps_normal_generation():
 # 建议⑤：发布保护
 # ---------------------------------------------------------------------------
 
-def _catalog_with_unverified_material() -> Catalog:
+def _catalog_with_extra_material(status: str = "verified") -> Catalog:
+    """追加第三个指标 T01I3（含一道指定核对状态的题），供排序/发布保护测试用。"""
     data = load_fixture()["catalog"]
     data["indicators"].append(
         Indicator(indicator_id="T01I3", topic_id="T01", description="测试指标").model_dump(mode="json")
@@ -235,7 +237,7 @@ def _catalog_with_unverified_material() -> Catalog:
             indicator_ids=["T01I3"],
             content="解不等式 2x+1>5，并说明每一步的依据。",
             source_locator=SourceLocator(
-                source_file="demo.pdf", pdf_page=1, verification_status="unverified"
+                source_file="demo.pdf", pdf_page=1, verification_status=status
             ),
         ).model_dump(mode="json")
     )
@@ -244,8 +246,8 @@ def _catalog_with_unverified_material() -> Catalog:
 
 def test_unverified_material_blocked():
     findings = [finding_type3("F003", "T01I3")]
-    bundle = recommend_rules(make_analysis(findings), _catalog_with_unverified_material(), make_context(), RecommendationConfig())
-    result = validate_recommendations(bundle, make_analysis(findings), _catalog_with_unverified_material())
+    bundle = recommend_rules(make_analysis(findings), _catalog_with_extra_material('unverified'), make_context(), RecommendationConfig())
+    result = validate_recommendations(bundle, make_analysis(findings), _catalog_with_extra_material('unverified'))
     assert not result.valid
     codes = {i.code for i in result.issues}
     assert "UNVERIFIED_MATERIAL_PUBLISHED" in codes
@@ -301,3 +303,86 @@ def test_next_action_pending_cases():
     assert next_action_rule([]) == "pending"
     assert next_action_rule([_event("teacher_note")]) == "pending"
     assert next_action_rule([_event("effectiveness_assessed")]) == "pending"
+
+
+# ---------------------------------------------------------------------------
+# A 任务单 C-5：验证扩展（重复建议 / 重复材料 / 负荷超限）
+# ---------------------------------------------------------------------------
+
+def _bare_rec(rid: str, fids: list[str], material_ids: list[str]):
+    from study_companion.contracts import Activity, AdjustmentCondition, Recommendation
+
+    acts = [
+        Activity.model_construct(
+            order=i + 1, material_id=mid, purpose="p",
+            hint_levels=["先想方向"], observation_points=["步骤完整性"],
+            previously_attempted=False,
+        )
+        for i, mid in enumerate(material_ids)
+    ]
+    return Recommendation.model_construct(
+        recommendation_id=rid, indicator_id="T01I1", finding_ids=fids, goal="g",
+        reason=f"诊断 {fids[0]}：三次作答均无有效解题步骤，安排递减干预扶练。",
+        activities=acts,
+        adjustment_conditions=[AdjustmentCondition.model_construct(observable_condition="仍错", next_action="转教师")],
+        review_status="draft", generation_method="rule",
+    )
+
+
+def _bare_bundle(recs):
+    from study_companion.contracts import RecommendationBundle
+
+    return RecommendationBundle.model_construct(
+        run_id="run-demo-1", dataset_id="ds-demo-1", catalog_version="synthetic-v1",
+        student_id="S01", node_id="N01", recommendations=recs, validation_issues=[],
+    )
+
+
+def test_validate_blocks_duplicate_material():
+    analysis = make_analysis([finding_1b()])
+    bundle = _bare_bundle([
+        _bare_rec("rec-A", ["F002"], ["M003", "M001"]),
+        _bare_rec("rec-B", ["F006"], ["M001"]),  # M001 与 rec-A 重复
+    ])
+    result = validate_recommendations(bundle, analysis, make_catalog())
+    assert not result.valid
+    assert "DUPLICATE_MATERIAL" in {i.code for i in result.issues}
+
+
+def test_validate_blocks_duplicate_recommendation():
+    analysis = make_analysis([finding_1b()])
+    bundle = _bare_bundle([
+        _bare_rec("rec-A", ["F002"], ["M001"]),
+        _bare_rec("rec-B", ["F002"], ["M002"]),  # F002 重复出现在两条建议
+    ])
+    result = validate_recommendations(bundle, analysis, make_catalog())
+    assert not result.valid
+    assert "DUPLICATE_RECOMMENDATION" in {i.code for i in result.issues}
+
+
+def test_validate_blocks_load_exceeded():
+    analysis = make_analysis([finding_1b()])
+    bundle = _bare_bundle([
+        _bare_rec("rec-A", ["F002"], ["M001"]),
+        _bare_rec("rec-B", ["F006"], ["M002"]),
+        _bare_rec("rec-C", ["F007"], ["M003"]),
+    ])
+    result = validate_recommendations(bundle, analysis, make_catalog(), RecommendationConfig())
+    assert "LOAD_LIMIT_EXCEEDED" in {i.code for i in result.issues}
+    # 不传 config 时不做负荷检查（向后兼容）
+    result2 = validate_recommendations(bundle, analysis, make_catalog())
+    assert "LOAD_LIMIT_EXCEEDED" not in {i.code for i in result2.issues}
+
+
+def test_materials_not_reused_across_recommendations():
+    # 策略层：1b 用完 M003/M001/M002 后，同指标 1a 无题可用 → 转暂缓，不硬凑重复题
+    findings = [finding_1b("F002", "T01I1"), finding_1a("F001", "T01I1")]
+    bundle = recommend_rules(
+        make_analysis(findings), make_catalog(), make_context(), RecommendationConfig(max_recommendations=3)
+    )
+    # 1b（高优先级）保留，1a 因材料耗尽转暂缓
+    assert len(bundle.recommendations) == 1
+    all_materials = [a.material_id for r in bundle.recommendations for a in r.activities]
+    assert len(all_materials) == len(set(all_materials))  # 无重复材料
+    last = bundle.recommendations[-1]
+    assert any("T01I1" in c.next_action and "材料" in c.next_action for c in last.adjustment_conditions)

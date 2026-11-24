@@ -54,15 +54,14 @@ class StrategyEntry:
     rationale: str = ""  # 策略层说明（教师语言，追加进 reason）
     follow_up_indicators: list[str] = field(default_factory=list)
     # 前置链归并：该知识点补练完成后需复评的后继指标
-    deferred_note: str = ""  # 负荷暂缓说明（写入保留条目的调整条件）
 
 
 @dataclass
 class StrategyPlan:
-    entries: list[StrategyEntry]  # 已按优先级排序、已控负荷
+    entries: list[StrategyEntry] = field(default_factory=list)  # 已按优先级排序、已控负荷
     deferred_indicators: list[str] = field(default_factory=list)
-    # 因前置未掌握暂缓的指标（待前置条目复评）
-    # 与负荷截断的指标（超出上限）
+    # 暂缓指标汇总（前置未掌握暂缓 + 负荷截断）；
+    # 暂缓说明由 service 层统一写进保留建议的调整条件（含材料耗尽转暂缓）
 
 
 def choose_strategy(
@@ -135,20 +134,14 @@ def choose_strategy(
     # 3) 优先级排序
     kept.sort(key=lambda e: _STRATEGY_PRIORITY[e.kind])
 
-    # 4) 负荷截断：单次最多 max_recommendations 条，超出暂缓
+    # 4) 负荷截断：一次最多 1~2 个核心目标（max_recommendations），超出暂缓
     limit = config.max_recommendations
-    plan = StrategyPlan(entries=[])
-    plan.deferred_indicators = list(deferred_by_prereq)
+    plan = StrategyPlan(entries=[], deferred_indicators=list(deferred_by_prereq))
     if len(kept) > limit:
         overflow = kept[limit:]
         kept = kept[:limit]
         overflow_ids = [e.findings[0].indicator_id for e in overflow]
         plan.deferred_indicators.extend(overflow_ids)
-        if kept:
-            kept[-1].deferred_note = (
-                f"本周学习安排以 {limit} 个知识点为限（减负原则），"
-                f"指标 {'、'.join(overflow_ids)} 暂不安排，建议下周再跟进"
-            )
     plan.entries = kept
     return plan
 

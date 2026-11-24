@@ -130,11 +130,16 @@ def _materials_for(
     indicator_id: str,
     types: tuple[str, ...],
     limit: int,
+    exclude: frozenset[str] | None = None,
 ) -> list[Material]:
-    return search_materials(
+    """按指标选材；exclude 为本建议包已使用的材料（A 任务单 C-4：同一材料不重复出现）。"""
+    found = search_materials(
         catalog,
         MaterialSearch(indicator_ids=[indicator_id], material_types=list(types), limit=limit),
     )
+    if exclude:
+        found = [m for m in found if m.material_id not in exclude]
+    return found
 
 
 def _require_materials(catalog: Catalog, indicator_id: str, materials: list[Material]) -> None:
@@ -167,10 +172,10 @@ def _activity(
 # 四类建议生成（剧本 v4）
 # ---------------------------------------------------------------------------
 
-def _build_type3(finding: Finding, catalog: Catalog, rec_id: str) -> Recommendation:
+def _build_type3(finding: Finding, catalog: Catalog, rec_id: str, exclude: frozenset[str] = frozenset()) -> Recommendation:
     """证据不足：观察用题组，不下结论（剧本：先观察再说话）。"""
     indicator_id = finding.indicator_id
-    materials = _materials_for(catalog, indicator_id, (_PRACTICE_TYPE,), 3)
+    materials = _materials_for(catalog, indicator_id, (_PRACTICE_TYPE,), 3, exclude=exclude)
     _require_materials(catalog, indicator_id, materials)
 
     activities = [
@@ -211,10 +216,10 @@ def _build_type3(finding: Finding, catalog: Catalog, rec_id: str) -> Recommendat
     )
 
 
-def _build_type2(finding: Finding, catalog: Catalog, rec_id: str) -> Recommendation:
+def _build_type2(finding: Finding, catalog: Catalog, rec_id: str, exclude: frozenset[str] = frozenset()) -> Recommendation:
     """表现较好：两级迁移。先知识迁移（变式），再思想辨识选择（学生选、学伴解释，不刷题）。"""
     indicator_id = finding.indicator_id
-    variants = _materials_for(catalog, indicator_id, (_PRACTICE_TYPE,), 2)
+    variants = _materials_for(catalog, indicator_id, (_PRACTICE_TYPE,), 2, exclude=exclude)
     _require_materials(catalog, indicator_id, variants)
 
     activities = [
@@ -289,10 +294,10 @@ def _build_type2(finding: Finding, catalog: Catalog, rec_id: str) -> Recommendat
     )
 
 
-def _build_1a(finding: Finding, catalog: Catalog, rec_id: str) -> Recommendation:
+def _build_1a(finding: Finding, catalog: Catalog, rec_id: str, exclude: frozenset[str] = frozenset()) -> Recommendation:
     """有思路但走不通：倾听式引导 + 巩固，不追加新课。"""
     indicator_id = finding.indicator_id
-    consolidations = _materials_for(catalog, indicator_id, (_PRACTICE_TYPE,), 2)
+    consolidations = _materials_for(catalog, indicator_id, (_PRACTICE_TYPE,), 2, exclude=exclude)
     _require_materials(catalog, indicator_id, consolidations)
 
     activities = [
@@ -334,11 +339,11 @@ def _build_1a(finding: Finding, catalog: Catalog, rec_id: str) -> Recommendation
     )
 
 
-def _build_1b(finding: Finding, catalog: Catalog, rec_id: str, config: RecommendationConfig) -> Recommendation:
+def _build_1b(finding: Finding, catalog: Catalog, rec_id: str, config: RecommendationConfig, exclude: frozenset[str] = frozenset()) -> Recommendation:
     """纯粹不懂：递减干预扶练。接住即放手，回头题受限在 reason 中如实声明。"""
     indicator_id = finding.indicator_id
-    support = _materials_for(catalog, indicator_id, _SUPPORT_TYPES, 1)
-    practices = _materials_for(catalog, indicator_id, (_PRACTICE_TYPE,), 2)
+    support = _materials_for(catalog, indicator_id, _SUPPORT_TYPES, 1, exclude=exclude)
+    practices = _materials_for(catalog, indicator_id, (_PRACTICE_TYPE,), 2, exclude=exclude)
     _require_materials(catalog, indicator_id, practices)
 
     activities: list[Activity] = []
@@ -406,10 +411,10 @@ def _build_1b(finding: Finding, catalog: Catalog, rec_id: str, config: Recommend
 
 
 _BUILDERS = {
-    "type3": lambda f, c, rid, cfg: _build_type3(f, c, rid),
-    "type2": lambda f, c, rid, cfg: _build_type2(f, c, rid),
-    "1a": lambda f, c, rid, cfg: _build_1a(f, c, rid),
-    "1b": _build_1b,
+    "type3": lambda f, c, rid, cfg, excl: _build_type3(f, c, rid, excl),
+    "type2": lambda f, c, rid, cfg, excl: _build_type2(f, c, rid, excl),
+    "1a": lambda f, c, rid, cfg, excl: _build_1a(f, c, rid, excl),
+    "1b": lambda f, c, rid, cfg, excl: _build_1b(f, c, rid, cfg, excl),
 }
 
 
@@ -444,10 +449,20 @@ def recommend_rules(
 
     plan = choose_strategy(analysis.findings, catalog, config)
     recommendations: list[Recommendation] = []
+    used_materials: set[str] = set()
+    exhausted: list[str] = []  # 可用材料耗尽转暂缓的指标（A 任务单 C-4）
     for seq, entry in enumerate(plan.entries, start=1):
         primary = entry.findings[0]
         rec_id = f"rec-{analysis.student_id}-{analysis.node_id}-{primary.indicator_id}-{seq:02d}"
-        rec = _BUILDERS[entry.kind](primary, catalog, rec_id, config)
+        try:
+            rec = _BUILDERS[entry.kind](primary, catalog, rec_id, config, frozenset(used_materials))
+        except DomainError as err:
+            if err.code == "MATERIAL_NOT_FOUND":
+                # 同一材料不重复出现；排除已用材料后无题可用 → 该知识点转暂缓，不硬凑重复题
+                exhausted.append(primary.indicator_id)
+                continue
+            raise
+        used_materials.update(a.material_id for a in rec.activities)
 
         updates: dict[str, object] = {}
         merged_ids = [f.finding_id for f in entry.findings[1:]]
@@ -471,19 +486,29 @@ def recommend_rules(
                     next_action=f"再安排指标 {later_id} 的同类练习（此前暂缓，不与补练叠加）",
                 )
             )
-        if entry.deferred_note:
-            conditions.append(
-                AdjustmentCondition(
-                    observable_condition="学生完成本轮全部活动",
-                    next_action=entry.deferred_note,
-                )
-            )
         if conditions != rec.adjustment_conditions:
             updates["adjustment_conditions"] = conditions
 
         if updates:
             rec = rec.model_copy(update=updates)
         recommendations.append(rec)
+
+    # 暂缓汇总（负荷截断 + 材料耗尽），统一写进最后一条保留建议的调整条件
+    deferred_all = list(plan.deferred_indicators) + exhausted
+    if deferred_all and recommendations:
+        last = recommendations[-1]
+        note = (
+            f"本周学习安排以不超过 {config.max_recommendations} 个知识点为限（减负原则），"
+            f"指标 {'、'.join(deferred_all)} 暂不安排，下周跟进"
+        )
+        if exhausted:
+            note += "；其中部分因避免重复使用同一批材料而暂缓，教师可另指定材料"
+        recommendations[-1] = last.model_copy(
+            update={
+                "adjustment_conditions": list(last.adjustment_conditions)
+                + [AdjustmentCondition(observable_condition="学生完成本轮全部活动", next_action=note)]
+            }
+        )
 
     return RecommendationBundle(
         run_id=context.run_id,
@@ -504,8 +529,9 @@ def validate_recommendations(
     bundle: RecommendationBundle,
     analysis: StudentResult,
     catalog: Catalog,
+    config: RecommendationConfig | None = None,
 ) -> ValidationResult:
-    """校验建议包（05 验收）：
+    """校验建议包（05 验收 + A 任务单 C-5 扩展）：
 
     - 运行身份一致（run/dataset/catalog/student 与分析结果对齐）
     - finding_ids 必须属于当前学生本次分析
@@ -515,6 +541,10 @@ def validate_recommendations(
     - 调整条件非空
     - 空话禁令：理由必须落到材料编号或诊断编号
     - 提示泄答拦截（15 号文档 §六）：HINT_LEAKS_ANSWER，命中不得以 validated 状态保存
+    - 发布保护：UNVERIFIED_MATERIAL_PUBLISHED，未核对材料不得发布给学生
+    - 重复建议阻断：同一 finding 不得出现在多条建议
+    - 重复材料阻断：同一 material 不得出现在多条建议（不让学生刷同一题两遍）
+    - 负荷超限阻断：建议条数超过 max_recommendations（需传入 config 启用）
     """
     issues: list[ValidationIssue] = []
 
@@ -529,6 +559,49 @@ def validate_recommendations(
     if bundle.student_id != analysis.student_id:
         issues.append(
             ValidationIssue(code="STUDENT_MISMATCH", message="建议包学生与分析结果学生不一致")
+        )
+
+    # bundle 级：重复建议 / 重复材料 / 负荷超限（A 任务单 C-5）
+    seen_finding: dict[str, str] = {}
+    seen_material: dict[str, str] = {}
+    for rec in bundle.recommendations:
+        for fid in rec.finding_ids:
+            if fid in seen_finding:
+                issues.append(
+                    ValidationIssue(
+                        code="DUPLICATE_RECOMMENDATION",
+                        message=(
+                            f"诊断 {fid} 同时出现在建议 {seen_finding[fid]} 与 {rec.recommendation_id}；"
+                            "同一诊断不应生成多条建议（重复建议）"
+                        ),
+                        recommendation_id=rec.recommendation_id,
+                    )
+                )
+            else:
+                seen_finding[fid] = rec.recommendation_id
+        for act in rec.activities:
+            if act.material_id in seen_material:
+                issues.append(
+                    ValidationIssue(
+                        code="DUPLICATE_MATERIAL",
+                        message=(
+                            f"材料 {act.material_id} 同时出现在建议 {seen_material[act.material_id]} 与 "
+                            f"{rec.recommendation_id}；同一材料不应重复安排给学生"
+                        ),
+                        recommendation_id=rec.recommendation_id,
+                    )
+                )
+            else:
+                seen_material[act.material_id] = rec.recommendation_id
+    if config is not None and len(bundle.recommendations) > config.max_recommendations:
+        issues.append(
+            ValidationIssue(
+                code="LOAD_LIMIT_EXCEEDED",
+                message=(
+                    f"建议包包含 {len(bundle.recommendations)} 条建议，"
+                    f"超出单次负荷上限 {config.max_recommendations}（减负原则）"
+                ),
+            )
         )
 
     known_findings = {f.finding_id for f in analysis.findings}

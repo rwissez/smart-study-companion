@@ -284,8 +284,8 @@ class ImportConfig(Contract):
 
 class RecommendationConfig(Contract):
     max_activities: int = Field(default=3, ge=1)
-    # 策略选择器的负荷上限（A 建议③）：单次最多安排的知识点数，超出暂缓下周跟进
-    max_recommendations: int = Field(default=3, ge=1)
+    # 策略选择器的负荷上限（A 建议③/任务单 C-4）：一次最多 1~2 个核心目标，超出暂缓
+    max_recommendations: int = Field(default=2, ge=1)
 
 
 class MaterialSearch(Contract):
