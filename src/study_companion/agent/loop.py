@@ -32,8 +32,21 @@ class ToolRegistry:
         tool = self._tools.get(call.name)
         if tool is None:
             raise DomainError("TOOL_NOT_ALLOWED", f"工具未注册：{call.name}")
+        parameters = tool.schema.get("function", {}).get("parameters", {})
+        required = parameters.get("required", [])
+        properties = parameters.get("properties", {})
+        missing = [key for key in required if key not in call.arguments]
+        unknown = [key for key in call.arguments if key not in properties]
+        if missing or unknown:
+            raise DomainError("INVALID_ARGUMENT", f"工具参数无效，缺少={missing}，未知={unknown}")
+        for key, value in call.arguments.items():
+            expected = properties.get(key, {}).get("type")
+            if expected == "string" and not isinstance(value, str):
+                raise DomainError("INVALID_ARGUMENT", f"参数 {key} 必须是字符串")
+            if expected == "integer" and (not isinstance(value, int) or isinstance(value, bool)):
+                raise DomainError("INVALID_ARGUMENT", f"参数 {key} 必须是整数")
         try:
-            return tool.invoke(call.arguments)
+            return tool.invoke({**call.arguments, "_call_id": call.call_id})
         except DomainError:
             raise
         except Exception as exc:
@@ -79,6 +92,14 @@ class AgentLoop:
                         status = result.get("status", "succeeded")
                         error = result.get("error")
                         data = result.get("data", result)
+                    elif getattr(result, "status", "succeeded") == "failed":
+                        error = getattr(result, "error", None) or {}
+                        status = "failed"
+                        data = None
+                        evidence_refs = list(getattr(result, "evidence_refs", []) or [])
+                        if error.get("code") in {"SCOPE_DENIED", "TOOL_NOT_ALLOWED", "FORBIDDEN", "CONTEXT_MISMATCH"}:
+                            trace.append(ToolTrace(call.call_id, call.name, call.arguments, status, data, error, evidence_refs))
+                            return AgentResult(None, state, trace, "tool_policy_failure")
                     else:
                         evidence_refs = list(getattr(result, "evidence_refs", []) or [])
                         status = getattr(result, "status", "succeeded")
@@ -94,11 +115,13 @@ class AgentLoop:
                                            "failed", error={"code": exc.code, "message": str(exc)}))
                     tool_payload = {"status": "failed", "data": None,
                                     "error": {"code": exc.code, "message": str(exc)}}
-                    # A scope or tool policy failure is terminal for this task;
-                    # never ask the model to retry a forbidden action.
+                    # Scope and policy failures are terminal; ordinary missing
+                    # evidence may be observed and trigger another model turn.
                     current.append({"role": "tool", "tool_call_id": call.call_id,
                                     "name": call.name, "content": tool_payload})
-                    return AgentResult(None, state, trace, "tool_policy_failure")
+                    if exc.code in {"SCOPE_DENIED", "TOOL_NOT_ALLOWED", "FORBIDDEN", "CONTEXT_MISMATCH"}:
+                        return AgentResult(None, state, trace, "tool_policy_failure")
+                    continue
                 current.append({"role": "tool", "tool_call_id": call.call_id,
                                 "name": call.name, "content": tool_payload})
 

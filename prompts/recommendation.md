@@ -1,3 +1,4 @@
+# prompt_version: recommendation-v1
 # C-1 建议生成指引（recommendation.md）
 
 ## 角色

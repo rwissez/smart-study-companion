@@ -1,3 +1,4 @@
+# prompt_version: diagnosis-v1
 # C-2 思路分析报告指引（diagnosis.md）
 
 ## 用途

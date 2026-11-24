@@ -63,11 +63,11 @@ def test_loop_enforces_tool_call_limit():
 def test_prompt_registry_loads_versioned_existing_prompt():
     prompt, version = PromptRegistry().compose(role="student", task="解释证据", context="metric=m1")
     assert "七年级学生" in prompt
-    assert version.startswith("file:student_style.md")
+    assert version == "student-style-v1"
 
 
-def test_tool_registry_converts_unexpected_failure_to_domain_error():
+def test_tool_registry_rejects_invalid_arguments_before_execution():
     registry = ToolRegistry([RegisteredTool(SCHEMA, lambda _: (_ for _ in ()).throw(RuntimeError("boom")))])
     with pytest.raises(DomainError) as exc:
         registry.call(ToolCall("c", "read_fact", {}))
-    assert exc.value.code == "TOOL_FAILED"
+    assert exc.value.code == "INVALID_ARGUMENT"
