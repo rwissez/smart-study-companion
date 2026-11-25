@@ -524,3 +524,29 @@ def test_observation_event_in_contracts():
     except Exception:
         raised = True
     assert raised, "extra=forbid 未生效：事件契约未走 Contract 基类"
+
+
+def test_attempted_materials_excluded_from_variants():
+    """type2 变式必须排除学生已作答材料（record→material 关联进算法）：做过的变式不再重复安排。"""
+    ctx, cfg = make_context(), RecommendationConfig()
+    analysis = make_analysis([finding_type2()])
+    catalog = make_catalog()
+
+    without_attempted = recommend_rules(analysis, catalog, ctx, cfg)
+    first_variant = without_attempted.recommendations[0].activities[0].material_id
+
+    attempted = frozenset({first_variant})
+    with_attempted = recommend_rules(analysis, catalog, ctx, cfg, attempted_material_ids=attempted)
+    picked = [a.material_id for a in with_attempted.recommendations[0].activities]
+
+    assert first_variant not in picked, f"已做材料 {first_variant} 不应再出现在变式安排 {picked}"
+    # 排除后无题可用的极端情形：全部练习题都做过 → 该指标转暂缓而不是硬凑
+    all_practice = frozenset(
+        m.material_id for m in catalog.materials if m.material_type == "question"
+    )
+    starved = recommend_rules(analysis, catalog, ctx, cfg, attempted_material_ids=all_practice)
+    deferred_rec = starved.recommendations[-1]
+    # 全部耗尽不留空包：生成零活动暂缓说明，教师看得见原因
+    assert deferred_rec.activities == []
+    assert "暂缓" in deferred_rec.reason or "暂不安排" in deferred_rec.reason
+    assert deferred_rec.student_intro != ""

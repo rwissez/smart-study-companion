@@ -528,6 +528,7 @@ def recommend_rules(
     catalog: Catalog,
     context: RunContext,
     config: RecommendationConfig,
+    attempted_material_ids: frozenset[str] = frozenset(),
 ) -> RecommendationBundle:
     """基于已验证分析结果与材料目录，生成规则建议（剧本 v4 四类 + 策略选择器）。
 
@@ -539,6 +540,9 @@ def recommend_rules(
     - 优先级：证据不足先观察 > 尚未掌握先扶练 > 倾听式纠错 > 思想迁移
     - 负荷上限 max_recommendations，超出暂缓并写进调整条件
     - 前置检查结论写进理由（教师语言，只转述本批 findings，不产生新判断）
+
+    attempted_material_ids：学生已作答过的材料（如 record→material 关联），
+    选材时排除，保证变式/扶练/观察题都是没做过的题；排除后无题可用的指标转暂缓。
     """
     _context_check(analysis, context)
     if catalog.version != context.catalog_version:
@@ -556,7 +560,9 @@ def recommend_rules(
         primary = entry.findings[0]
         rec_id = f"rec-{analysis.student_id}-{analysis.node_id}-{primary.indicator_id}-{seq:02d}"
         try:
-            rec = _BUILDERS[entry.kind](primary, catalog, rec_id, config, frozenset(used_materials))
+            rec = _BUILDERS[entry.kind](
+                primary, catalog, rec_id, config, frozenset(used_materials) | attempted_material_ids
+            )
         except DomainError as err:
             if err.code == "MATERIAL_NOT_FOUND":
                 # 同一材料不重复出现；排除已用材料后无题可用 → 该知识点转暂缓，不硬凑重复题
@@ -609,6 +615,35 @@ def recommend_rules(
                 "adjustment_conditions": list(last.adjustment_conditions)
                 + [AdjustmentCondition(observable_condition="学生完成本轮全部活动", next_action=note, group="advance")]
             }
+        )
+    elif deferred_all:
+        # 全部指标暂缓（如材料耗尽）：不留空包，生成一条零活动的暂缓说明，让教师看得见原因
+        deferred_findings = [f.finding_id for f in analysis.findings]
+        primary_ind = plan.entries[0].findings[0].indicator_id if plan.entries else (
+            analysis.findings[0].indicator_id if analysis.findings else ""
+        )
+        recommendations.append(
+            Recommendation(
+                recommendation_id=f"rec-{analysis.student_id}-{analysis.node_id}-DEFERRED-01",
+                indicator_id=primary_ind,
+                finding_ids=deferred_findings,
+                goal="本周不安排练习：先向教师说明暂缓原因并等待补充材料",
+                reason=(
+                    f"指标 {'、'.join(deferred_all)} 暂不安排："
+                    + ("目录中可用材料均已使用过，为避免重复刷题暂缓（教师可另指定材料）" if exhausted else "负荷上限控制")
+                ),
+                student_intro="今天没有给你安排新练习，我先看看你最近的学习情况，有想法随时跟我说。",
+                activities=[],
+                adjustment_conditions=[
+                    AdjustmentCondition(
+                        observable_condition="教师在材料目录中补充新题目或调整安排",
+                        next_action=f"重新为指标 {'、'.join(deferred_all)} 生成学习建议",
+                        group="advance",
+                    )
+                ],
+                review_status="draft",
+                generation_method="rule",
+            )
         )
 
     return RecommendationBundle(
