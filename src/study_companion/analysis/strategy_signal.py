@@ -89,6 +89,7 @@ class StrategySignal:
     evidence_refs: list[dict] = field(default_factory=list)
     limitations: list[str] = field(default_factory=list)
     reason: str = ""                      # 人可读的判定依据说明
+    counted: bool = True                  # 是否进入有效统计（graded且未排除）
 
 
 # ---------------------------------------------------------------------------
@@ -194,12 +195,14 @@ def build_signal(
         signal.error_stage = STAGE_CANNOT_START
         signal.error_type = TYPE_INSUFFICIENT
         signal.evidence_status = "insufficient"
+        signal.counted = False
         signal.reason = "记录状态为未作答，无作答内容与过程，判定为不会开始"
         return signal
 
     # 2. 待评分或分数被排除：证据不足，不判错误
     if event.status != "graded" or event.disposition != "include":
         signal.evidence_status = "insufficient"
+        signal.counted = False
         signal.reason = (
             "待评分，尚无官方分数" if event.status == "pending"
             else "分数被排除（超满分/缺满分/冲突），不进入错误判定"
@@ -409,16 +412,15 @@ def aggregate_signals_by_topic(
                 "evidence_status": "insufficient",
             },
         )
-        is_valid = s.error_type not in ("insufficient_evidence",) or s.error_stage == "cannot_start"
-        if s.question_type == "解答题":
-            if s.error_type == "none" or s.error_stage == "cannot_start" or is_valid:
-                g["distinct_solution_materials"].add(s.material_id)
+        is_counted = s.counted  # graded 且未排除：有效作答（客观题错也计入）
+        if s.question_type == "解答题" and is_counted:
+            g["distinct_solution_materials"].add(s.material_id)
             if s.error_type in ("concept_error", "step_error", "calculation_error",
                                 "missing_verification"):
                 mats_seen = g["error_materials"].setdefault(s.error_type, [])
                 if s.material_id not in mats_seen:
                     mats_seen.append(s.material_id)
-        if s.error_stage != "undetermined" or s.error_type == "none":
+        if is_counted:
             g["distinct_valid_materials"].add(s.material_id)
         if s.evidence_status == "insufficient":
             g["insufficient_reasons"] += 1
