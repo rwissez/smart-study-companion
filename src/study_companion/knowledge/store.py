@@ -254,7 +254,7 @@ class KnowledgeStore:
         if draft.status != "draft" or manifest.status != "draft":
             raise DomainError("KB_NOT_DRAFT", "只有 draft 知识库可以发布")
         active_points = [point for point in draft.points if point.verification_status != "rejected"]
-        active_annotations = [annotation for annotation in draft.annotations if annotation.candidate_id and annotation.verification_status != "rejected"]
+        active_annotations = [annotation for annotation in draft.annotations if annotation.verification_status != "rejected"]
         active_relations = [relation for relation in draft.relations if relation.verification_status != "rejected"]
         if any(point.verification_status != "verified" for point in active_points):
             raise DomainError("UNVERIFIED_KNOWLEDGE", "仍有未核对知识点，不能发布")
@@ -284,8 +284,15 @@ class KnowledgeStore:
                 raise DomainError("SOURCE_PAGE_NOT_FOUND", f"知识点来源页不存在：{point.kp_id}")
             if point.snippet and point.snippet.replace(" ", "") not in source_text.replace(" ", ""):
                 raise DomainError("EVIDENCE_NOT_IN_TEXT", f"知识点来源证据无效：{point.kp_id}")
-        accepted, rejected = validate_target_candidates(active_kb, catalog, active_annotations, bound_text)
-        if rejected or len(accepted) != len(active_annotations):
+        point_ids = {point.kp_id for point in active_points}
+        material_ids = {material.material_id for material in catalog.materials}
+        for annotation in active_annotations:
+            if annotation.candidate_id is None:
+                if annotation.material_id not in material_ids or any(kp_id not in point_ids for kp_id in annotation.kp_ids):
+                    raise DomainError("TARGET_VALIDATION_FAILED", "Legacy annotation references unknown material or knowledge point")
+        candidates = [annotation for annotation in active_annotations if annotation.candidate_id is not None]
+        accepted, rejected = validate_target_candidates(active_kb, catalog, candidates, bound_text)
+        if rejected or len(accepted) != len(candidates):
             raise DomainError("TARGET_VALIDATION_FAILED", "; ".join(f"{r.candidate_id}:{r.code}" for r in rejected))
         accepted_relations, rejected_relations = validate_candidates(active_kb.model_copy(update={"relations": []}), active_relations, bound_text)
         if rejected_relations or len(accepted_relations) != len(active_relations):

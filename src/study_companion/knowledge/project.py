@@ -120,13 +120,18 @@ def project_to_catalog(kb: KnowledgeBase, base: Catalog, version: str) -> Projec
     materials = list(base.materials)
     material_ids = {item.material_id for item in materials}
 
+    eligible_points = []
     for point in kb.points:
+        if point.verification_status != "verified" or point.definition_locator.verification_status != "verified":
+            report.warnings.append(f"{point.kp_id} 知识点或定义位置未核对，跳过投影")
+            continue
         unknown = sorted(set(point.indicator_ids) - known_indicators)
         if unknown:
             report.warnings.append(
                 f"{point.kp_id} 引用了不存在的指标：{unknown}"
             )
             continue
+        eligible_points.append(point)
         material = _knowledge_material(point, base)
         if material.material_id in material_ids:
             report.warnings.append(f"跳过重复材料：{material.material_id}")
@@ -144,6 +149,11 @@ def project_to_catalog(kb: KnowledgeBase, base: Catalog, version: str) -> Projec
             continue
         if relation.verification_status == "rejected":
             report.skipped_relation_ids.append(relation.relation_id)
+            continue
+        eligible_ids = {point.kp_id for point in eligible_points}
+        if any(point_id not in eligible_ids for point_id in [*relation.source_ids, relation.target_id]):
+            report.skipped_relation_ids.append(relation.relation_id)
+            report.warnings.append(f"{relation.relation_id} 包含不存在或未核对的端点，跳过投影")
             continue
         for link in _relation_links(relation, kb, report):
             key = (link.source_id, link.target_id, link.relation, link.basis)

@@ -115,6 +115,7 @@ def test_projection_uses_confirmed_relation_mapping():
     for point, indicator in zip(kb.points, ["I1", "I2", "I3", "I4"]):
         point.indicator_ids = [indicator]
         point.verification_status = "verified"
+        point.definition_locator.verification_status = "verified"
     kb.relations = [
         Relation(relation_id="derive", type="derives_from", source_ids=["K1"], target_id="K3",
                  verification_status="verified"),
@@ -213,6 +214,9 @@ def test_target_candidate_validation_reports_missing_ids_duplicates_and_auto_ver
 
 def test_projection_skips_missing_indicator_mapping():
     kb = _kb()
+    for point in kb.points:
+        point.verification_status = "verified"
+        point.definition_locator.verification_status = "verified"
     kb.points[0].indicator_ids = ["I1"]
     kb.relations = [
         Relation(relation_id="r", type="derives_from", source_ids=["K1"], target_id="K3",
