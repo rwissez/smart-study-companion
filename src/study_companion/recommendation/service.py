@@ -132,16 +132,22 @@ def _materials_for(
     limit: int,
     exclude: frozenset[str] | None = None,
 ) -> list[Material]:
-    """按指标选材；exclude 为本建议包已使用的材料（A 任务单 C-4：同一材料不重复出现）。"""
+    """按指标选材；exclude 为本建议包已使用的材料（A 任务单 C-4：同一材料不重复出现）。
+
+    选材阶段隔离未核对材料（A 反馈 2026-11-25 P0）：只选教师核对过（verified）的材料，
+    避免"生成建议后才被发布校验拒绝"；未核对材料在教师检索中仍可见，核对后自动进池。
+    全部候选未核对时返回空 → 走既有的转暂缓机制，教师端可见"需核对/补充材料"。
+    """
     # 过滤顺序（A 合并前反馈修复）：先全量取 → 排除本包已用 → 再截 limit；
     # 旧顺序先截后排会让已用材料挤占名额，可用题白白变少
     found = search_materials(
         catalog,
         MaterialSearch(indicator_ids=[indicator_id], material_types=list(types), limit=200),
     )
+    verified = [m for m in found if m.source_locator.verification_status == "verified"]
     if exclude:
-        found = [m for m in found if m.material_id not in exclude]
-    return found[:limit]
+        verified = [m for m in verified if m.material_id not in exclude]
+    return verified[:limit]
 
 
 def _require_materials(catalog: Catalog, indicator_id: str, materials: list[Material]) -> None:

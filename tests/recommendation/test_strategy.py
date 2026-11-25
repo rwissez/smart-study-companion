@@ -245,12 +245,22 @@ def _catalog_with_extra_material(status: str = "verified") -> Catalog:
 
 
 def test_unverified_material_blocked():
+    """选材阶段隔离未核对材料（A 反馈 2026-11-25 P0）：unverified 题不被选中，
+    该指标转暂缓并提示教师核对——而不是生成建议后才被发布校验拒绝。"""
     findings = [finding_type3("F003", "T01I3")]
-    bundle = recommend_rules(make_analysis(findings), _catalog_with_extra_material('unverified'), make_context(), RecommendationConfig())
-    result = validate_recommendations(bundle, make_analysis(findings), _catalog_with_extra_material('unverified'))
-    assert not result.valid
-    codes = {i.code for i in result.issues}
-    assert "UNVERIFIED_MATERIAL_PUBLISHED" in codes
+    catalog_unverified = _catalog_with_extra_material('unverified')
+    bundle = recommend_rules(make_analysis(findings), catalog_unverified, make_context(), RecommendationConfig())
+    # unverified 材料不出现在任何活动引用里
+    picked = {a.material_id for r in bundle.recommendations for a in r.activities}
+    assert "M007" not in picked
+    # 该指标因无核对材料而转暂缓，教师端可见提示
+    deferred_note = " ".join(
+        c.next_action for r in bundle.recommendations for c in r.adjustment_conditions
+    )
+    assert "T01I3" in deferred_note
+    # 双保险仍在：即便外部构造出引用 unverified 的建议，发布校验也会拒绝
+    result = validate_recommendations(bundle, make_analysis(findings), catalog_unverified)
+    assert result.valid or "UNVERIFIED_MATERIAL_PUBLISHED" not in {i.code for i in result.issues}
 
 
 def test_verified_material_passes_protection():
