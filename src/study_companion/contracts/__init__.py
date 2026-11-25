@@ -239,9 +239,19 @@ class Activity(Contract):
     previously_attempted: bool
 
 
+ActionGroup = Literal[
+    "advance",          # 升阶/推进：证据到位，进入下一步学习
+    "fall_back",        # 回退：出错或未接住，降级补台阶
+    "escalate_teacher", # 转教师介入
+    "wrap_up",          # 收尾记录：亮点归档或如实呈现现状
+]
+
+
 class AdjustmentCondition(Contract):
     observable_condition: str
     next_action: str
+    # 后续动作分组（A 合并前反馈）：教师端调整入口按组呈现，与事件闭环 next_action_rule 对齐
+    group: ActionGroup = "advance"
 
 
 class Recommendation(Contract):
@@ -250,6 +260,8 @@ class Recommendation(Contract):
     finding_ids: list[str]
     goal: str
     reason: str
+    # 学伴开场白（学生端呈现，2026-11-24）：学生语气，说清今天为什么安排这些；教师端字段不受影响
+    student_intro: str = ""
     activities: list[Activity]
     adjustment_conditions: list[AdjustmentCondition]
     review_status: Literal["draft", "validated", "needs_review"]
@@ -277,6 +289,46 @@ class ValidationResult(Contract):
     issues: list[ValidationIssue]
 
 
+ObservationEventType = Literal[
+    "completed_independent",   # 独立完成
+    "completed_with_hints",    # 借助提示完成
+    "step_failed",             # 某一步卡住或做错
+    "not_completed",           # 未完成
+    "teacher_note",            # 教师观察备注
+    "effectiveness_assessed",  # 教师评估建议有效性
+]
+
+
+class ObservationEvent(Contract):
+    """学习观察事件：学生练习/对话后的结构化观察记录。
+
+    红线：事件只追加；绝不修改原始作答成绩（原始数据是诊断证据链的根）。
+    供 A 的 API 层落库，回流 C 的诊断与策略。
+    事件契约统一（A 合并前反馈）：随契约层 strict+extra=forbid 校验，统一导出。
+    """
+
+    event_id: str
+    run_id: str
+    student_id: str
+    recommendation_id: str
+    activity_order: int
+    material_id: str
+    event_type: ObservationEventType
+    hint_level_used: int | None = None
+    failed_step: str | None = None
+    teacher_note: str | None = None
+    created_at: str = ""
+
+
+NextAction = Literal[
+    "advance",          # 推进下一知识点
+    "retry_same",       # 同级再练（提示减一档）
+    "fall_back",        # 回落扶助
+    "escalate_teacher", # 转教师介入
+    "pending",          # 信息不足，不臆测
+]
+
+
 class ImportConfig(Contract):
     rule_version: str
     quarantine_invalid_scores: bool = True
@@ -284,6 +336,8 @@ class ImportConfig(Contract):
 
 class RecommendationConfig(Contract):
     max_activities: int = Field(default=3, ge=1)
+    # 策略选择器的负荷上限（A 建议③/任务单 C-4）：一次最多 1~2 个核心目标，超出暂缓
+    max_recommendations: int = Field(default=2, ge=1)
 
 
 class LearningObservation(Contract):
@@ -310,6 +364,27 @@ class MaterialSearch(Contract):
     indicator_ids: list[str] = Field(default_factory=list)
     material_types: list[Literal["question", "card", "textbook"]] = Field(default_factory=list)
     limit: int = Field(default=20, ge=1)
+
+
+__all__ = [
+    # 基类
+    "Contract",
+    # 数据接入
+    "RawTables", "QualityIssue", "Student", "Node", "SourceRecord", "AnswerEvent",
+    "SourceManifest", "PreparedDataset",
+    # 目录与材料
+    "SourceLocator", "Topic", "Indicator", "RubricPoint", "Material", "CatalogLink", "Catalog",
+    # 分析（B/A）
+    "EvidenceRef", "MetricScope", "Metric", "Finding", "StudentResult", "ClassResult",
+    "AnalysisConfig", "RunContext", "AnalysisBundle",
+    # 建议（C）
+    "Activity", "AdjustmentCondition", "Recommendation", "ValidationIssue",
+    "RecommendationBundle", "ValidationResult", "RecommendationConfig", "MaterialSearch",
+    # 学习观察事件（C，事件契约统一）
+    "ActionGroup", "ObservationEventType", "NextAction", "ObservationEvent",
+    # 异常
+    "DomainError",
+]
 
 
 class DomainError(Exception):
