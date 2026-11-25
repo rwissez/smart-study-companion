@@ -1,0 +1,396 @@
+{
+  "说明": "B交付C的StrategySignal典型样例（真实赛题数据）；字段定义见 strategy_signal.py",
+  "字段约定": {
+    "student_id/node_id/material_id/event_id": "范围标识",
+    "record_id": "可追溯的原始记录编号",
+    "question_type": "题型，来自材料表",
+    "error_stage": "cannot_start/modeling/concept_understanding/key_step/calculation/verification/none/undetermined",
+    "error_type": "concept_error/step_error/calculation_error/missing_verification/insufficient_evidence/none",
+    "rubric_focus": "失分评分点ID列表（rubric_detail含每个点的语义类别）",
+    "evidence_status": "sufficient/insufficient/conflicting",
+    "reason": "判定依据（人可读，含评分点编号）"
+  },
+  "真实数据分布": {
+    "总事件": 799,
+    "stage": {
+      "calculation": 3,
+      "none": 402,
+      "undetermined": 219,
+      "concept_understanding": 65,
+      "key_step": 44,
+      "cannot_start": 5,
+      "modeling": 37,
+      "verification": 24
+    },
+    "type": {
+      "calculation_error": 3,
+      "none": 402,
+      "insufficient_evidence": 224,
+      "concept_error": 84,
+      "step_error": 62,
+      "missing_verification": 24
+    },
+    "evidence_status": {
+      "sufficient": 575,
+      "insufficient": 223,
+      "conflicting": 1
+    }
+  },
+  "典型样例": {
+    "calculation_error": {
+      "student_id": "D01",
+      "node_id": "N01",
+      "material_id": "Q015",
+      "event_id": "D01-N01-Q015",
+      "record_id": "DR0001",
+      "question_type": "解答题",
+      "error_stage": "calculation",
+      "error_type": "calculation_error",
+      "rubric_focus": [
+        "Q015P3"
+      ],
+      "rubric_detail": [
+        {
+          "point_id": "Q015P1",
+          "description": "正确去两个括号",
+          "awarded": 1,
+          "max_score": 1,
+          "category": "step"
+        },
+        {
+          "point_id": "Q015P2",
+          "description": "分别合并a项和b项",
+          "awarded": 1,
+          "max_score": 1,
+          "category": "step"
+        },
+        {
+          "point_id": "Q015P3",
+          "description": "写出正确结果",
+          "awarded": 0,
+          "max_score": 1,
+          "category": "calculation"
+        }
+      ],
+      "evidence_status": "sufficient",
+      "evidence_refs": [
+        {
+          "kind": "record",
+          "id": "DR0001"
+        },
+        {
+          "kind": "rubric",
+          "id": "Q015P3"
+        }
+      ],
+      "limitations": [],
+      "reason": "起步与步骤点已得分，仅计算结果类点丢失（Q015P3）"
+    },
+    "concept_error": {
+      "student_id": "D01",
+      "node_id": "N01",
+      "material_id": "Q014",
+      "event_id": "D01-N01-Q014",
+      "record_id": "DR0005",
+      "question_type": "解答题",
+      "error_stage": "concept_understanding",
+      "error_type": "concept_error",
+      "rubric_focus": [
+        "Q014P1",
+        "Q014P2",
+        "Q014P3"
+      ],
+      "rubric_detail": [
+        {
+          "point_id": "Q014P1",
+          "description": "表示女生人数",
+          "awarded": 0,
+          "max_score": 1,
+          "category": "concept"
+        },
+        {
+          "point_id": "Q014P2",
+          "description": "列出全班人数之和",
+          "awarded": 0,
+          "max_score": 1,
+          "category": "step"
+        },
+        {
+          "point_id": "Q014P3",
+          "description": "合并同类项并写单位",
+          "awarded": 0,
+          "max_score": 1,
+          "category": "step"
+        }
+      ],
+      "evidence_status": "sufficient",
+      "evidence_refs": [
+        {
+          "kind": "record",
+          "id": "DR0005"
+        },
+        {
+          "kind": "rubric",
+          "id": "Q014P1"
+        },
+        {
+          "kind": "rubric",
+          "id": "Q014P2"
+        },
+        {
+          "kind": "rubric",
+          "id": "Q014P3"
+        }
+      ],
+      "limitations": [],
+      "reason": "首评分点（概念/建模类）丢失：Q014P1,Q014P2,Q014P3，起步即失分"
+    },
+    "step_error": {
+      "student_id": "D02",
+      "node_id": "N02",
+      "material_id": "Q028",
+      "event_id": "D02-N02-Q028",
+      "record_id": "DR0042",
+      "question_type": "解答题",
+      "error_stage": "modeling",
+      "error_type": "step_error",
+      "rubric_focus": [
+        "Q028P1",
+        "Q028P2",
+        "Q028P3"
+      ],
+      "rubric_detail": [
+        {
+          "point_id": "Q028P1",
+          "description": "正确选择消元关系",
+          "awarded": 0,
+          "max_score": 1,
+          "category": "step"
+        },
+        {
+          "point_id": "Q028P2",
+          "description": "求出一个未知数并回代",
+          "awarded": 0,
+          "max_score": 1,
+          "category": "verification"
+        },
+        {
+          "point_id": "Q028P3",
+          "description": "给出并核验两个解",
+          "awarded": 0,
+          "max_score": 1,
+          "category": "verification"
+        }
+      ],
+      "evidence_status": "sufficient",
+      "evidence_refs": [
+        {
+          "kind": "record",
+          "id": "DR0042"
+        },
+        {
+          "kind": "rubric",
+          "id": "Q028P1"
+        },
+        {
+          "kind": "rubric",
+          "id": "Q028P2"
+        },
+        {
+          "kind": "rubric",
+          "id": "Q028P3"
+        }
+      ],
+      "limitations": [],
+      "reason": "首评分点丢失且无过程得分：Q028P1,Q028P2,Q028P3，建模或起步步骤失败"
+    },
+    "missing_verification": {
+      "student_id": "D03",
+      "node_id": "N02",
+      "material_id": "Q028",
+      "event_id": "D03-N02-Q028",
+      "record_id": "DR0065",
+      "question_type": "解答题",
+      "error_stage": "verification",
+      "error_type": "missing_verification",
+      "rubric_focus": [
+        "Q028P2",
+        "Q028P3"
+      ],
+      "rubric_detail": [
+        {
+          "point_id": "Q028P1",
+          "description": "正确选择消元关系",
+          "awarded": 1,
+          "max_score": 1,
+          "category": "step"
+        },
+        {
+          "point_id": "Q028P2",
+          "description": "求出一个未知数并回代",
+          "awarded": 0,
+          "max_score": 1,
+          "category": "verification"
+        },
+        {
+          "point_id": "Q028P3",
+          "description": "给出并核验两个解",
+          "awarded": 0,
+          "max_score": 1,
+          "category": "verification"
+        }
+      ],
+      "evidence_status": "sufficient",
+      "evidence_refs": [
+        {
+          "kind": "record",
+          "id": "DR0065"
+        },
+        {
+          "kind": "rubric",
+          "id": "Q028P2"
+        },
+        {
+          "kind": "rubric",
+          "id": "Q028P3"
+        }
+      ],
+      "limitations": [],
+      "reason": "仅检验类评分点丢失（Q028P2,Q028P3），此前步骤已得分"
+    },
+    "insufficient_objective": {
+      "student_id": "D01",
+      "node_id": "N01",
+      "material_id": "Q019",
+      "event_id": "D01-N01-Q019",
+      "record_id": "DR0004",
+      "question_type": "填空题",
+      "error_stage": "undetermined",
+      "error_type": "insufficient_evidence",
+      "rubric_focus": [
+        "Q019P1"
+      ],
+      "rubric_detail": [
+        {
+          "point_id": "Q019P1",
+          "description": "答案正确",
+          "awarded": 0,
+          "max_score": 1,
+          "category": "calculation"
+        }
+      ],
+      "evidence_status": "insufficient",
+      "evidence_refs": [
+        {
+          "kind": "record",
+          "id": "DR0004"
+        },
+        {
+          "kind": "rubric",
+          "id": "Q019P1"
+        }
+      ],
+      "limitations": [
+        "客观题无过程证据，建议作为观察候选而非直接定论"
+      ],
+      "reason": "客观题答案错误（丢失点：Q019P1），无解答过程，无法区分概念错误与计算错误"
+    },
+    "cannot_start": {
+      "student_id": "D01",
+      "node_id": "N02",
+      "material_id": "Q029",
+      "event_id": "D01-N02-Q029",
+      "record_id": "DR0017",
+      "question_type": "填空题",
+      "error_stage": "cannot_start",
+      "error_type": "insufficient_evidence",
+      "rubric_focus": [],
+      "rubric_detail": [],
+      "evidence_status": "insufficient",
+      "evidence_refs": [
+        {
+          "kind": "record",
+          "id": "DR0017"
+        }
+      ],
+      "limitations": [],
+      "reason": "记录状态为未作答，无作答内容与过程，判定为不会开始"
+    }
+  },
+  "主题层聚合样例": [
+    {
+      "student_id": "D01",
+      "node_id": "N01",
+      "topic_id": "T01",
+      "valid_material_count": 5,
+      "solution_material_count": 4,
+      "confirmed_error_types": {
+        "concept_error": [
+          "Q014",
+          "Q018",
+          "Q011"
+        ]
+      },
+      "unconfirmed_error_types": {
+        "calculation_error": [
+          "Q015"
+        ]
+      },
+      "rubric_focus": [
+        "Q002P1",
+        "Q011P3",
+        "Q014P1",
+        "Q014P2",
+        "Q014P3",
+        "Q015P3",
+        "Q018P3"
+      ],
+      "evidence_status": "sufficient",
+      "insufficient_signal_count": 1
+    },
+    {
+      "student_id": "D01",
+      "node_id": "N01",
+      "topic_id": "T02",
+      "valid_material_count": 4,
+      "solution_material_count": 2,
+      "confirmed_error_types": {},
+      "unconfirmed_error_types": {
+        "step_error": [
+          "Q022"
+        ]
+      },
+      "rubric_focus": [
+        "Q019P1",
+        "Q021P1",
+        "Q022P2",
+        "Q022P3"
+      ],
+      "evidence_status": "sufficient",
+      "insufficient_signal_count": 2
+    },
+    {
+      "student_id": "D01",
+      "node_id": "N02",
+      "topic_id": "T03",
+      "valid_material_count": 3,
+      "solution_material_count": 1,
+      "confirmed_error_types": {},
+      "unconfirmed_error_types": {
+        "concept_error": [
+          "Q043"
+        ]
+      },
+      "rubric_focus": [
+        "Q037P1",
+        "Q041P1",
+        "Q043P2",
+        "Q043P3",
+        "Q044P1"
+      ],
+      "evidence_status": "sufficient",
+      "insufficient_signal_count": 3
+    }
+  ],
+  "主题层聚合说明": "aggregate_signals_by_topic 输出；confirmed需>=2道解答题重复出现，evidence_status按18号核对表规则"
+}
