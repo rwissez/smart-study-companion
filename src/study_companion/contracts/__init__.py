@@ -340,6 +340,26 @@ class RecommendationConfig(Contract):
     max_recommendations: int = Field(default=2, ge=1)
 
 
+class LearningObservation(Contract):
+    """A post-publication learning event, separate from official scoring."""
+
+    observation_id: str
+    dataset_id: str
+    run_id: str
+    student_id: str
+    node_id: str
+    activity_id: str
+    material_id: str | None = None
+    event_type: Literal[
+        "answer_submitted", "hint_requested", "activity_completed", "teacher_review"
+    ]
+    sequence: int = Field(ge=1)
+    hint_level: int | None = Field(default=None, ge=1, le=3)
+    payload: dict[str, str | int | float | bool | None] = Field(default_factory=dict)
+    observed_at: str
+    source: Literal["student", "teacher", "system"]
+
+
 class MaterialSearch(Contract):
     indicator_ids: list[str] = Field(default_factory=list)
     material_types: list[Literal["question", "card", "textbook"]] = Field(default_factory=list)

@@ -8,7 +8,9 @@ from __future__ import annotations
 
 import re
 import unicodedata
+from collections.abc import Mapping
 from dataclasses import dataclass
+from typing import Any
 
 from study_companion.knowledge.models import KnowledgeBase, Relation
 
@@ -39,16 +41,42 @@ def _has_path(edges: dict[str, set[str]], start: str, goal: str) -> bool:
     return False
 
 
+PageText = Mapping[Any, str]
+
+
+def _page_text_for(relation: Relation, page_text: PageText) -> str | None:
+    """Resolve evidence using a source-qualified map, while keeping old maps valid."""
+    page = relation.evidence_file_page
+    if page is None:
+        return None
+    if relation.source_file is not None:
+        source_page = page_text.get((relation.source_file, page))
+        if source_page is not None:
+            return source_page
+        source_pages = page_text.get(relation.source_file)
+        if isinstance(source_pages, Mapping):
+            return source_pages.get(page)
+        return None
+    return page_text.get(page)
+
+
 def validate_candidates(
     kb: KnowledgeBase,
     candidates: list[Relation],
-    page_text: dict[int, str],
+    page_text: PageText,
 ) -> tuple[list[Relation], list[Rejection]]:
-    """返回 (通过, 拒绝)。page_text: 文件页 -> 该页文字。"""
+    """Return accepted and rejected relations.
+
+    ``page_text`` accepts the legacy ``{file_page: text}`` shape. New callers may
+    use ``{(source_file, file_page): text}`` or ``{source_file: {file_page: text}}``
+    so evidence cannot accidentally be checked against another source file.
+    """
     ids = {p.kp_id for p in kb.points}
     accepted: list[Relation] = []
     rejected: list[Rejection] = []
     existing = list(kb.relations)
+    existing_ids = {r.relation_id for r in existing}
+    seen_ids: set[str] = set()
     keys = {(r.type, tuple(sorted(r.source_ids)), r.target_id) for r in existing}
     edges: dict[str, set[str]] = {}
     for r in existing:
@@ -57,6 +85,10 @@ def validate_candidates(
                 edges.setdefault(s, set()).add(r.target_id)
 
     for r in candidates:
+        if r.relation_id in existing_ids or r.relation_id in seen_ids:
+            rejected.append(Rejection(r.relation_id, "RELATION_ID_DUPLICATE", "关系 ID 必须唯一"))
+            continue
+        seen_ids.add(r.relation_id)
         missing = [x for x in [*r.source_ids, r.target_id] if x not in ids]
         if missing:
             rejected.append(Rejection(r.relation_id, "KP_NOT_FOUND", f"知识点不存在：{missing}"))
@@ -65,11 +97,15 @@ def validate_candidates(
         if key in keys:
             rejected.append(Rejection(r.relation_id, "DUPLICATE", "同类型同端点的关系已存在"))
             continue
+        if r.source_file is not None and r.evidence_file_page is None:
+            rejected.append(Rejection(r.relation_id, "SOURCE_PAGE_REQUIRED", "指定来源文件时必须指定 file page"))
+            continue
         if r.evidence:
-            if r.evidence_file_page is None or r.evidence_file_page not in page_text:
-                rejected.append(Rejection(r.relation_id, "EVIDENCE_PAGE_MISSING", "evidence 未指定有效页"))
+            text = _page_text_for(r, page_text)
+            if text is None:
+                rejected.append(Rejection(r.relation_id, "EVIDENCE_PAGE_MISSING", "evidence 未指定有效来源页"))
                 continue
-            if _flat(r.evidence) not in _flat(page_text[r.evidence_file_page]):
+            if _flat(r.evidence) not in _flat(text):
                 rejected.append(Rejection(r.relation_id, "EVIDENCE_NOT_IN_TEXT", "evidence 不是该页原文的子串"))
                 continue
         elif r.proposer != "human":

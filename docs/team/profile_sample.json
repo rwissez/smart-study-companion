@@ -1,0 +1,143 @@
+{
+  "说明": "StudentLearningProfile真实数据样例（D30/N01）+对话依据",
+  "profile": {
+    "profile_id": "PROFILE-run-demo-D30-N01",
+    "run_id": "run-demo",
+    "student_id": "D30",
+    "class_id": "DC02",
+    "node_id": "N01",
+    "summary": {
+      "observed_strength_count": 1,
+      "priority_weakness_count": 2,
+      "insufficient_area_count": 0
+    },
+    "strengths": [
+      {
+        "topic_id": "T02",
+        "indicator_ids": [
+          "T02I1",
+          "T02I2",
+          "T02I3"
+        ],
+        "summary": "3道有效作答未发现确认的错误模式",
+        "evidence_refs": []
+      }
+    ],
+    "priority_weaknesses": [
+      {
+        "weakness_id": "W01",
+        "topic_id": "T01",
+        "indicator_ids": [
+          "T01I1",
+          "T01I2",
+          "T01I3"
+        ],
+        "title": "概念理解需要巩固",
+        "error_stage": "concept_understanding",
+        "error_type": "concept_error",
+        "rubric_focus": [
+          "Q011P3",
+          "Q014P1",
+          "Q014P2",
+          "Q014P3",
+          "Q018P1",
+          "Q018P2",
+          "Q018P3"
+        ],
+        "severity": "high",
+        "priority": 1,
+        "confidence_level": "high",
+        "evidence_status": "sufficient",
+        "evidence_count": 3,
+        "evidence_refs": [
+          "EVD-DR0599",
+          "EVD-DR0606",
+          "EVD-DR0609"
+        ],
+        "evidence_summary": "3次相关作答中重复出现概念理解需要巩固",
+        "teacher_message": "学生在概念理解类评分点上反复失分，建议结合具体情境澄清概念。",
+        "student_message": "这个主题里有些概念还需要再澄清，可以结合具体例子重新梳理基本定义。",
+        "limitations": []
+      },
+      {
+        "weakness_id": "W02",
+        "topic_id": "T01",
+        "indicator_ids": [
+          "T01I1",
+          "T01I2",
+          "T01I3"
+        ],
+        "title": "关键解题步骤易出错",
+        "error_stage": "modeling",
+        "error_type": "step_error",
+        "rubric_focus": [
+          "Q006P3",
+          "Q009P1",
+          "Q009P2",
+          "Q009P3"
+        ],
+        "severity": "medium",
+        "priority": 2,
+        "confidence_level": "medium",
+        "evidence_status": "sufficient",
+        "evidence_count": 2,
+        "evidence_refs": [
+          "EVD-DR0597",
+          "EVD-DR0603"
+        ],
+        "evidence_summary": "2次相关作答中重复出现关键解题步骤易出错",
+        "teacher_message": "学生能完成起步与结果，中段关键步骤失分集中。",
+        "student_message": "大方向没有问题，个别关键步骤容易出错，可以放慢速度逐步核对。",
+        "limitations": []
+      }
+    ],
+    "other_findings": [],
+    "insufficient_areas": [],
+    "limitations": [
+      "画像基于已评分作答的事实模式；不推断性格、态度或能力上限"
+    ],
+    "generated_at": "2026-11-25T02:46:03.407402+00:00"
+  },
+  "dialog_basis": {
+    "conclusion": "概念理解需要巩固",
+    "evidence_summary": "3次相关作答中重复出现概念理解需要巩固",
+    "evidence_status": "sufficient",
+    "confidence_level": "high",
+    "evidence_items": [
+      {
+        "record_id": "DR0599",
+        "material_id": "Q011",
+        "score": 2,
+        "max_score": 3,
+        "lost_rubric_points": [
+          "Q011P3"
+        ],
+        "fact": "得 2/3，失分评分点：Q011P3"
+      },
+      {
+        "record_id": "DR0606",
+        "material_id": "Q018",
+        "score": 0,
+        "max_score": 3,
+        "lost_rubric_points": [
+          "Q018P1",
+          "Q018P2",
+          "Q018P3"
+        ],
+        "fact": "得 0/3，失分评分点：Q018P1,Q018P2,Q018P3"
+      },
+      {
+        "record_id": "DR0609",
+        "material_id": "Q014",
+        "score": 0,
+        "max_score": 3,
+        "lost_rubric_points": [
+          "Q014P1",
+          "Q014P2",
+          "Q014P3"
+        ],
+        "fact": "得 0/3，失分评分点：Q014P1,Q014P2,Q014P3"
+      }
+    ]
+  }
+}

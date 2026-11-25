@@ -7,11 +7,17 @@ from pydantic import ValidationError
 
 from study_companion.knowledge.extract import PageRecord, normalize_text
 from study_companion.knowledge.index import locate, neighbors, upstream_closure
-from study_companion.knowledge.models import KnowledgeBase, KnowledgePoint, Locator, Relation
+from study_companion.knowledge.models import Annotation, KnowledgeBase, KnowledgePoint, Locator, Relation
 from study_companion.knowledge.project import project_to_catalog
 from study_companion.knowledge.relations import validate_candidates
+from study_companion.knowledge.targets import (
+    generate_target_candidates,
+    register_textbook_fragment,
+    textbook_fragment_id,
+    validate_target_candidates,
+)
 from study_companion.knowledge.terms import extract_knowledge
-from study_companion.contracts import Catalog, Indicator, Topic
+from study_companion.contracts import Catalog, Indicator, Material, RubricPoint, SourceLocator, Topic
 
 
 def _loc(page: int) -> Locator:
@@ -109,6 +115,7 @@ def test_projection_uses_confirmed_relation_mapping():
     for point, indicator in zip(kb.points, ["I1", "I2", "I3", "I4"]):
         point.indicator_ids = [indicator]
         point.verification_status = "verified"
+        point.definition_locator.verification_status = "verified"
     kb.relations = [
         Relation(relation_id="derive", type="derives_from", source_ids=["K1"], target_id="K3",
                  verification_status="verified"),
@@ -140,8 +147,76 @@ def test_projection_uses_confirmed_relation_mapping():
     assert result.catalog.version == "projected"
 
 
+def test_target_candidates_are_conservative_and_explainable():
+    kb = _kb()
+    kb.points[0].aliases = ["AlphaConcept"]
+    kb.points[0].snippet = "AlphaConcept meets condition"
+    kb.points[0].topic_ids = ["T1"]
+    kb.points[0].indicator_ids = ["I1"]
+    catalog = Catalog(
+        version="cat-v1",
+        topics=[Topic(topic_id="T1", title="AlphaConcept")],
+        indicators=[Indicator(indicator_id="I1", topic_id="T1", description="AlphaConcept meets condition")],
+        materials=[Material(
+            material_id="M1", material_type="question", topic_ids=["T1"], indicator_ids=["I1"],
+            content="Please explain AlphaConcept", source_locator=SourceLocator(source_file="x", pdf_page=1, verification_status="unverified"),
+            rubric_points=[RubricPoint(point_id="R1", description="AlphaConcept", max_score=1)],
+        )],
+        links=[],
+    )
+    candidates = generate_target_candidates(kb, catalog)
+    assert {(c.source_id, c.target_type, c.target_ids[0]) for c in candidates} >= {
+        ("K1", "topic", "T1"), ("K1", "indicator", "I1"),
+        ("cat-v1/M1", "knowledge_point", "K1"), ("cat-v1/M1/R1", "knowledge_point", "K1"),
+    }
+    assert all(c.verification_status == "unverified" and c.reason and c.keywords for c in candidates)
+
+
+def test_textbook_fragment_registration_is_deterministic_and_manifest_bound():
+    kb = _kb()
+    fragment = register_textbook_fragment("book.pdf", 2, "甲概念满足条件", "K1")
+    same = register_textbook_fragment("book.pdf", 2, "甲概念满足条件", "K1")
+    assert fragment.candidate_id == same.candidate_id
+    assert textbook_fragment_id("book", 1, "alpha  beta") == textbook_fragment_id("book", 1, "alpha\n beta")
+    assert fragment.source_id == textbook_fragment_id("book.pdf", 2, "甲概念满足条件")
+    accepted, rejected = validate_target_candidates(
+        kb, Catalog(version="cat", topics=[], indicators=[], materials=[], links=[]),
+        [fragment], {("book.pdf", 2): "本页包含甲概念满足条件。"},
+    )
+    assert accepted == [fragment]
+    assert rejected == []
+
+
+def test_textbook_fragment_validation_rejects_wrong_id_and_unmanifested_page():
+    kb = _kb()
+    catalog = Catalog(version="cat", topics=[], indicators=[], materials=[], links=[])
+    fragment = register_textbook_fragment("book.pdf", 2, "甲概念满足条件", "K1")
+    wrong = fragment.model_copy(update={"source_id": "FRAG-invalid"})
+    accepted, rejected = validate_target_candidates(kb, catalog, [wrong], {("book.pdf", 2): "甲概念满足条件"})
+    assert accepted == []
+    assert rejected[0].code == "FRAGMENT_ID_MISMATCH"
+    accepted, rejected = validate_target_candidates(kb, catalog, [fragment], {("book.pdf", 1): "甲概念满足条件"})
+    assert accepted == []
+    assert rejected[0].code == "SOURCE_NOT_FOUND"
+
+
+def test_target_candidate_validation_reports_missing_ids_duplicates_and_auto_verified():
+    kb = _kb()
+    catalog = Catalog(version="cat-v1", topics=[Topic(topic_id="T1", title="主题")], indicators=[], materials=[], links=[])
+    valid = Annotation(candidate_id="c1", source_type="knowledge_point", source_id="K1", target_type="topic", target_ids=["T1"], proposer="rule")
+    duplicate = valid.model_copy(update={"candidate_id": "c2"})
+    missing = valid.model_copy(update={"candidate_id": "c3", "target_ids": ["T404"]})
+    auto_verified = valid.model_copy(update={"candidate_id": "c4", "verification_status": "verified"})
+    accepted, rejected = validate_target_candidates(kb, catalog, [valid, duplicate, missing, auto_verified])
+    assert [item.candidate_id for item in accepted] == ["c1"]
+    assert {item.code for item in rejected} == {"DUPLICATE", "TOPIC_NOT_FOUND", "AUTO_VERIFIED"}
+
+
 def test_projection_skips_missing_indicator_mapping():
     kb = _kb()
+    for point in kb.points:
+        point.verification_status = "verified"
+        point.definition_locator.verification_status = "verified"
     kb.points[0].indicator_ids = ["I1"]
     kb.relations = [
         Relation(relation_id="r", type="derives_from", source_ids=["K1"], target_id="K3",
