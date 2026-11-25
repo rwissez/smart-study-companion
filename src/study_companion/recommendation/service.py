@@ -260,7 +260,7 @@ def _build_type3(finding: Finding, catalog: Catalog, rec_id: str, exclude: froze
             ),
             AdjustmentCondition(
                 observable_condition="学生未完成观察题组",
-                next_action="记录 limitation，不强行归因，教师端如实呈现该生未参与本轮观察",
+                next_action="不强行归因，教师端如实呈现该生未参与本轮观察，证据不足不进入任何定性判断",
                 group="wrap_up",
             ),
         ],
