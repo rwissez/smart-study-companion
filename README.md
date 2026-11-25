@@ -81,7 +81,7 @@ Copy-Item .env.example .env
 | `uv run pytest tests/knowledge -q` | 运行知识点图谱测试 |
 | `uv run pytest tests/api/test_chat_agent.py -q` | 运行智能体多轮闭环验收测试 |
 
-当前全量回归结果：`186 passed`，另有一个既有的 Starlette/httpx 弃用警告。
+A-Agent-8 回归以 `uv run pytest -q` 为准；专项覆盖知识快照、审核发布、角色查询及无 run 聊天链路。存在一个既有的 Starlette/httpx 弃用警告。
 
 ## 智能体任务路由与下一步
 
@@ -96,7 +96,9 @@ Copy-Item .env.example .env
 | `class_analysis` | 分析班级共性 | 教师、班级、run、node | 班级分析 |
 | `out_of_scope` | 拒绝无关任务并提示支持范围 | 无 | 固定安全回复，不调用模型或工具 |
 
-任务类型和提示词位置已为以下场景预留，但由于所需工具或校验尚未接入，会返回 `TASK_NOT_AVAILABLE`，不会让模型使用无关工具作答：`evidence_lookup`、`student_progress`、`class_data_quality`、`student_learning_advice`、`study_plan`、`class_strategy`、`knowledge_lookup`、`prerequisite_query`、`material_search`、`concept_tutoring`、`relation_review`、`observation_review`。
+知识任务另提供 `knowledge_lookup`（知识定位与详情）、`prerequisite_query`（先定位知识点，再查询关系）和仅教师可用的 `relation_review`（只读查看候选）。这些任务不要求分析 run，但必须由服务端绑定数据集、Catalog 和本地知识库；学生要求已发布版本。缺少知识库时返回明确错误，不生成虚构内容。
+
+以下场景仍预留提示词并返回 `TASK_NOT_AVAILABLE`：`evidence_lookup`、`student_progress`、`class_data_quality`、`student_learning_advice`、`study_plan`、`class_strategy`、`material_search`、`concept_tutoring`、`observation_review`。
 
 ### 提示词结构
 
@@ -111,7 +113,7 @@ Copy-Item .env.example .env
 | 优先级 | 尚未完成 | 建议阶段 |
 | --- | --- | --- |
 | P0 | `AgentTaskState` 的缺失信息、策略选择和下一动作尚未形成程序化决策状态 | A-Agent-7 后续完善 |
-| P0 | A 知识图谱查询、C 材料/策略/建议工具未接入 | A-Agent-8 |
+| P0 | C 材料/策略/建议工具尚未接入；A 知识工具见下方知识工作流 | 后续 C 工具整合 |
 | P0 | 最终输出证据引用、泄答、负荷和角色表达校验及模型失败规则回退 | A-Agent-9 |
 | P1 | 对话范围/历史、Agent 请求和工具轨迹未持久化 | 后续后端工作 |
 | P1 | 总请求时限、安全重试、调用/Token 预算和统一模型上下文裁剪不足 | 后续运行保护工作 |
@@ -128,8 +130,8 @@ Copy-Item .env.example .env
 用户请求
   -> FastAPI 路由与会话权限
   -> ServerContext（数据集、运行、学生范围、Catalog 版本）
-  -> 当前：B 分析事实、质量问题、作答证据
-  -> 后续：A 知识查询、C 材料与策略工具
+  -> B 分析事实、质量问题、作答证据 / A 角色受限知识查询
+  -> 后续：C 材料与策略工具
   -> AgentLoop：工具调用 -> 观察结果 -> 再规划
   -> 后续：最终输出校验门与持久化轨迹
   -> 候选回答或候选建议
@@ -212,6 +214,19 @@ PDF / 图片
 
 知识点候选默认是 `unverified`，关系候选默认是 `candidate`。未经人工核对的数据不能作为正式课程事实或建议的唯一依据。
 
+### A-Agent-8 本地工作流
+
+- `knowledge.ingest.ingest_textbook_snapshot(...)`：将 `data_root` 内 PDF 导入 dataset/catalog 隔离的 draft，绑定相对路径、SHA-256、页数和提取信息。不保存整页正文副本。
+- `knowledge.targets.generate_target_candidates(kb, catalog)`：保守生成知识点到 Topic/Indicator、材料/评分点到知识点的候选。材料使用 `catalog_version/material_id`，评分点使用 `catalog_version/material_id/point_id`。
+- `KnowledgeStore.review_candidates(..., catalog=...)`：本地受信任教师调用；核对知识点、归属或关系，生成新 draft，继承来源 manifest。`edit-target` 后必须再次 accept。
+- `KnowledgeStore.publish_verified(..., catalog=...)`：重新核验源文件 hash、来源证据及 Catalog 引用，发布新快照；未审核项阻止发布，被拒绝项留在父草稿历史中。
+- 所有版本目录不可覆盖；current pointer 更新失败不改变旧版本。单一 current pointer 若指向 draft，学生查询返回 `KB_NOT_PUBLISHED`，需发布后恢复学生查询。
+- 只读工具提供定位、详情、关系及教师候选分页。没有模型审核、确认或发布工具。请求无须 `run_id`，Catalog 由当前会话数据集在服务端解析。
+
+跨资料增量导入使用 `ingest_textbook_snapshot(..., parent_version=...)`；严格重复聚合来源，名称/别名/定义歧义生成教师可见的 `MergeCandidate`，人工决议后安全重写引用，关系折叠冲突拒绝合并。`register_textbook_fragment(...)` 注册稳定片段 ID，来源证据按 manifest 核验；resolver 只重读被引用页。旧 JSON 使用 `KnowledgeStore.import_legacy_json(...)` 显式迁入指定 dataset/catalog，重置为待审核且保留原文件。
+
+本轮提供本地服务，不提供教师审核 HTTP 写接口或图形化审核 UI。模型自动关系生成、真实教材金标准及授权模型实机质量验收不在本轮交付范围。
+
 ## 数据、可靠性与权限
 
 项目区分三类可靠性依据：
@@ -274,9 +289,7 @@ PDF / 图片
 以下内容不应被当前 README 描述为已完成：
 
 - `frontend/` 前端和浏览器端工具轨迹展示；
-- IntentRouter 和学生/班级 Target 请求模型；当前 `/chat` 任务仍固定为解释学生失分；
 - AgentTaskState 的缺失信息、策略选择和下一动作更新逻辑；
-- A 知识查询工具接入 AgentLoop；
 - C 材料搜索、策略选择和候选建议工具接入 AgentLoop；
 - 最终回答的证据引用、泄答、策略限制和角色表达校验，以及失败时的规则回退；
 - 对话范围/历史持久化与 Agent 请求、工具轨迹、模型用量的持久化；

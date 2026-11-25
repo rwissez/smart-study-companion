@@ -17,9 +17,10 @@ from study_companion.agent import AgentLoop, PromptRegistry, ToolRegistry, build
 from study_companion.agent.router import route_task
 from study_companion.agent.tasks import TaskSpec, get_task
 from study_companion.agent.tools import build_b_registry
+from study_companion.agent.knowledge_tools import build_knowledge_registry
 from study_companion.api.deps import AppSettings, DbSession, Scope
 from study_companion.api.envelope import success
-from study_companion.contracts import AnalysisBundle, AnalysisConfig, DomainError, PreparedDataset
+from study_companion.contracts import AnalysisBundle, AnalysisConfig, Catalog as CatalogContract, DomainError, PreparedDataset
 from study_companion.db import models
 from study_companion.tools.b_analysis import ServerContext
 
@@ -181,9 +182,12 @@ def _server_context(
                 if ref.kind == "record"
             ] if selected else []
         )
+    catalog_version = run.catalog_version if run else db.scalar(
+        select(models.Catalog.version).where(models.Catalog.dataset_id == scope.dataset_id).order_by(models.Catalog.created_at.desc())
+    )
     return ServerContext(
         run_id=run_id or "", dataset_id=scope.dataset_id,
-        catalog_version=run.catalog_version if run else "", allowed_student_ids=allowed,
+        catalog_version=catalog_version or "", allowed_student_ids=allowed,
         bundle=bundle, dataset=prepared,
         bound_student_id=target.id if target and target.type == "student" else None,
         bound_class_id=target.id if target and target.type == "class" else None,
@@ -191,6 +195,16 @@ def _server_context(
         allowed_class_ids=class_ids,
         allowed_record_ids=allowed_records,
     )
+
+
+def _catalog_context(db: DbSession, dataset_id: str, version: str) -> CatalogContract:
+    row = db.get(models.Catalog, version)
+    if row is None or row.dataset_id != dataset_id:
+        raise DomainError("CONTEXT_MISMATCH", "课程目录不属于当前数据集")
+    indicators = [item.payload_json for item in db.scalars(select(models.Indicator).where(models.Indicator.catalog_version == version)).all()]
+    materials = [item.payload_json for item in db.scalars(select(models.Material).where(models.Material.catalog_version == version)).all()]
+    payload = row.payload_json
+    return CatalogContract(version=version, topics=payload.get("topics", []), indicators=indicators, materials=materials, links=payload.get("links", []))
 
 
 @router.post("/chat")
@@ -245,6 +259,11 @@ def post_chat(payload: ChatRequest, db: DbSession, scope: Scope, settings: AppSe
         raise DomainError("VALIDATION_ERROR", "该任务必须提供 node_id")
     context = _server_context(db, scope, payload.run_id, target, payload.node_id, task)
     registry = build_b_registry(context, scope.role, task)
+    if task.task_type in {"knowledge_lookup", "prerequisite_query", "relation_review"}:
+        if not context.catalog_version:
+            raise DomainError("CONTEXT_MISMATCH", "知识查询需要绑定 catalog_version")
+        catalog_contract = _catalog_context(db, context.dataset_id, context.catalog_version)
+        registry = build_knowledge_registry(context, scope.role, task, settings.data_root, catalog_contract)
     context_description = "; ".join(filter(None, [
         f"run_id={context.run_id}" if context.run_id else "",
         f"target_type={target.type}" if target else "target_type=dataset",
