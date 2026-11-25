@@ -50,11 +50,16 @@ _CONCEPT_WORDS = (
     "开闭端点", "端点与方向", "反向", "上界", "下界",
 )
 _STEP_WORDS = (
-    "列出", "算式", "化简", "移项", "合并", "步骤", "解方程", "变形",
-    "去括号", "括号", "去分母", "消元", "解不等式", "解出", "求出", "交集",
-    "解集", "求值", "求两种数量", "求解",
+    "列出", "算式", "移项", "步骤", "解方程", "变形",
+    "去括号", "括号", "去分母", "消元", "解不等式", "交集", "解集",
 )
-_CALC_WORDS = ("计算", "运算", "求解结果", "结果正确", "答案正确", "写出正确结果", "写出结果")
+# 化简/合并属于运算操作（结果对错即计算对错）；"求出/解出/求值"等产出结果型
+# 动词的得分直接等于运算结果对错（人工复核案例9：会列式但求值运算错），
+# 均归计算类。
+_CALC_WORDS = (
+    "计算", "运算", "求解结果", "结果正确", "答案正确", "写出正确结果", "写出结果",
+    "化简", "合并", "求出", "解出", "求值", "求两种数量", "求解",
+)
 
 
 @dataclass
@@ -134,16 +139,21 @@ def parse_rubric_definitions(raw: str | None) -> dict[str, str]:
 
 
 def classify_point(description: str) -> str:
-    """按描述文本给评分点分类（关键词规则；未匹配归 unknown，不强行猜）。"""
+    """按描述文本给评分点分类（关键词规则；未匹配归 unknown，不强行猜）。
+
+    优先级：检验 > 概念 > 计算 > 步骤。计算先于步骤：产出结果型动词
+    （求出/解出/求值/消元求两种数量）常与操作词混写（如"消元求两种数量"），
+    结果对错取决于运算，归计算（人工复核案例9）。
+    """
     text = description or ""
     if any(w in text for w in _VERIFICATION_WORDS):
         return "verification"
     if any(w in text for w in _CONCEPT_WORDS):
         return "concept"
-    if any(w in text for w in _STEP_WORDS):
-        return "step"
     if any(w in text for w in _CALC_WORDS):
         return "calculation"
+    if any(w in text for w in _STEP_WORDS):
+        return "step"
     if "答案" in text or "结果" in text:
         return "answer"
     return "unknown"
@@ -266,6 +276,14 @@ def build_signal(
     return _classify_objective_question(signal, event, final_answer, lost)
 
 
+def _point_position(point_id: str) -> tuple[int, int]:
+    """评分点位置键：Q015P3 -> (15, 3)，用于根因排序（越早越可能是根因）。"""
+    m = re.search(r"P(\d+)$", point_id)
+    seq = int(m.group(1)) if m else 99
+    m2 = re.search(r"(\d+)", point_id)
+    return (seq, int(m2.group(1)) if m2 else 0)
+
+
 def _classify_solution_question(
     signal: StrategySignal,
     event: AnswerEvent,
@@ -288,57 +306,68 @@ def _classify_solution_question(
         return signal
 
     point_ids = [p.point_id for p in lost]
-    first_lost = all(not p.point_id.endswith("P1") for p in lost) is False
-    # 首点（P1）丢 → 起步/建模失败；中后段点丢 → 关键步骤/计算
-    p1_lost = any(p.point_id.endswith("P1") for p in lost)
-    verification_lost = [p for p in lost if p.category == "verification"]
-    concept_lost = [p for p in lost if p.category == "concept"]
-    step_lost = [p for p in lost if p.category == "step"]
-    calc_lost = [p for p in lost if p.category == "calculation"]
+    # 根因优先（人工复核案例3修正）：错误链传导——最早的丢分点是根因，
+    # 其后的丢分点多为被带错的下游，按根因分类而非类别并集。
+    ordered = sorted(lost, key=lambda p: _point_position(p.point_id))
+    root = ordered[0]
+    downstream = ordered[1:]
+    p1_lost = root.point_id.endswith("P1")
+    root_ids = ",".join(point_ids)
 
-    # 末位检验点单独丢 → 缺少检验
-    if verification_lost and not p1_lost and len(lost) == len(verification_lost):
+    def _downstream_note() -> None:
+        if downstream:
+            signal.limitations.append(
+                f"下游评分点{'、'.join(p.point_id for p in downstream)}受根因影响连带失分，不重复判型"
+            )
+
+    # 末位检验点单独丢 → 缺少检验（不是根因链，是习惯缺失）
+    if (
+        root.category == "verification"
+        and len(lost) == len([p for p in lost if p.category == "verification"])
+        and not p1_lost
+    ):
         signal.error_stage = STAGE_VERIFICATION
         signal.error_type = TYPE_NO_VERIFICATION
-        signal.reason = f"仅检验类评分点丢失（{','.join(point_ids)}），此前步骤已得分"
+        signal.reason = f"仅检验类评分点丢失（{root_ids}），此前步骤已得分"
         return signal
 
-    # 前段步骤对、仅计算/结果类点丢 → 计算错误
-    if calc_lost and not p1_lost and not concept_lost and len(lost) == len(calc_lost):
-        signal.error_stage = STAGE_CALCULATION
-        signal.error_type = TYPE_CALC
-        signal.reason = f"起步与步骤点已得分，仅计算结果类点丢失（{','.join(point_ids)}）"
-        return signal
-
+    # 根因是起步点 → 建模/概念失败
     if p1_lost:
-        # 起步点丢失：建模或概念
-        if concept_lost:
-            signal.error_stage = STAGE_CONCEPT if concept_lost[0].point_id.endswith("P1") else STAGE_MODELING
+        _downstream_note()
+        if root.category == "concept":
+            signal.error_stage = STAGE_CONCEPT
             signal.error_type = TYPE_CONCEPT
-            signal.reason = f"首评分点（概念/建模类）丢失：{','.join(point_ids)}，起步即失分"
+            signal.reason = f"首评分点（概念/建模类）丢失：{root_ids}，起步即失分"
         else:
             signal.error_stage = STAGE_MODELING
             signal.error_type = TYPE_STEP
-            signal.reason = f"首评分点丢失且无过程得分：{','.join(point_ids)}，建模或起步步骤失败"
+            signal.reason = f"首评分点丢失：{root_ids}，建模或起步步骤失败"
         return signal
 
-    if concept_lost:
+    # 根因在中后段：按根因点的语义类别判型
+    _downstream_note()
+    if root.category == "concept":
         signal.error_stage = STAGE_CONCEPT
         signal.error_type = TYPE_CONCEPT
-        signal.reason = f"概念类评分点丢失：{','.join(point_ids)}，但起步点已得分"
-        return signal
-
-    if step_lost:
+        signal.reason = f"根因为概念类评分点丢失：{root.point_id}，起步点已得分"
+    elif root.category == "calculation":
+        signal.error_stage = STAGE_CALCULATION
+        signal.error_type = TYPE_CALC
+        signal.reason = f"根因为计算/结果类评分点丢失：{root.point_id}，此前步骤已得分"
+    elif root.category == "step":
         signal.error_stage = STAGE_KEY_STEP
         signal.error_type = TYPE_STEP
-        signal.reason = f"中段步骤评分点丢失：{','.join(point_ids)}，起步与结果正常"
-        return signal
-
-    # 无语义信息（定义缺失）→ 按位置保守判定为步骤类
-    signal.error_stage = STAGE_KEY_STEP if not first_lost else STAGE_MODELING
-    signal.error_type = TYPE_STEP
-    signal.reason = f"评分点丢失但材料表无该点定义，按位置判定：{','.join(point_ids)}"
-    signal.limitations.append("材料表缺评分点定义，类别判定基于点位置而非语义")
+        signal.reason = f"根因为中段步骤评分点丢失：{root.point_id}，起步与后续部分正常"
+    elif root.category == "verification":
+        signal.error_stage = STAGE_VERIFICATION
+        signal.error_type = TYPE_NO_VERIFICATION
+        signal.reason = f"检验类评分点丢失：{root.point_id}，与其它失分并存"
+    else:
+        # 根因点无语义定义 → 按位置保守判定为步骤类
+        signal.error_stage = STAGE_KEY_STEP
+        signal.error_type = TYPE_STEP
+        signal.reason = f"根因评分点无定义，按位置判定：{root.point_id}"
+        signal.limitations.append("材料表缺评分点定义，类别判定基于点位置而非语义")
     return signal
 
 

@@ -1,0 +1,80 @@
+{
+  "说明": "P1观察接入+跨运行变化 端到端演示（真实数据D30 + 模拟观察事件）",
+  "rerun_context": {
+    "run_id": "run-demo-obs3",
+    "previous_run_id": "run-demo",
+    "student_id": "D30",
+    "node_id": "N01",
+    "observation_signals": [
+      {
+        "observation_id": "OBS001",
+        "student_id": "D30",
+        "node_id": "N01",
+        "activity_id": "ACT-T01-1",
+        "material_id": "QA",
+        "event_type": "activity_summary",
+        "pattern": "positive_practice",
+        "summary": "独立完成活动（未使用提示）",
+        "evidence_refs": [
+          "OBS001"
+        ],
+        "limitations": [],
+        "source": "observation"
+      },
+      {
+        "observation_id": "OBS002",
+        "student_id": "D30",
+        "node_id": "N01",
+        "activity_id": "ACT-T01-2",
+        "material_id": "QB",
+        "event_type": "activity_summary",
+        "pattern": "supported_success",
+        "summary": "一级提示后完成（基本能完成，仍需轻度支持）",
+        "evidence_refs": [
+          "OBS002",
+          "OBS003"
+        ],
+        "limitations": [],
+        "source": "observation"
+      }
+    ],
+    "generated_at": "2026-11-25T02:52:32.002875+00:00",
+    "source_separation": {
+      "original_scores": "read-only, from official records",
+      "process_evidence": "observation events, source=observation"
+    }
+  },
+  "comparison": {
+    "student_id": "D30",
+    "node_id": "N01",
+    "previous_run_id": "run-demo",
+    "current_run_id": "run-demo-obs3",
+    "comparable": true,
+    "improved_weaknesses": [],
+    "persistent_weaknesses": [
+      {
+        "weakness_id": "W01",
+        "topic_id": "T01",
+        "error_type": "concept_error",
+        "change_summary": "持续存在：3次相关作答中重复出现概念理解需要巩固",
+        "previous_evidence_status": "sufficient",
+        "current_evidence_status": "sufficient",
+        "previous_count": 3,
+        "current_count": 3
+      },
+      {
+        "weakness_id": "W02",
+        "topic_id": "T01",
+        "error_type": "step_error",
+        "change_summary": "持续存在：2次相关作答中重复出现关键解题步骤易出错",
+        "previous_evidence_status": "sufficient",
+        "current_evidence_status": "sufficient",
+        "previous_count": 2,
+        "current_count": 2
+      }
+    ],
+    "new_weaknesses": [],
+    "evidence_changes": [],
+    "comparison_limitations": []
+  }
+}

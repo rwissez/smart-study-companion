@@ -4,6 +4,16 @@
 """
 
 from study_companion.analysis.evidence import EvidencePackage, build_evidence_package
+from study_companion.analysis.observation import (
+    ObservationSignal,
+    get_previous_observations,
+    rerun_profile_with_observations,
+    translate_observations,
+)
+from study_companion.analysis.profile_comparison import (
+    ProfileComparison,
+    compare_student_profiles,
+)
 from study_companion.analysis.learning_profile import (
     StudentLearningProfile,
     Weakness,
@@ -33,4 +43,10 @@ __all__ = [
     "Weakness",
     "build_student_learning_profile",
     "build_dialog_basis",
+    "ObservationSignal",
+    "get_previous_observations",
+    "translate_observations",
+    "rerun_profile_with_observations",
+    "ProfileComparison",
+    "compare_student_profiles",
 ]

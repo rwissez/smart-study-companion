@@ -286,3 +286,63 @@ def test_topic_aggregation_objective_only_never_sufficient():
         signals, {"I1": "T01"}, {f"Q{i}": ["I1"] for i in range(1, 6)}
     )
     assert agg[0]["evidence_status"] == "insufficient"
+
+
+# ---------- 13. 根因优先判定（人工复核案例3修正回归） ----------
+def test_root_cause_priority_calc_before_concept():
+    """案例3场景：P2化简(计算)丢 + P3解释(概念)丢 → 根因是P2计算错，P3是下游。"""
+    from study_companion.analysis.strategy_signal import build_signal, STAGE_CALCULATION, TYPE_CALC
+    mat = {
+        "材料编号": "Q011", "题型": "解答题",
+        "评分点": "Q011P1 列出三个数的和 1分\nQ011P2 正确化简 1分\nQ011P3 由n为整数解释倍数关系 1分",
+    }
+    s = build_signal(
+        event(score=1, max_score=3, mat="Q011"),
+        record(answer="3n+2", steps="1. (n-1)+n+(n+1)。2. =3n+2。", rubric="Q011P1=1；Q011P2=0；Q011P3=0"),
+        mat,
+    )
+    assert s.error_stage == STAGE_CALCULATION
+    assert s.error_type == TYPE_CALC
+    assert "根因为计算" in s.reason
+    # 下游受影响有说明
+    assert any("下游" in l for l in s.limitations)
+    assert s.rubric_focus == ["Q011P2", "Q011P3"]  # 焦点仍含全部丢分点
+
+
+def test_root_cause_p1_lost_still_concept():
+    """P1概念点丢仍是概念错误（根因在起步，优先级不变）。"""
+    from study_companion.analysis.strategy_signal import build_signal, STAGE_CONCEPT
+    mat = {
+        "材料编号": "Q043", "题型": "解答题",
+        "评分点": "Q043P1 识别概念定义 1分\nQ043P2 正确列出算式 1分\nQ043P3 代入检验 1分",
+    }
+    s = build_signal(
+        event(score=1, max_score=3, mat="Q043"),
+        record(answer="x", steps="过程", rubric="Q043P1=0；Q043P2=1；Q043P3=0"),
+        mat,
+    )
+    assert s.error_stage == STAGE_CONCEPT
+    assert s.error_type == "concept_error"
+
+
+# ---------- 14. 产出结果型动词归计算类（人工复核案例9回归） ----------
+def test_output_verbs_classified_as_calculation():
+    """案例9场景：设列都对(P1✓)，消元求值运算错 → calculation，不是step。"""
+    from study_companion.analysis.strategy_signal import build_signal, classify_point, STAGE_CALCULATION, TYPE_CALC
+    mat = {
+        "材料编号": "Q036", "题型": "解答题",
+        "评分点": "Q036P1 设未知数并列数量关系 1分\nQ036P2 消元求两种数量 1分\nQ036P3 检验实际意义 1分",
+    }
+    s = build_signal(
+        event(score=1, max_score=3, mat="Q036"),
+        record(answer="鸡2只兔8只", steps="1. 设鸡x只兔y只。2. x+y=10, 2x+4y=26。3. y=8, x=2。",
+               rubric="Q036P1=1；Q036P2=0；Q036P3=0"),
+        mat,
+    )
+    assert s.error_stage == STAGE_CALCULATION
+    assert s.error_type == TYPE_CALC
+    assert "根因为计算" in s.reason
+    # 词表直接验证
+    assert classify_point("求出x") == "calculation"
+    assert classify_point("消元求两种数量") == "calculation"
+    assert classify_point("正确建立消元步骤") == "step"  # 步骤型消元仍是step
