@@ -7,7 +7,10 @@
 from __future__ import annotations
 
 import re
+from hashlib import sha1
+import unicodedata
 
+from study_companion.knowledge.dedup import normalize_definition, normalize_name, deduplicate_knowledge
 from study_companion.knowledge.extract import PageRecord
 from study_companion.knowledge.models import (
     KnowledgeBase,
@@ -35,7 +38,7 @@ def _clean_term(term: str) -> str:
 
 
 def _flat(text: str) -> str:
-    return re.sub(r"\s+", "", text)
+    return normalize_name(text)
 
 
 def _sentences(text: str) -> list[str]:
@@ -54,14 +57,24 @@ class _Registry:
     def add(self, name: str, kind: str, loc: Locator, snippet: str, alias: str | None = None) -> bool:
         key = _flat(name)
         if key in self.by_name:
-            return False
+            existing = self.by_name[key]
+            if existing.kind == kind and normalize_definition(existing.snippet) and normalize_definition(existing.snippet) == normalize_definition(snippet[:80]):
+                if alias and alias not in existing.aliases:
+                    existing.aliases.append(alias)
+                if loc not in existing.source_locators:
+                    existing.source_locators.append(loc)
+                return False
+        fingerprint = _flat(snippet)[:80]
+        stable = sha1(unicodedata.normalize("NFKC", f"{key}|{kind}|{loc.source_file}|{loc.file_page}|{fingerprint}").encode()).hexdigest()[:16]
         kp = KnowledgePoint(
-            kp_id=f"KP-{self.prefix}-{len(self.points) + 1:04d}",
+            kp_id=f"KP-{self.prefix}-{stable}",
             name=name,
             aliases=[alias] if alias else [],
             kind=kind,  # type: ignore[arg-type]
             definition_locator=loc,
             snippet=snippet[:80],
+            source_locators=[loc],
+            definition_fingerprint=sha1(unicodedata.normalize("NFKC", fingerprint).encode()).hexdigest(),
         )
         self.by_name[key] = kp
         self.points.append(kp)
@@ -144,4 +157,4 @@ def extract_knowledge(
                 )
             )
 
-    return KnowledgeBase(kb_version=kb_version, points=reg.points, relations=relations)
+    return deduplicate_knowledge(KnowledgeBase(kb_version=kb_version, points=reg.points, relations=relations))

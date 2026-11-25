@@ -20,7 +20,10 @@ logger = logging.getLogger(__name__)
 STATUS_BY_CODE: dict[str, int] = {
     "VALIDATION_ERROR": 400,
     "NOT_FOUND": 404,
+    "KB_NOT_FOUND": 404,
+    "KB_NOT_PUBLISHED": 422,
     "FORBIDDEN": 403,
+    "CONTEXT_MISMATCH": 403,
     "CONFLICT": 409,
     "REVISION_CONFLICT": 409,
     "RESULT_NOT_READY": 409,

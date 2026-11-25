@@ -11,6 +11,7 @@ from pathlib import Path
 from study_companion.analysis.textbook_split import split_textbook
 from study_companion.knowledge.extract import PageRecord, read_pdf
 from study_companion.knowledge.models import KnowledgeBase, Locator
+from study_companion.knowledge.store import KnowledgeStore, source_manifest_entry
 from study_companion.knowledge.terms import extract_knowledge
 
 
@@ -44,12 +45,57 @@ def ingest_textbook(pdf: Path, prefix: str, kb_version: str = "kb-draft") -> tup
     return kb, pages
 
 
+def ingest_textbook_snapshot(
+    pdf: Path,
+    *,
+    data_root: Path,
+    dataset_id: str,
+    catalog_version: str,
+    prefix: str,
+    kb_version: str,
+    page_count: int | None = None,
+    parent_version: str | None = None,
+) -> KnowledgeBase:
+    """Ingest a textbook into a manifest-bound draft snapshot."""
+    relative = pdf.resolve().relative_to(data_root.resolve()).as_posix()
+    identity_prefix = prefix if parent_version is None else f"{prefix}-{__import__('hashlib').sha1(relative.encode()).hexdigest()[:8]}"
+    kb, pages = ingest_textbook(pdf, identity_prefix, kb_version)
+    for point in kb.points:
+        point.definition_locator = point.definition_locator.model_copy(update={"source_file": relative})
+        point.source_locators = [item.model_copy(update={"source_file": relative}) for item in point.source_locators]
+    for relation in kb.relations:
+        relation.source_file = relative
+    store = KnowledgeStore(data_root)
+    entry = source_manifest_entry(
+        data_root, pdf, source_id=relative, page_count=page_count or len(pages),
+        extraction_method=pages[0].method if pages else "text", extraction_version="1",
+    )
+    sources = [entry]
+    if parent_version is not None:
+        from study_companion.contracts import DomainError
+        from study_companion.knowledge.dedup import deduplicate_knowledge
+
+        parent, manifest = store.load_version(dataset_id, catalog_version, parent_version, verify_sources=True)
+        if any(entry.source_id in {item.source_id, item.relative_path} or
+               entry.relative_path in {item.source_id, item.relative_path} for item in manifest.source_files):
+            raise DomainError("SOURCE_ID_DUPLICATE", "Source already exists in parent manifest")
+        existing_ids = {point.kp_id for point in parent.points}
+        if existing_ids & {point.kp_id for point in kb.points}:
+            raise DomainError("CANDIDATE_ID_DUPLICATE", "Imported point IDs conflict with parent")
+        imported = kb
+        kb = parent.model_copy(deep=True, update={"kb_version": kb_version, "status": "draft", "created_at": None})
+        kb.points.extend(imported.points)
+        kb.relations.extend(imported.relations)
+        kb.annotations.extend(imported.annotations)
+        kb.merge_candidates.extend(imported.merge_candidates)
+        kb = deduplicate_knowledge(kb)
+        sources = [*manifest.source_files, entry]
+    return store.save_draft(dataset_id, catalog_version, kb, parent_version=parent_version, source_files=sources)
+
+
 def save(kb: KnowledgeBase, pages: list[PageRecord], out_dir: Path) -> None:
     out_dir.mkdir(parents=True, exist_ok=True)
     (out_dir / "knowledge_base.json").write_text(
         json.dumps(kb.model_dump(), ensure_ascii=False, indent=2, sort_keys=True), encoding="utf-8", newline="\n"
     )
-    (out_dir / "pages.json").write_text(
-        json.dumps({str(p.file_page): p.text for p in pages}, ensure_ascii=False, indent=1),
-        encoding="utf-8", newline="\n",
-    )
+    # Page text stays in memory; source pages can be reread when validating evidence.
