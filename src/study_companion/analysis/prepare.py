@@ -10,6 +10,8 @@ from __future__ import annotations
 
 import hashlib
 import json
+import re
+from collections import defaultdict
 
 from study_companion.contracts import (
     AnswerEvent,
@@ -35,7 +37,8 @@ STUDENTS_COLUMNS: dict[str, tuple[str, ...]] = {
     "grade": ("年级",),
 }
 NODES_COLUMNS: dict[str, tuple[str, ...]] = {
-    "node_id": ("节点编号",),
+    "node_id": ("节点编号", "测验节点编号", "教学节点编号"),
+    "available_materials": ("可用题目编号", "可用材料编号", "可用题目集合"),
 }
 MATERIALS_COLUMNS: dict[str, tuple[str, ...]] = {
     "material_id": ("材料编号",),
@@ -74,7 +77,8 @@ _STATUS_UNANSWERED = ("未作答", "unanswered")
 class _ParsedRecord:
     """一条作答记录的解析视图；原始行保存在 record 中。"""
 
-    def __init__(self, record: SourceRecord, row: RawRow):
+    def __init__(self, record: SourceRecord, row: RawRow,
+                 material_nodes_map: dict[str, set[str]] | None = None):
         self.record = record
         self.student_id = _pick(row, RECORDS_COLUMNS["student_id"]) or ""
         self.material_id = _pick(row, RECORDS_COLUMNS["material_id"]) or ""
@@ -85,6 +89,48 @@ class _ParsedRecord:
         self.score = _to_int(_pick(row, RECORDS_COLUMNS["score"]))
         self.max_score = _to_int(_pick(row, RECORDS_COLUMNS["max_score"]))
         self.final_answer = _pick(row, RECORDS_COLUMNS["final_answer"])
+        self.rubric_sum = _rubric_sum(_pick(row, RECORDS_COLUMNS["rubric_scores"]))
+        # 材料表标注的可用节点集合（按材料编号，来自材料表"节点编号"列，可多值顿号分隔）
+        if material_nodes_map is not None and self.material_id in material_nodes_map:
+            self.material_nodes: set[str] | None = material_nodes_map[self.material_id]
+        else:
+            self.material_nodes = None
+
+
+def _rubric_sum(raw: str | None) -> int | None:
+    """解析评分点得分串并求和。
+
+    兼容两种格式（均实测出现）：
+    - 真实赛题："Q015P1=1；Q015P2=0"（分号/；分隔的 编号=分数 对）
+    - 自建测试：'{"P1": 1, "P2": 1}'（JSON）
+    无法解析返回 None，不参与矛盾检测（宁可漏报不可误报）。
+    """
+    if not raw:
+        return None
+    raw = raw.strip()
+    values: list[int] = []
+    if raw.startswith("{"):
+        try:
+            data = json.loads(raw)
+            values = [int(v) for v in data.values()]
+        except (ValueError, TypeError):
+            return None
+    else:
+        for pair in re.split(r"[;；,，]", raw):
+            pair = pair.strip()
+            if not pair:
+                continue
+            if "=" in pair:
+                value = pair.split("=", 1)[1].strip()
+            elif ":" in pair:
+                value = pair.rsplit(":", 1)[1].strip()
+            else:
+                return None  # 无法识别的格式
+            try:
+                values.append(int(value))
+            except ValueError:
+                return None
+    return sum(values) if values else None
 
 
 def _pick(row: RawRow, aliases: tuple[str, ...]) -> str | None:
@@ -173,7 +219,19 @@ def prepare_dataset(tables: RawTables, config: ImportConfig) -> PreparedDataset:
                 )
             )
 
-    parsed = _parse_records(tables.records, next_issue_id, issues)
+    # 材料→可用节点集合：来自节点表"可用题目编号"列（顿号分隔），供越界检测
+    material_nodes_map: dict[str, set[str]] = defaultdict(set)
+    for row in tables.nodes:
+        node_id = _pick(row, NODES_COLUMNS["node_id"])
+        materials_raw = _pick(row, NODES_COLUMNS["available_materials"])
+        if not node_id or not materials_raw:
+            continue
+        for mid in re.split(r"[、,，;；]", materials_raw):
+            mid = mid.strip()
+            if mid:
+                material_nodes_map[mid].add(node_id)
+
+    parsed = _parse_records(tables.records, next_issue_id, issues, material_nodes_map)
     selected_events = _select_events(parsed, config, next_issue_id, issues)
 
     manifest = SourceManifest(
@@ -229,7 +287,8 @@ def _table_ids(rows: list[RawRow], aliases: tuple[str, ...]) -> list[str]:
 
 
 def _parse_records(
-    rows: list[RawRow], next_issue_id, issues: list[QualityIssue]
+    rows: list[RawRow], next_issue_id, issues: list[QualityIssue],
+    material_nodes_map: dict[str, set[str]] | None = None,
 ) -> list[_ParsedRecord]:
     """构造解析视图，并处理记录编号重复：完全重复去重保留，同号不同内容隔离。"""
     by_record_id: dict[str, list[_ParsedRecord]] = {}
@@ -241,7 +300,7 @@ def _parse_records(
             source_row_number=index,
             payload=row,
         )
-        parsed = _ParsedRecord(record, row)
+        parsed = _ParsedRecord(record, row, material_nodes_map)
         if record.record_id not in by_record_id:
             by_record_id[record.record_id] = []
             order.append(record.record_id)
@@ -354,6 +413,49 @@ def _select_events(
         chosen = top[0]
         status = _resolve_status(chosen)
         disposition = "include"
+
+        # 评分点之和与得分矛盾（17号文档数据陷阱）：不重判官方分数，仅标记复核
+        rubric_sum = chosen.rubric_sum
+        if (
+            status == "graded"
+            and rubric_sum is not None
+            and chosen.score is not None
+            and rubric_sum != chosen.score
+        ):
+            issues.append(
+                QualityIssue(
+                    issue_id=next_issue_id(),
+                    code="RUBRIC_SUM_MISMATCH",
+                    severity="warning",
+                    record_ids=[chosen.record.record_id],
+                    event_id=event_key,
+                    message=(
+                        f"评分点之和 {rubric_sum} 与得分 {chosen.score} 不符，"
+                        f"保留官方得分并标记待复核，不重判"
+                    ),
+                    action="retain",
+                    rule_version="import-rules-v1",
+                )
+            )
+
+        # 作答材料不在事件节点可用集合（材料表标注的节点）：标记复核，不改分
+        if chosen.material_nodes and node_id not in chosen.material_nodes:
+            issues.append(
+                QualityIssue(
+                    issue_id=next_issue_id(),
+                    code="MATERIAL_NODE_MISMATCH",
+                    severity="warning",
+                    record_ids=[chosen.record.record_id],
+                    event_id=event_key,
+                    message=(
+                        f"材料 {material_id} 按材料表属于节点 "
+                        f"{'、'.join(sorted(chosen.material_nodes))}，"
+                        f"但作答发生在 {node_id}，标记待复核"
+                    ),
+                    action="retain",
+                    rule_version="import-rules-v1",
+                )
+            )
 
         if status == "graded":
             if chosen.score is not None and chosen.max_score is not None and chosen.score > chosen.max_score:
