@@ -170,10 +170,26 @@ def _activity(
     )
 
 
-def _excerpt(material, limit: int = 24) -> str:
+def _indicator_label(catalog: Catalog, indicator_id: str) -> str:
+    """知识点编号 → 目录中的知识点描述（教师端文案禁内部编号，红线：不产生新判断，只转述目录）。"""
+    for ind in catalog.indicators:
+        if ind.indicator_id == indicator_id:
+            return ind.description
+    return indicator_id
+
+
+def _excerpt(material, limit: int = 40) -> str:
     """材料题干摘要（织入文案，治模板死板）：超长截断。"""
     text = (material.content or "").strip().replace("\n", " ")
-    return text[:limit] + ("…" if len(text) > limit else "")
+    if len(text) <= limit:
+        return text
+    # 在上限内找最后一个句读标点截断，避免把词语切成"并检…"
+    window = text[:limit]
+    for cut in ("，", "。", "；", "？", "！", "："):
+        pos = window.rfind(cut)
+        if pos >= limit // 2:
+            return window[: pos + 1]
+    return window + "…"
 
 
 _FRUSTRATION_SIGNALS = ("均无有效", "多次", "连续", "仍未", "反复")
@@ -210,7 +226,7 @@ def _build_type3(finding: Finding, catalog: Catalog, rec_id: str, exclude: froze
             ),
             points=(
                 "完成度与过程完整度",
-                f"错误是否集中在同一位置（对照诊断 {finding.finding_id}）",
+                "错误是否集中在同一位置（对照本次诊断描述）",
             ),
         )
         for i, m in enumerate(materials, start=1)
@@ -219,16 +235,16 @@ def _build_type3(finding: Finding, catalog: Catalog, rec_id: str, exclude: froze
         recommendation_id=rec_id,
         indicator_id=indicator_id,
         finding_ids=[finding.finding_id],
-        goal=f"用 {len(materials)} 道覆盖不同问法的题，看清学生在指标 {indicator_id} 上的真实掌握情况",
+        goal=f"用 {len(materials)} 道覆盖不同问法的题，看清学生在「{_indicator_label(catalog, indicator_id)}」上的真实掌握情况",
         reason=(
             (
-                f"诊断 {finding.finding_id} 的记录之间说法互相冲突。"
+                "这份诊断的多条记录之间说法互相冲突。"
                 f"现在下结论为时过早，先安排 {len(materials)} 道覆盖不同问法的观察题，让证据自己说话。"
             )
             if finding.evidence_status == "conflicting"
             else (
-                f"诊断 {finding.finding_id} 判定证据不足（{finding.evidence_status}）：{finding.description} "
-                f"现有信息还撑不起“会或不会”的判断，先安排 {len(materials)} 道覆盖不同问法的观察题补齐证据。"
+                f"这份诊断的记录还不够充分：{finding.description} "
+                f"现在还撑不起“会或不会”的判断，先安排 {len(materials)} 道覆盖不同问法的观察题补齐证据。"
             )
         ),
         student_intro=(
@@ -239,7 +255,7 @@ def _build_type3(finding: Finding, catalog: Catalog, rec_id: str, exclude: froze
         adjustment_conditions=[
             AdjustmentCondition(
                 observable_condition="题组证据齐备",
-                next_action="按证据归类到 1a/1b/类型二并重新生成建议",
+                next_action="教师复核题组证据、确认问题类型后，再生成进一步建议",
                 group="advance",
             ),
             AdjustmentCondition(
@@ -296,13 +312,13 @@ def _build_type2(finding: Finding, catalog: Catalog, rec_id: str, exclude: froze
         indicator_id=indicator_id,
         finding_ids=[finding.finding_id],
         goal=(
-            f"在指标 {indicator_id} 上完成知识迁移（说清每步依据）与思想迁移（选并解释一个数学思想）"
+            f"在「{_indicator_label(catalog, indicator_id)}」上完成知识迁移（说清每步依据）与思想迁移（选并解释一个数学思想）"
             if len(variants) > 1
-            else f"在指标 {indicator_id} 上完成知识迁移，说清每步依据"
+            else f"在「{_indicator_label(catalog, indicator_id)}」上完成知识迁移，说清每步依据"
         ),
         reason=(
             (
-                f"诊断 {finding.finding_id} 判定表现较好（{finding.description}）。"
+                f"这份诊断显示表现较好（{finding.description}）。"
                 "不追加刷题量：先用变式确认换问法后是否仍能识别，"
                 "再用思想辨识选择（学生选、学伴解释）做思想迁移。"
                 "思想辨识是低频环节：同一思想每周至多一次，三个思想可轮换，"
@@ -310,7 +326,7 @@ def _build_type2(finding: Finding, catalog: Catalog, rec_id: str, exclude: froze
             )
             if len(variants) > 1
             else (
-                f"诊断 {finding.finding_id} 判定表现较好（{finding.description}）。"
+                f"这份诊断显示表现较好（{finding.description}）。"
                 "不追加刷题量：本轮先用变式确认知识迁移；思想辨识环节需要配套选题，"
                 "留到材料齐备时再做，不为凑环节硬安排。"
             )
@@ -384,9 +400,9 @@ def _build_1a(finding: Finding, catalog: Catalog, rec_id: str, exclude: frozense
         recommendation_id=rec_id,
         indicator_id=indicator_id,
         finding_ids=[finding.finding_id],
-        goal=f"按修正后思路独立完成指标 {indicator_id} 的 {len(consolidations)} 道同类题，并保持代入检验习惯",
+        goal=f"按修正后思路独立完成「{_indicator_label(catalog, indicator_id)}」的 {len(consolidations)} 道同类题，并保持代入检验习惯",
         reason=(
-            f"诊断 {finding.finding_id}：{finding.description} "
+            f"诊断显示：{finding.description} "
             f"思路完整、失败点集中。学伴先按倾听式四步（复述确认→定位分岔→引导自撞→修正重走）"
             f"听学生讲当时的想法，走通后只安排 {len(consolidations)} 道巩固题，不追加新课。"
         ),
@@ -460,10 +476,10 @@ def _build_1b(finding: Finding, catalog: Catalog, rec_id: str, config: Recommend
         recommendation_id=rec_id,
         indicator_id=indicator_id,
         finding_ids=[finding.finding_id],
-        goal=f"在指标 {indicator_id} 上补齐基础台阶，独立完成 {len(practices)} 道同类题并自查",
+        goal=f"在「{_indicator_label(catalog, indicator_id)}」上补齐基础台阶，独立完成 {len(practices)} 道同类题并自查",
         reason=(
             (
-                f"诊断 {finding.finding_id}：{finding.description} "
+                f"诊断显示：{finding.description} "
                 "先用学习卡从方向层补台阶（L1→L2→L3 逐层、接住即停），"
                 f"再做 {len(practices)} 道同类题；扶的目的是尽早放手，"
                 "接住的层级越浅，练习的提示上限越低。"
@@ -471,7 +487,7 @@ def _build_1b(finding: Finding, catalog: Catalog, rec_id: str, config: Recommend
             )
             if support
             else (
-                f"诊断 {finding.finding_id}：{finding.description} "
+                f"诊断显示：{finding.description} "
                 f"本轮目录内暂无配套学习卡，直接安排 {len(practices)} 道同类题观察独立完成度，教师可视情况补讲。"
                 "若想让学生重做自己的原错题，教师可在记录列表中指定那道题。"
             )
@@ -589,7 +605,7 @@ def recommend_rules(
         for later_id in entry.follow_up_indicators:
             conditions.append(
                 AdjustmentCondition(
-                    observable_condition=f"指标 {primary.indicator_id} 的补练完成且复评通过",
+                    observable_condition=f"「{_indicator_label(catalog, primary.indicator_id)}」的补练完成且复评通过",
                     next_action=f"再安排指标 {later_id} 的同类练习（此前暂缓，不与补练叠加）",
                 )
             )
