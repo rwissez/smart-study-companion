@@ -827,7 +827,7 @@ def rerun_student_analysis(
             "student_id": student_id,
             "node_id": node_ids[0],
         },
-        payload={"reason": "manual_rerun"},
+        payload={"reason": "manual_rerun", "nonce": repo.new_id("rerun")},
         dataset_id=dataset_id,
         student_id=student_id,
         requested_by=scope.session_id,
