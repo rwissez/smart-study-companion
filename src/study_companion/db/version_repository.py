@@ -428,3 +428,35 @@ def record_artifact_use(
     if written:
         db.flush()
     return written
+
+def record_evidence_index(
+    db: Session,
+    *,
+    version_id: str,
+    entries: list[tuple[str, str, dict[str, Any], str]],
+) -> int:
+    """登记"这个版本里，某个对象对应哪条证据"（06 §4.3）。
+
+    ``entries`` 是 ``(kind, object_id, locator, visibility)``；同版本同对象只保留一条。
+    """
+
+    written = 0
+    for kind, object_id, locator, visibility in entries:
+        if not object_id:
+            continue
+        existing = db.get(models.EvidenceIndex, (version_id, kind, object_id))
+        if existing is not None:
+            continue
+        db.add(
+            models.EvidenceIndex(
+                version_id=version_id,
+                kind=kind,
+                object_id=object_id,
+                locator_json=locator,
+                visibility=visibility,
+            )
+        )
+        written += 1
+    if written:
+        db.flush()
+    return written

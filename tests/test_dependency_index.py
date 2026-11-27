@@ -96,3 +96,35 @@ def test_artifact_use_is_idempotent(imported: dict, session: Session) -> None:
         else [],
     )
     assert written == 0, "同一输入同一用途不重复登记"
+
+def test_evidence_index_links_analysis_and_plan_objects(imported: dict, session: Session) -> None:
+    dataset_id = imported["dataset_id"]
+    analysis_ids = [
+        row.version_id
+        for row in session.scalars(
+            select(models.Version).where(
+                models.Version.dataset_id == dataset_id,
+                models.Version.kind == "student_analysis",
+            )
+        ).all()
+    ]
+    plan_ids = [
+        row.version_id
+        for row in session.scalars(
+            select(models.Version).where(
+                models.Version.dataset_id == dataset_id, models.Version.kind == "plan"
+            )
+        ).all()
+    ]
+    analysis_index = session.scalars(
+        select(models.EvidenceIndex).where(models.EvidenceIndex.version_id.in_(analysis_ids))
+    ).all()
+    assert analysis_index, "学情版本要建立证据索引"
+    assert any(item.kind in {"record", "metric"} for item in analysis_index)
+    assert all(item.locator_json for item in analysis_index)
+
+    plan_index = session.scalars(
+        select(models.EvidenceIndex).where(models.EvidenceIndex.version_id.in_(plan_ids))
+    ).all()
+    assert plan_index, "方案版本要索引引用的题目"
+    assert any(item.kind == "material" for item in plan_index)

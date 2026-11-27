@@ -254,6 +254,38 @@ def persist_analysis_bundle(
                 ),
             ],
         )
+        index_entries: list[tuple[str, str, dict[str, Any], str]] = []
+        for finding in result.findings:
+            for ref in finding.evidence_refs:
+                index_entries.append(
+                    (
+                        ref.kind,
+                        ref.id,
+                        {
+                            "run_id": ref.run_id or run_id,
+                            "indicator_id": finding.indicator_id,
+                            "analysis_version": version.version_id,
+                        },
+                        "full",
+                    )
+                )
+        for metric in result.metrics:
+            for ref in metric.evidence_refs:
+                index_entries.append(
+                    (
+                        ref.kind,
+                        ref.id,
+                        {
+                            "run_id": ref.run_id or run_id,
+                            "metric_id": metric.metric_id,
+                            "analysis_version": version.version_id,
+                        },
+                        "full",
+                    )
+                )
+        repo.record_evidence_index(
+            db, version_id=version.version_id, entries=index_entries
+        )
         db.add(
             models.AnalysisResult(
                 run_id=run_id,
@@ -832,6 +864,25 @@ def persist_plan(
                 if knowledge_version_id
                 else []
             ),
+        ],
+    )
+    repo.record_evidence_index(
+        db,
+        version_id=plan_version_id,
+        entries=[
+            (
+                "material",
+                activity.material_id,
+                {
+                    "plan_version": plan_version_id,
+                    "activity_id": activity.activity_id,
+                    "node_id": getattr(normalised, "node_id", "") or "",
+                },
+                "full",
+            )
+            for recommendation in normalised.recommendations
+            for activity in recommendation.activities
+            if activity.material_id
         ],
     )
     # 记录策略试验：目标 + 主策略 + 素材指纹，供后续"无效则换策略"判定。
