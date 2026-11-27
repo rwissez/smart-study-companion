@@ -1,0 +1,168 @@
+{
+  "schema_version": "1.0",
+  "project": "湛知（smart-study-companion）最终整合开发",
+  "docs_commit": "1d6db6fc45e7f7d785f194a73b83b6bd5f67cefb",
+  "base_sha": "49587a15430e4674a1a699e108c91e27b7a537b6",
+  "current_sha": "1d6db6fc45e7f7d785f194a73b83b6bd5f67cefb",
+  "branch": "codex/final-integration",
+  "remote": "https://github.com/rwissez/smart-study-companion.git",
+  "environment": {
+    "python": "3.12.16 (uv managed)",
+    "uv": "0.13.10",
+    "node": "v26.1.0",
+    "npm": "11.13.0",
+    "platform": "Windows-11-10.0.26300-SP0"
+  },
+  "stages": [
+    {
+      "id": "P0",
+      "title": "基线与执行基础",
+      "status": "passed",
+      "deps": [],
+      "commit": null,
+      "gates": [
+        {
+          "id": "ENV-01",
+          "result": "passed",
+          "test_mode": "synthetic",
+          "command": "uv sync --locked --python 3.12 ; uv run pytest -q",
+          "detail": "42 packages resolved / 41 checked；322 passed, 1 warning",
+          "evidence": ["docs/evidence/ENV-01-baseline.md"]
+        }
+      ],
+      "notes": "远端 main 与 D 分支 SHA 与 08 文档一致；主机缺少 Python 3.12 与 uv，已补装受管解释器；.gitignore 编码导致一次 hatchling 构建失败，已修复。"
+    },
+    {
+      "id": "P1",
+      "title": "公共基础：契约、迁移、权限、任务、导入",
+      "status": "pending",
+      "deps": ["P0"],
+      "commit": null,
+      "gates": [
+        {"id": "API-01", "result": "not_run"},
+        {"id": "API-02", "result": "not_run"},
+        {"id": "API-03", "result": "not_run"},
+        {"id": "API-04", "result": "not_run"},
+        {"id": "DB-01", "result": "not_run"},
+        {"id": "DB-02", "result": "not_run"},
+        {"id": "DB-04", "result": "not_run"},
+        {"id": "SEC-01", "result": "not_run"},
+        {"id": "JOB-01", "result": "not_run"},
+        {"id": "JOB-02", "result": "not_run"}
+      ],
+      "notes": ""
+    },
+    {
+      "id": "P2",
+      "title": "A 模块：课程知识体系",
+      "status": "pending",
+      "deps": ["P1"],
+      "commit": null,
+      "gates": [
+        {"id": "A-01", "result": "not_run"},
+        {"id": "A-02", "result": "not_run"},
+        {"id": "A-03", "result": "not_run"}
+      ],
+      "notes": ""
+    },
+    {
+      "id": "P3",
+      "title": "B 模块：学情分析、评分、比较、质量",
+      "status": "pending",
+      "deps": ["P1"],
+      "commit": null,
+      "gates": [
+        {"id": "B-01", "result": "not_run"},
+        {"id": "B-02", "result": "not_run"},
+        {"id": "B-03", "result": "not_run"},
+        {"id": "B-04", "result": "not_run"},
+        {"id": "DB-03", "result": "not_run"}
+      ],
+      "notes": ""
+    },
+    {
+      "id": "P4",
+      "title": "C 模块：六策略、审核、发布、微课堂",
+      "status": "pending",
+      "deps": ["P2", "P3"],
+      "commit": null,
+      "gates": [
+        {"id": "C-01", "result": "not_run"},
+        {"id": "C-02", "result": "not_run"},
+        {"id": "C-03", "result": "not_run"},
+        {"id": "C-04", "result": "not_run"},
+        {"id": "SEC-02", "result": "not_run"}
+      ],
+      "notes": ""
+    },
+    {
+      "id": "P5",
+      "title": "Agent：受控工具、确认、辅导、异步",
+      "status": "pending",
+      "deps": ["P4"],
+      "commit": null,
+      "gates": [
+        {"id": "AG-01", "result": "not_run"},
+        {"id": "AG-02", "result": "not_run"},
+        {"id": "AG-03", "result": "not_run"},
+        {"id": "AG-04", "result": "not_run"},
+        {"id": "JOB-03", "result": "not_run"}
+      ],
+      "notes": ""
+    },
+    {
+      "id": "P6",
+      "title": "Web：教师四页、学生三页、真实接口",
+      "status": "pending",
+      "deps": ["P5"],
+      "commit": null,
+      "gates": [
+        {"id": "UI-01", "result": "not_run"},
+        {"id": "UI-02", "result": "not_run"},
+        {"id": "UI-03", "result": "not_run"},
+        {"id": "UI-04", "result": "not_run"},
+        {"id": "UI-05", "result": "not_run"}
+      ],
+      "notes": ""
+    },
+    {
+      "id": "P7",
+      "title": "整合与交付：导出、备份、E2E、验收",
+      "status": "pending",
+      "deps": ["P6"],
+      "commit": null,
+      "gates": [
+        {"id": "ZIP-01", "result": "not_run"},
+        {"id": "ZIP-02", "result": "not_run"},
+        {"id": "ZIP-03", "result": "not_run"},
+        {"id": "RUN-01", "result": "not_run"},
+        {"id": "RUN-02", "result": "not_run"},
+        {"id": "RUN-03", "result": "not_run"},
+        {"id": "E2E-01", "result": "not_run"},
+        {"id": "E2E-02", "result": "not_run"},
+        {"id": "E2E-03", "result": "not_run"},
+        {"id": "E2E-04", "result": "not_run"},
+        {"id": "PERF-01", "result": "not_run"},
+        {"id": "REL-01", "result": "not_run"},
+        {"id": "REL-02", "result": "not_run"}
+      ],
+      "notes": ""
+    }
+  ],
+  "next_ready": ["P1"],
+  "blockers": [
+    {
+      "id": "B-REAL-MODEL",
+      "scope": "真实模型验收（模型相关用例）",
+      "state": "open",
+      "detail": "本机未提供经授权的模型端点与密钥；按 01 约束不得虚构模型成果。受影响：真实模型抽查、模型降级现场演示。不阻塞规则/合成路径与其余开发。"
+    },
+    {
+      "id": "B-COMPETITION-DATA",
+      "scope": "官方赛方数据与典型案例验收（ZIP-03、DBT42、REL-02 的真实数据部分）",
+      "state": "open",
+      "detail": "本工作区不含赛方原始数据包。受影响：真实 40 学生 2 班数据闭环与三学生案例。已用合成数据覆盖同一代码路径，真实数据项保留 not_run 并如实标记。"
+    }
+  ],
+  "updated_at": "2026-11-27T13:40:00+08:00"
+}

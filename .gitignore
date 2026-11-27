@@ -38,8 +38,8 @@ test-results/
 .DS_Store
 Thumbs.db
 
-# Local handoff package (not part of the product repo)
-/湛知_DSH最终开发交接包/
-/湛知_DSH最终开发交接包.zip
+# Local handoff package and local-only verification artifacts
+/婀涚煡_DSH鏈�缁堝紑鍙戜氦鎺ュ寘/
+/婀涚煡_DSH鏈�缁堝紑鍙戜氦鎺ュ寘.zip
 /_local/
-
+/_evidence/
