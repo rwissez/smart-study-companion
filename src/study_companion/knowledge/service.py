@@ -110,6 +110,7 @@ def build_knowledge(
     knowledge_version: str,
     model_configured: bool = False,
     textbook_candidates: list[Any] | None = None,
+    textbook_stats: dict[str, int] | None = None,
 ) -> KnowledgeBuildResult:
     """构建候选知识体系并给出可发布子集。
 
@@ -372,11 +373,14 @@ def build_knowledge(
         "generated_at": "",
         "mapping_gaps": mapping_gaps,
         "counts": {
-            "source_files": len({loc.source_file for point in points for loc in point.source_locators}),
-            "total_pages": 0,
-            "relevant_pages": 0,
-            "usable_relevant_pages": 0,
-            "recovered_pages": 0,
+            "source_files": (textbook_stats or {}).get(
+                "source_files",
+                len({loc.source_file for point in points for loc in point.source_locators}),
+            ),
+            "total_pages": (textbook_stats or {}).get("total_pages", 0),
+            "relevant_pages": (textbook_stats or {}).get("relevant_pages", 0),
+            "usable_relevant_pages": (textbook_stats or {}).get("usable_relevant_pages", 0),
+            "recovered_pages": (textbook_stats or {}).get("recovered_pages", 0),
             "formal_points": len(points),
             "formal_relations": len(clean_relations),
             "formal_annotations": len(annotations),

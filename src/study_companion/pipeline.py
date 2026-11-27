@@ -536,15 +536,17 @@ def _attach_error_types(
             )
 
 
-def _textbook_candidates(db: Session, dataset_id: str, catalog) -> list[Any]:
-    """从本数据集导入的教材 PDF 抽取规则候选；没有 PDF 就返回空列表。"""
+def _textbook_candidates(
+    db: Session, dataset_id: str, catalog
+) -> tuple[list[Any], dict[str, int]]:
+    """从本数据集导入的教材 PDF 抽取规则候选与页面统计；没有 PDF 就返回空。"""
 
     from study_companion.knowledge.candidates import (
         dedupe_candidates,
         extract_definition_candidates,
     )
     from study_companion.knowledge.pdf_reader import read_pdf
-    from study_companion.knowledge.scope_plan import plan_scope, split_chapters
+    from study_companion.knowledge.scope_plan import page_stats, plan_scope, split_chapters
     from study_companion.library import blobs
 
     files = db.scalars(
@@ -558,23 +560,34 @@ def _textbook_candidates(db: Session, dataset_id: str, catalog) -> list[Any]:
         .distinct()
     ).all()
     if not files:
-        return []
+        return [], {}
     topics = list({indicator.topic_id for indicator in catalog.indicators if indicator.topic_id})
     indicators = [indicator.description for indicator in catalog.indicators if indicator.description]
     collected: list[Any] = []
+    totals = {
+        "source_files": 0,
+        "total_pages": 0,
+        "relevant_pages": 0,
+        "usable_relevant_pages": 0,
+        "recovered_pages": 0,
+        "unusable_relevant_pages": 0,
+    }
     for file_row in files:
         try:
             data = blobs.read_bytes(file_row.storage_key)
             document = read_pdf(file_row.file_id, data)
             chapters = split_chapters(document)
             scope = plan_scope(chapters, topics=topics, indicators=indicators)
+            stats = page_stats(document, scope)
+            for key, value in stats.items():
+                totals[key] = totals.get(key, 0) + int(value)
             collected.extend(extract_definition_candidates(scope))
         except DomainError:
             continue
     if not collected:
-        return []
+        return [], totals
     deduped, _ = dedupe_candidates(collected)
-    return deduped
+    return deduped, totals
 
 
 def current_knowledge_payload(db: Session, dataset_id: str, family_id: str | None) -> dict[str, Any]:
@@ -991,6 +1004,7 @@ def handle_import_process(ctx: JobContext) -> dict[str, Any]:
     from study_companion.model_service import ModelService
 
     knowledge_version_id = repo.new_id("kn")
+    textbook_candidates, textbook_stats = _textbook_candidates(db, dataset_id, catalog)
     knowledge_result = build_knowledge(
         catalog,
         context=None,
@@ -998,7 +1012,8 @@ def handle_import_process(ctx: JobContext) -> dict[str, Any]:
         dataset_id=dataset_id,
         knowledge_version=knowledge_version_id,
         model_configured=ModelService().configured,
-        textbook_candidates=_textbook_candidates(db, dataset_id, catalog),
+        textbook_candidates=textbook_candidates,
+        textbook_stats=textbook_stats,
     )
     knowledge_payload = knowledge_result.candidate_snapshot.model_dump(mode="json")
     knowledge_payload["review_info"] = knowledge_result.review_info.model_dump(mode="json")

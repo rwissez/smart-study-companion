@@ -5,6 +5,8 @@ from __future__ import annotations
 from study_companion.knowledge.pdf_reader import PageText, PdfDocument
 from study_companion.knowledge.scope_plan import (
     Chapter,
+    ScopeDecision,
+    ScopePlan,
     detect_heading_kind,
     is_structural_heading,
     plan_scope,
@@ -206,3 +208,32 @@ def test_heading_helpers_distinguish_structural_and_short_titles() -> None:
     assert is_structural_heading("1.2 有理数的加减法") is True
     assert is_structural_heading("第一章 有理数") is True
     assert is_structural_heading("绝对值") is False
+
+def test_page_stats_count_relevant_and_usable_pages():
+    from study_companion.knowledge.scope_plan import page_stats
+
+    class Page:
+        def __init__(self, number, quality):
+            self.page = number
+            self.quality = quality
+
+    class Document:
+        page_count = 5
+        pages = [Page(1, "usable"), Page(2, "sparse"), Page(3, "usable"), Page(4, "usable")]
+
+    plan = ScopePlan(
+        chapters=[
+            Chapter("c1", "第一章", 1, 2, "x"),
+            Chapter("c2", "第二章", 3, 4, "y"),
+        ],
+        decisions=[
+            ScopeDecision("c1", "core", "命中", ["主题"]),
+            ScopeDecision("c2", "unknown", "未命中", []),
+        ],
+        limitations=[],
+    )
+    stats = page_stats(Document(), plan)
+    assert stats["total_pages"] == 5
+    assert stats["relevant_pages"] == 2
+    assert stats["usable_relevant_pages"] == 1
+    assert stats["unusable_relevant_pages"] == 1

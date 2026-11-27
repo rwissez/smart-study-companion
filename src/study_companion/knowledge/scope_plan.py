@@ -379,6 +379,39 @@ def plan_scope(
     return ScopePlan(chapters=chapters, decisions=decisions, limitations=limitations)
 
 
+
+def page_stats(document: Any, plan: "ScopePlan") -> dict[str, int]:
+    """按范围计划统计页面分母：总量、相关、可用相关（02 §12）。
+
+    只统计真实存在的页；不可用页计入 recovered=0 并在返回里给出差距。
+    """
+
+    total_pages = getattr(document, "page_count", 0) or len(getattr(document, "pages", []) or [])
+    usable_pages = {
+        page.page
+        for page in getattr(document, "pages", []) or []
+        if getattr(page, "quality", "") == "usable"
+    }
+    relevant_pages: set[int] = set()
+    for decision in plan.decisions:
+        if decision.role not in {"core", "prerequisite"}:
+            continue
+        chapter = next(
+            (item for item in plan.chapters if item.chapter_id == decision.chapter_id), None
+        )
+        if chapter is None:
+            continue
+        relevant_pages.update(range(chapter.start_page, chapter.end_page + 1))
+    usable_relevant = relevant_pages & usable_pages
+    return {
+        "source_files": 1 if total_pages else 0,
+        "total_pages": total_pages,
+        "relevant_pages": len(relevant_pages),
+        "usable_relevant_pages": len(usable_relevant),
+        "recovered_pages": 0,
+        "unusable_relevant_pages": len(relevant_pages - usable_pages),
+    }
+
 __all__ = [
     "OUT_OF_SCOPE_TERMS",
     "PREREQUISITE_TERMS",
@@ -387,6 +420,7 @@ __all__ = [
     "ScopePlan",
     "detect_heading_kind",
     "is_structural_heading",
+    "page_stats",
     "plan_scope",
     "split_chapters",
 ]
