@@ -81,7 +81,48 @@ def get_micro_lesson(
     return success(view)
 
 
-@router.post("/runs/{run_id}/students/{student_id}/activities/{activity_id}/micro-lesson/complete")
+@router.get("/runs/{run_id}/students/{student_id}/activities/{activity_id}/micro-lesson/preview")
+def preview_micro_lesson(
+    run_id: str,
+    student_id: str,
+    activity_id: str,
+    db: DbSession,
+    scope: Scope,
+    plan_version: str = Query(min_length=1, max_length=128),
+) -> dict:
+    """教师预览微课堂正文与审核信息，不受学生侧完成状态限制。"""
+
+    scope.require("view_curriculum")
+    scope.require_teacher()
+    run = db.get(models.AnalysisRun, run_id)
+    if run is None:
+        raise DomainError("NOT_FOUND", "分析运行不存在")
+    version, activity = _activity_of(db, plan_version, activity_id)
+    if version.target_key != student_id:
+        raise DomainError("FORBIDDEN", "该方案不属于此学生")
+    if activity.kind != "micro_lesson":
+        raise DomainError("UNPROCESSABLE", "该活动不是微课堂")
+    content_version = activity.content_version
+    if not content_version:
+        raise DomainError("RESULT_NOT_READY", "微课堂正文版本缺失")
+    lesson_version = db.get(models.Version, content_version)
+    if lesson_version is None or lesson_version.kind != "lesson":
+        raise DomainError("RESULT_NOT_READY", "微课堂正文不可读")
+    payload = dict(lesson_version.payload_json or {})
+    view = lesson_service.lesson_view(payload)
+    view.update(
+        {
+            "activity_id": activity_id,
+            "plan_version": plan_version,
+            "content_version": content_version,
+            "review_info": payload.get("review_info") or {},
+            "limitations": payload.get("limitations") or [],
+            "source_refs": payload.get("source_refs") or [],
+            "editable": False,
+            "editable_reason": "当前是已发布内容；修改需生成新的内容版本并重新发布方案",
+        }
+    )
+    return success(view)
 def complete_micro_lesson(
     run_id: str,
     student_id: str,
