@@ -9,6 +9,7 @@ import {
   getProgress,
   getStudentProfile,
   listPlanReviews,
+  regenerateStudentLessons,
   rerunStudentAnalysis,
 } from "../../api/service";
 import type { AnswerRecordListItem, EvidenceRef, PlanView, StudentResultView } from "../../api/types";
@@ -47,6 +48,7 @@ export function StudentProfilePage() {
   const [editorOpen, setEditorOpen] = useState(false);
   const [reviewOpen, setReviewOpen] = useState(searchParams.get("review") === "1");
   const [rerunBusy, setRerunBusy] = useState(false);
+  const [lessonBusy, setLessonBusy] = useState(false);
   const [rerunNotice, setRerunNotice] = useState("");
 
   const savedView = useMemo(() => {
@@ -170,6 +172,30 @@ export function StudentProfilePage() {
             }}
           >
             {rerunBusy ? "提交中…" : "重新分析"}
+          </button>
+          <button
+            type="button"
+            className="btn"
+            disabled={lessonBusy}
+            onClick={async () => {
+              if (!datasetId) return;
+              setLessonBusy(true);
+              setRerunNotice("");
+              try {
+                const job = await regenerateStudentLessons(
+                  datasetId,
+                  studentId,
+                  result?.node_id ?? nodeId ?? null,
+                );
+                setRerunNotice(`已提交微课堂重生成任务 ${job.job_id}，完成后刷新本页查看。`);
+              } catch (reason) {
+                setRerunNotice(toErrorMessage(reason));
+              } finally {
+                setLessonBusy(false);
+              }
+            }}
+          >
+            {lessonBusy ? "提交中…" : "重新生成微课堂"}
           </button>
           <button
             type="button"

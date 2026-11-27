@@ -872,3 +872,23 @@ export async function rebuildKnowledge(datasetId: string): Promise<{ job_id: str
   );
 }
 
+export async function regenerateStudentLessons(
+  datasetId: string,
+  studentId: string,
+  nodeId: string | null,
+): Promise<{ job_id: string; status: string; node_id: string }> {
+  if (isDemo) {
+    return { job_id: "job-demo-lessons", status: "queued", node_id: nodeId ?? "N01" };
+  }
+  return request<{ job_id: string; status: string; node_id: string }>(
+    `/datasets/${segment(datasetId)}/students/${segment(studentId)}/lessons/regenerate${query({
+      node_id: nodeId,
+    })}`,
+    {
+      method: "POST",
+      body: JSON.stringify({}),
+      idempotencyKey: newIdempotencyKey("regen-lessons"),
+    },
+  );
+}
+

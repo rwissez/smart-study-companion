@@ -836,3 +836,47 @@ def rerun_student_analysis(
     ensure_worker_started()
     return success({"job_id": job.id, "status": job.status, "node_id": node_ids[0]})
 
+@router.post("/datasets/{dataset_id}/students/{student_id}/lessons/regenerate", status_code=202)
+def regenerate_student_lessons(
+    dataset_id: str,
+    student_id: str,
+    db: DbSession,
+    scope: Scope,
+    node_id: str = Query(default="", max_length=64),
+) -> dict:
+    """按当前正式方案重新生成微课堂；旧微课堂被替换，不产生重复活动。"""
+
+    scope.require("view_student_analysis")
+    scope.require_teacher()
+    from study_companion.jobs.service import enqueue
+    from study_companion.jobs.worker import ensure_worker_started
+
+    nodes = [node_id] if node_id else []
+    if not nodes:
+        head = db.scalar(
+            select(models.Version)
+            .where(
+                models.Version.dataset_id == dataset_id,
+                models.Version.kind == "plan",
+                models.Version.target_key == student_id,
+            )
+            .order_by(models.Version.created_at.desc())
+            .limit(1)
+        )
+        if head is not None and head.node_key:
+            nodes = [head.node_key]
+    if not nodes:
+        raise DomainError("RESULT_NOT_READY", "该学生没有可用的观察节点")
+    job = enqueue(
+        db,
+        kind="lesson_regenerate",
+        scope={"dataset_id": dataset_id, "student_id": student_id, "node_id": nodes[0]},
+        payload={"reason": "manual_regenerate"},
+        dataset_id=dataset_id,
+        student_id=student_id,
+        requested_by=scope.session_id,
+    )
+    db.commit()
+    ensure_worker_started()
+    return success({"job_id": job.id, "status": job.status, "node_id": nodes[0]})
+

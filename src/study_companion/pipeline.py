@@ -1365,6 +1365,7 @@ def attach_lessons(
     job_id: str | None,
     student_uid: str | None,
     catalog: Any | None = None,
+    replace_existing: bool = False,
 ) -> dict[str, Any] | None:
     """为方案中的任务组补充个性化微课堂，作为父方案的子修订发布。
 
@@ -1380,6 +1381,39 @@ def attach_lessons(
     if plan_row is None or plan_row.payload_json is None:
         return None
     plan = RecommendationBundle.model_validate(plan_row.payload_json)
+    if replace_existing:
+        cleaned_recs = []
+        for rec in plan.recommendations:
+            activities = [
+                item for item in rec.activities if item.activity_kind != "micro_lesson"
+            ]
+            cleaned_recs.append(rec.model_copy(update={"activities": activities}))
+        cleaned_groups = []
+        for group in plan.task_groups:
+            ids = [
+                item.activity_id
+                for item in next(
+                    (rec.activities for rec in cleaned_recs if rec.group_id == group.group_id), []
+                )
+            ]
+            cleaned_groups.append(
+                group.model_copy(
+                    update={
+                        "activity_ids": ids,
+                        "required_activity_ids": [
+                            item.activity_id
+                            for item in next(
+                                (rec.activities for rec in cleaned_recs if rec.group_id == group.group_id),
+                                [],
+                            )
+                            if item.activity_kind != "micro_lesson"
+                        ],
+                    }
+                )
+            )
+        plan = plan.model_copy(
+            update={"recommendations": cleaned_recs, "task_groups": cleaned_groups}
+        )
     knowledge_payload = knowledge_payload or {}
     points = {point["kp_id"]: point for point in knowledge_payload.get("points", [])}
     annotations = knowledge_payload.get("annotations", [])
@@ -1971,3 +2005,63 @@ def handle_student_update(ctx: JobContext) -> dict[str, Any]:
         "publication_status": published["publication_status"],
         "base_plan_version": old_plan_version,
     }
+
+@register("lesson_regenerate")
+def handle_lesson_regenerate(ctx: JobContext) -> dict[str, Any]:
+    """按当前正式方案重新生成微课堂（替换旧微课堂，不重复叠加）。"""
+
+    db = ctx.session
+    scope = dict(ctx.job.scope_json or {})
+    dataset_id = str(scope.get("dataset_id") or "")
+    student_id = str(scope.get("student_id") or "")
+    node_id = str(scope.get("node_id") or "")
+    dataset = db.get(models.Dataset, dataset_id)
+    if dataset is None or not dataset.family_id:
+        raise DomainError("NOT_FOUND", "数据集不存在")
+    key = repo.FormalKey(
+        family_id=dataset.family_id,
+        dataset_id=dataset_id,
+        kind="plan",
+        node_key=node_id,
+        target_key=student_id,
+    )
+    head = repo.read_head(db, key)
+    if head is None or not head.version_id:
+        raise DomainError("RESULT_NOT_READY", "该学生当前没有正式学习方案")
+    catalog_version = db.scalar(
+        select(models.Catalog.version)
+        .where(models.Catalog.dataset_id == dataset_id)
+        .order_by(models.Catalog.created_at.desc())
+        .limit(1)
+    )
+    if not catalog_version:
+        raise DomainError("RESULT_NOT_READY", "该数据集缺少课程目录")
+    catalog = load_catalog(db, catalog_version, dataset_id)
+    student = db.get(models.Student, (dataset_id, student_id))
+    upsert_step(db, ctx.job, "lessons", label="重新生成微课堂", status="running")
+    db.commit()
+    result = attach_lessons(
+        db,
+        family_id=dataset.family_id,
+        dataset_id=dataset_id,
+        student_id=student_id,
+        node_id=node_id,
+        plan_version=head.version_id,
+        knowledge_payload=current_knowledge_payload(db, dataset_id, dataset.family_id),
+        job_id=ctx.job.id,
+        student_uid=student.student_uid if student else None,
+        catalog=catalog,
+        replace_existing=True,
+    )
+    if result is None:
+        raise DomainError("RESULT_NOT_READY", "没有可生成微课堂的知识依据")
+    upsert_step(db, ctx.job, "lessons", label="重新生成微课堂", status="succeeded")
+    db.commit()
+    return {
+        "dataset_id": dataset_id,
+        "student_id": student_id,
+        "node_id": node_id,
+        "plan_version": result.get("plan_version"),
+        "lessons": result.get("lessons") or [],
+    }
+
