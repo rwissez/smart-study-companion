@@ -18,6 +18,7 @@
 
 from __future__ import annotations
 
+from dataclasses import dataclass
 from typing import Any
 
 from sqlalchemy import select
@@ -438,19 +439,238 @@ def micro_lesson_view(
 # --------------------------------------------------------------------------- #
 
 
-def _knowledge_indicators(
-    *, dataset_id: str, catalog_version: str
-) -> dict[str, set[str]] | None:
-    """知识点到指标的正式映射；知识库不可用时返回 None，由调用方如实拒绝筛选。"""
+@dataclass(frozen=True)
+class _KnowledgeMapping:
+    """知识点→指标映射的解析结果；``indicators`` 为 None 表示本次不可用。"""
+
+    indicators: dict[str, set[str]] | None
+    source: str
+    limitations: tuple[str, ...] = ()
+
+
+def _point_indicator_mapping(payload: dict[str, Any]) -> dict[str, set[str]]:
+    """把知识正文投影成知识点→指标映射；只取可核对对象，不补造归属。"""
+
+    points = payload.get("points")
+    if points is None:
+        return {}
+    if not isinstance(points, list):
+        raise DomainError("RESULT_NOT_READY", "知识正文的 points 不是数组，无法按知识点筛选材料")
+    formal_ids = payload.get("formal_object_ids")
+    formal: set[str] | None = None
+    if formal_ids is not None:
+        if not isinstance(formal_ids, list):
+            raise DomainError("RESULT_NOT_READY", "知识正文的 formal_object_ids 不是数组")
+        formal = {str(item) for item in formal_ids if isinstance(item, (str, int))}
+    mapping: dict[str, set[str]] = {}
+    for point in points:
+        if not isinstance(point, dict):
+            continue
+        kp_id = point.get("kp_id")
+        if not isinstance(kp_id, str) or not kp_id:
+            continue
+        # 已发布正文仍可能保留未进入正式对象白名单的候选，按白名单裁剪。
+        if formal is not None and kp_id not in formal:
+            continue
+        indicator_ids = point.get("indicator_ids")
+        if not isinstance(indicator_ids, list):
+            indicator_ids = []
+        mapping.setdefault(kp_id, set()).update(
+            str(item) for item in indicator_ids if isinstance(item, (str, int)) and str(item)
+        )
+    return mapping
+
+
+def _validate_knowledge_binding(
+    payload: dict[str, Any], *, dataset_id: str, catalog_version: str
+) -> None:
+    """校验知识正文自述的数据集与目录边界；未声明时按调用方绑定使用。"""
+
+    declared_dataset = payload.get("dataset_id")
+    if declared_dataset not in (None, "") and str(declared_dataset) != dataset_id:
+        raise DomainError("CONTEXT_MISMATCH", "知识正文声明的数据集与请求数据集不一致")
+    declared_catalog = payload.get("catalog_version")
+    if declared_catalog not in (None, "") and str(declared_catalog) != catalog_version:
+        raise DomainError("CONTEXT_MISMATCH", "知识正文绑定的目录与请求目录不一致")
+
+
+def _formal_knowledge_versions(
+    db: Session, dataset: models.Dataset, catalog_version: str
+) -> list[models.Version]:
+    """读取正式知识指针指向的版本；同时认生产键和按目录登记的旧键。"""
+
+    family_id = dataset.family_id or ""
+    keys = (
+        repo.knowledge_key(family_id, dataset.id, catalog_version),
+        repo.FormalKey(family_id=family_id, dataset_id=dataset.id, kind="knowledge"),
+    )
+    versions: list[models.Version] = []
+    seen: set[str] = set()
+    for key in keys:
+        version = repo.read_formal(db, key)
+        if version is not None and version.version_id not in seen:
+            seen.add(version.version_id)
+            versions.append(version)
+    return versions
+
+
+def _formal_knowledge_mapping(
+    db: Session, dataset: models.Dataset, catalog_version: str
+) -> _KnowledgeMapping | None:
+    """当前正式知识版本的映射；没有正式指针返回 None，不读草稿版本。"""
+
+    versions = _formal_knowledge_versions(db, dataset, catalog_version)
+    if not versions:
+        return None
+    declared_matches: list[models.Version] = []
+    undeclared_matches: list[models.Version] = []
+    for version in versions:
+        declared = str((version.payload_json or {}).get("catalog_version") or "")
+        if not declared:
+            undeclared_matches.append(version)
+        elif declared == catalog_version:
+            declared_matches.append(version)
+    if not declared_matches and not undeclared_matches:
+        raise DomainError("CONTEXT_MISMATCH", "当前正式知识版本绑定的目录与请求目录不一致")
+
+    # 声明了当前目录的正式版本优先；未声明目录的旧正文只作为兼容回退。
+    version = (declared_matches + undeclared_matches)[0]
+    payload = dict(version.payload_json or {})
+    if not payload:
+        return _KnowledgeMapping(
+            None, "db_unreadable", ("正式知识版本正文不可读，无法按知识点筛选材料",)
+        )
+    _validate_knowledge_binding(payload, dataset_id=dataset.id, catalog_version=catalog_version)
+    declared_version = str(payload.get("knowledge_version") or "")
+    if declared_version and declared_version != version.version_id:
+        raise DomainError("CONTEXT_MISMATCH", "正式知识正文版本与正式指针不一致")
+    limitations = ["知识点筛选按数据库正式知识版本的知识点→指标映射解析，未重新判断归属"]
+    if not payload.get("catalog_version"):
+        limitations.append("该正式知识正文未声明目录版本，按当前正式指针使用")
+    return _KnowledgeMapping(
+        _point_indicator_mapping(payload), "db_formal", tuple(limitations)
+    )
+
+
+def _caller_knowledge_mapping(
+    db: Session,
+    dataset: models.Dataset,
+    catalog_version: str,
+    knowledge_payload: dict[str, Any],
+) -> _KnowledgeMapping:
+    """调用方显式传入的知识正文；声明了版本就必须能对到当前正式指针。"""
+
+    if not isinstance(knowledge_payload, dict):
+        raise DomainError("INVALID_ARGUMENT", "knowledge_payload 必须是知识正文对象")
+    _validate_knowledge_binding(
+        knowledge_payload, dataset_id=dataset.id, catalog_version=catalog_version
+    )
+    version_id = knowledge_payload.get("knowledge_version")
+    if version_id not in (None, ""):
+        versions = _formal_knowledge_versions(db, dataset, catalog_version)
+        version = next(
+            (item for item in versions if item.version_id == str(version_id)), None
+        )
+        if version is None:
+            raise DomainError("KB_NOT_PUBLISHED", "调用方知识正文不属于当前正式知识版本")
+        declared = str((version.payload_json or {}).get("catalog_version") or "")
+        if declared and declared != catalog_version:
+            raise DomainError("CONTEXT_MISMATCH", "调用方知识版本绑定的目录与请求目录不一致")
+        return _KnowledgeMapping(
+            _point_indicator_mapping(knowledge_payload),
+            "db_formal",
+            ("知识点筛选使用调用方传入的正式知识正文，未重新判断归属",),
+        )
+    return _KnowledgeMapping(
+        _point_indicator_mapping(knowledge_payload),
+        "caller_payload",
+        (
+            "知识点筛选使用调用方传入的知识正文；正文未声明知识版本，"
+            "本次查询未重新校验发布状态",
+        ),
+    )
+
+
+def _file_knowledge_mapping(
+    *, dataset_id: str, catalog_version: str, role: str
+) -> _KnowledgeMapping | None:
+    """旧文件知识快照回退；学生不能把未发布的旧草稿当正式依据。"""
 
     from study_companion.config import get_settings
     from study_companion.knowledge.store import KnowledgeStore
 
     try:
-        kb, _manifest = KnowledgeStore(get_settings().data_root).load_version(dataset_id, catalog_version)
-    except DomainError:
+        kb, manifest = KnowledgeStore(get_settings().data_root).load_version(
+            dataset_id, catalog_version
+        )
+    except (DomainError, ValueError, OSError):
         return None
-    return {point.kp_id: set(point.indicator_ids) for point in kb.points}
+    if manifest.dataset_id != dataset_id or manifest.catalog_version != catalog_version:
+        return None
+    if kb.status != "verified" and role != "teacher":
+        return _KnowledgeMapping(
+            None,
+            "file_unpublished",
+            ("旧文件知识快照未标记为正式发布，学生视图不能据此按知识点筛选材料",),
+        )
+    limitations = ["知识点筛选回退到旧文件知识快照；正式部署应以数据库正式知识版本为准"]
+    if kb.status != "verified":
+        limitations.append("该旧快照未标记为正式发布，仅用于教师端旧回退")
+    mapping: dict[str, set[str]] = {}
+    for point in kb.points:
+        if point.verification_status == "rejected":
+            continue
+        # 学生只按已核对的知识点及其来源定位取映射，与知识查询的可见性一致。
+        if role != "teacher" and (
+            point.verification_status != "verified"
+            or point.definition_locator.verification_status != "verified"
+        ):
+            continue
+        mapping[point.kp_id] = set(point.indicator_ids)
+    return _KnowledgeMapping(mapping, "file_snapshot", tuple(limitations))
+
+
+def _knowledge_indicators(
+    db: Session,
+    *,
+    dataset: models.Dataset,
+    catalog_version: str,
+    role: str,
+    knowledge_payload: dict[str, Any] | None = None,
+) -> _KnowledgeMapping:
+    """解析知识点到指标的映射。
+
+    优先顺序：调用方显式正文 → 数据库正式知识指针 → 旧文件快照回退。
+    全部不可用时返回 ``indicators=None`` 和可读限制，不抛不可读异常，也不
+    借用其他数据集或草稿版本拼出映射。
+    """
+
+    if knowledge_payload is not None:
+        return _caller_knowledge_mapping(db, dataset, catalog_version, knowledge_payload)
+    formal = _formal_knowledge_mapping(db, dataset, catalog_version)
+    if formal is not None:
+        return formal
+
+    file_result = _file_knowledge_mapping(
+        dataset_id=dataset.id, catalog_version=catalog_version, role=role
+    )
+    if file_result is not None and file_result.indicators is not None:
+        return file_result
+
+    limitations = list(file_result.limitations) if file_result is not None else []
+    unpublished = db.scalar(
+        select(models.Version.version_id)
+        .where(
+            models.Version.kind == "knowledge",
+            models.Version.dataset_id == dataset.id,
+        )
+        .limit(1)
+    )
+    if unpublished is not None:
+        limitations.append("当前数据集的知识版本尚未发布为正式版本，无法按知识点筛选材料")
+    else:
+        limitations.append("当前数据集没有已发布的正式知识版本，无法按知识点筛选材料")
+    return _KnowledgeMapping(None, "unavailable", tuple(limitations))
 
 
 def search_formal_materials(
@@ -463,36 +683,61 @@ def search_formal_materials(
     kp_ids: list[str] | None = None,
     question_type: str | None = None,
     difficulty: str | None = None,
+    knowledge_payload: dict[str, Any] | None = None,
     page: int = 1,
     page_size: int = PAGE_DEFAULT,
 ) -> dict[str, Any]:
-    """在正式目录里按用途/知识点/题型/难度筛选材料；学生裁剪答案与解析。"""
+    """在正式目录里按用途/知识点/题型/难度筛选材料；学生裁剪答案与解析。
+
+    ``kp_ids`` 的知识点→指标映射优先读数据库正式知识版本；调用方已持有
+    正式正文时可用 ``knowledge_payload`` 显式传入。旧文件快照只做回退。
+    没有可用的正式映射时返回空结果并写明限制，不静默改用其他来源。
+    """
 
     from study_companion.library.datasets import load_catalog
 
     page, page_size = _clamp_page(page, page_size)
-    _dataset(db, dataset_id)
+    allowed_types = {"practice": {"question"}, "support": {"card", "textbook"}}.get(purpose)
+    if allowed_types is None:
+        raise DomainError("INVALID_ARGUMENT", "purpose 只能是 practice 或 support")
+
+    dataset = _dataset(db, dataset_id)
     catalog = load_catalog(db, catalog_version, dataset_id)
     limitations: list[str] = []
     wanted_indicators: set[str] | None = None
     if kp_ids:
-        mapping = _knowledge_indicators(dataset_id=dataset_id, catalog_version=catalog_version)
-        if mapping is None:
-            raise DomainError(
-                "RESULT_NOT_READY",
-                "知识点映射不可用：当前目录没有正式知识库，无法按 kp_ids 筛选材料",
-            )
+        if not isinstance(kp_ids, list) or any(
+            not isinstance(item, str) or not item for item in kp_ids
+        ):
+            raise DomainError("INVALID_ARGUMENT", "kp_ids 必须是非空字符串数组")
+        resolved = _knowledge_indicators(
+            db,
+            dataset=dataset,
+            catalog_version=catalog_version,
+            role=role,
+            knowledge_payload=knowledge_payload,
+        )
+        limitations.extend(resolved.limitations)
+        if resolved.indicators is None:
+            return {
+                "catalog_version": catalog_version,
+                "purpose": purpose,
+                "items": [],
+                "total": 0,
+                "page": page,
+                "page_size": page_size,
+                "limitations": limitations
+                + ["本次按知识点筛选返回空结果；没有改用其他知识来源替代正式映射"],
+            }
+        mapping = resolved.indicators
         unknown = [kp for kp in kp_ids if kp not in mapping]
         if unknown:
             raise DomainError("NOT_FOUND", f"知识点不存在：{'、'.join(unknown)}")
         wanted_indicators = set()
         for kp in kp_ids:
             wanted_indicators |= mapping[kp]
-        limitations.append("知识点筛选按正式知识库的知识点→指标映射解析，未重新判断归属")
-
-    allowed_types = {"practice": {"question"}, "support": {"card", "textbook"}}.get(purpose)
-    if allowed_types is None:
-        raise DomainError("INVALID_ARGUMENT", "purpose 只能是 practice 或 support")
+        if not wanted_indicators:
+            limitations.append("所选知识点在正式知识中没有绑定任何指标，筛选结果为空")
 
     matched = []
     for material in catalog.materials:
