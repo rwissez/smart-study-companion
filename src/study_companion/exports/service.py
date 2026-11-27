@@ -14,6 +14,7 @@ import hashlib
 import io
 import json
 import os
+import re
 import tempfile
 import zipfile
 from collections import deque
@@ -37,6 +38,9 @@ from study_companion.db import version_repository as repo
 SCHEMA_VERSION = "1.1"
 EXPORT_FORMAT = "zip"
 AUTO_CASE_LIMIT = 3
+#: 原始作答按片段导出：足够支持核对诊断，但不在成果包里展开整篇过程。
+EVIDENCE_ANSWER_LIMIT = 500
+EVIDENCE_STEPS_LIMIT = 1000
 
 
 def _now() -> datetime:
@@ -1059,6 +1063,126 @@ def _safe_evidence_ref(item: Any) -> dict[str, Any] | None:
     return projected
 
 
+def _excerpt(value: Any, limit: int) -> str | None:
+    """按上限截取原始文本；字段缺失返回 None，不用空串冒充原文。"""
+
+    if value is None:
+        return None
+    text = str(value)
+    if len(text) <= limit:
+        return text
+    return text[:limit] + "…"
+
+
+def _project_rubric_scores(raw: Any) -> list[dict[str, Any]]:
+    """只投影评分点编号与得分，不携带评分点描述或参考答案。"""
+
+    if raw is None or raw == "":
+        return []
+    pairs: dict[str, Any] = {}
+    if isinstance(raw, dict):
+        pairs = dict(raw)
+    elif isinstance(raw, list):
+        for item in raw:
+            if not isinstance(item, dict):
+                continue
+            rubric_id = item.get("rubric_id") or item.get("point_id") or item.get("id")
+            awarded = item.get("awarded", item.get("score"))
+            if rubric_id not in (None, ""):
+                pairs[str(rubric_id)] = awarded
+    else:
+        text = str(raw).strip()
+        if text.startswith("{"):
+            try:
+                parsed = json.loads(text)
+            except json.JSONDecodeError:
+                return []
+            return _project_rubric_scores(parsed)
+        for chunk in re.split(r"[;；,，]", text):
+            chunk = chunk.strip()
+            if not chunk:
+                continue
+            if "=" in chunk:
+                rubric_id, value = chunk.split("=", 1)
+            elif ":" in chunk:
+                rubric_id, value = chunk.rsplit(":", 1)
+            else:
+                continue
+            pairs[rubric_id.strip()] = value.strip()
+    projected: list[dict[str, Any]] = []
+    for rubric_id, value in pairs.items():
+        try:
+            awarded = int(str(value).strip())
+        except (TypeError, ValueError):
+            continue
+        projected.append({"rubric_id": str(rubric_id), "awarded": awarded})
+    return sorted(projected, key=lambda item: item["rubric_id"])
+
+
+def _as_int(value: Any) -> int | None:
+    if value is None or value == "":
+        return None
+    try:
+        return int(str(value).strip())
+    except (TypeError, ValueError):
+        return None
+
+
+def _record_status(value: Any) -> str:
+    """把原始评分状态收敛到事件契约的三个值；无法识别时保留 pending，不猜已评分。"""
+
+    text = str(value or "").strip()
+    if text in {"已评分", "graded"}:
+        return "graded"
+    if text in {"未作答", "unanswered"}:
+        return "unanswered"
+    return "pending"
+
+
+def _record_refs_in(value: Any) -> set[str]:
+    """收集载荷里所有 kind=record 的引用 ID，用于判定证据闭包。"""
+
+    found: set[str] = set()
+    stack: list[Any] = [value]
+    while stack:
+        current = stack.pop()
+        if isinstance(current, dict):
+            if str(current.get("kind") or "") == "record":
+                ref_id = str(current.get("id") or "").strip()
+                if ref_id:
+                    found.add(ref_id)
+            stack.extend(current.values())
+        elif isinstance(current, list):
+            stack.extend(current)
+    return found
+
+
+def _metric_finding_record_refs(result: dict[str, Any]) -> list[str]:
+    """只收集 metric/finding（含诊断 detail）里的记录引用，供业务校验逐项解析。"""
+
+    refs: list[str] = []
+
+    def collect(items: Any) -> None:
+        for item in items or []:
+            if not isinstance(item, dict):
+                continue
+            for ref in item.get("evidence_refs") or []:
+                if not isinstance(ref, dict) or str(ref.get("kind") or "") != "record":
+                    continue
+                ref_id = str(ref.get("id") or "").strip()
+                if ref_id:
+                    refs.append(ref_id)
+
+    collect(result.get("metrics") or [])
+    for key in ("findings", "common_findings"):
+        for finding in result.get(key) or []:
+            if not isinstance(finding, dict):
+                continue
+            collect([finding])
+            collect(finding.get("diagnostic_details") or [])
+    return refs
+
+
 def _module_method(methods: set[str]) -> str:
     """把模块内出现的方法合并成可读标签；模型参与优先，教师确认单独保留。"""
 
@@ -1893,11 +2017,30 @@ def build_files(db: Session, export: models.Export) -> dict[str, bytes]:
 
     evidence: list[dict[str, Any]] = []
     record_keys: dict[tuple[str, str], list[str]] = {}
+    evidence_record_ids: set[str] = set()
+    record_students: set[str] = set()
     roster_ids = list(
         db.scalars(
             select(models.Student.student_id).where(models.Student.dataset_id == dataset.id)
         ).all()
     )
+    # 原始记录按数据集整表读取后建索引；导出证据要按记录 ID 回查原文，
+    # 不能只依赖当前展示分页选中的事件。
+    source_rows = db.scalars(
+        select(models.SourceRow)
+        .where(
+            models.SourceRow.dataset_id == dataset.id,
+            models.SourceRow.table_name == "records",
+        )
+        .order_by(models.SourceRow.row_number)
+    ).all()
+    source_rows_by_id = {row.id: row for row in source_rows}
+    source_rows_by_record_id: dict[str, models.SourceRow] = {}
+    for row in source_rows:
+        record_id = str((row.payload_json or {}).get("记录编号") or "").strip()
+        if record_id:
+            source_rows_by_record_id.setdefault(record_id, row)
+
     events = db.scalars(
         select(models.AnswerEvent)
         .where(
@@ -1906,34 +2049,98 @@ def build_files(db: Session, export: models.Export) -> dict[str, bytes]:
             models.AnswerEvent.node_id.in_(node_ids),
         )
         .order_by(models.AnswerEvent.event_id)
-        .limit(500)
     ).all()
-    for event in events:
-        payload = dict(event.payload_json or {})
-        record_id = payload.get("selected_record_id") or event.event_id
+
+    def _add_record_evidence(
+        record_id: str,
+        *,
+        event: models.AnswerEvent | None = None,
+        row: models.SourceRow | None = None,
+        student_id: str | None = None,
+        node_id: str | None = None,
+        material_id: str | None = None,
+        status: str | None = None,
+        score: Any = None,
+        max_score: Any = None,
+    ) -> None:
+        """追加一条记录证据；同一记录只保留一条，缺失原文时如实留空。"""
+
+        if not record_id or record_id in evidence_record_ids:
+            return
+        payload = dict(event.payload_json or {}) if event is not None else {}
+        if row is None and event is not None:
+            row = source_rows_by_id.get(event.selected_source_row_id or "")
+        if row is None:
+            row = source_rows_by_record_id.get(record_id)
+        if row is None and event is None:
+            # 引用指向正式数据里不存在的记录：不补造证据条目，留给内容校验报缺失。
+            return
+        raw = dict(row.payload_json or {}) if row is not None else {}
+        raw_rubric = raw.get("评分点得分")
+        rubric_scores = _project_rubric_scores(raw_rubric)
+        limitations: list[str] = []
+        if row is None:
+            limitations.append(
+                "原始作答记录不可回查，未导出作答原文（不补造缺失字段）"
+            )
+        elif raw_rubric not in (None, "") and not rubric_scores:
+            limitations.append("评分点得分无法解析，未推断得分")
+        actual_student = student_id or raw.get("学生编号") or ""
+        actual_node = node_id or raw.get("节点编号") or ""
+        actual_material = material_id or raw.get("材料编号") or (
+            event.material_id if event else None
+        )
+        detail = {
+            "student_id": str(actual_student) if actual_student is not None else "",
+            "node_id": str(actual_node) if actual_node is not None else "",
+            "question": {
+                "material_id": actual_material,
+                "catalog_version": selection["catalog_version"],
+            },
+            "status": status
+            or str(payload.get("status") or _record_status(raw.get("评分状态"))),
+            "score": score if event is not None else _as_int(raw.get("得分")),
+            "max_score": max_score
+            if event is not None
+            else _as_int(raw.get("满分")),
+            "student_answer": _excerpt(
+                raw.get("学生最终作答"), EVIDENCE_ANSWER_LIMIT
+            ),
+            "solution_steps": _excerpt(raw.get("解答过程"), EVIDENCE_STEPS_LIMIT),
+            "rubric_scores": rubric_scores,
+            "source_row_number": row.row_number if row is not None else None,
+            "quality_issues": [],
+            "related_findings": [],
+        }
         key = f"ev:{selection['run_id']}:{record_id}"
-        record_keys.setdefault((event.student_id, event.node_id), []).append(key)
+        evidence_record_ids.add(record_id)
+        if detail["student_id"]:
+            record_students.add(str(detail["student_id"]))
         evidence.append(
             {
                 "key": key,
                 "ref": {"kind": "record", "id": record_id, "run_id": selection["run_id"]},
                 "detail_type": "record",
-                "detail": {
-                    "student_id": event.student_id,
-                    "question": {
-                        "material_id": event.material_id,
-                        "catalog_version": selection["catalog_version"],
-                    },
-                    "status": payload.get("status", "pending"),
-                    "score": payload.get("score"),
-                    "max_score": payload.get("max_score"),
-                    "rubric_scores": [],
-                    "quality_issues": [],
-                    "related_findings": [],
-                },
+                "detail": detail,
                 "related_refs": [],
-                "limitations": [],
+                "limitations": limitations,
             }
+        )
+
+    for event in events:
+        payload = dict(event.payload_json or {})
+        record_id = str(payload.get("selected_record_id") or event.event_id)
+        key = f"ev:{selection['run_id']}:{record_id}"
+        record_keys.setdefault((event.student_id, event.node_id), []).append(key)
+        _add_record_evidence(
+            record_id,
+            event=event,
+            student_id=event.student_id,
+            node_id=event.node_id,
+            material_id=event.material_id,
+            status=str(payload.get("status") or "pending"),
+            score=payload.get("score"),
+            max_score=payload.get("max_score"),
         )
 
     cutoff = selection.get("created_at")
@@ -1942,7 +2149,6 @@ def build_files(db: Session, export: models.Export) -> dict[str, bytes]:
         select(models.LearningEventRow)
         .where(models.LearningEventRow.dataset_id == dataset.id)
         .order_by(models.LearningEventRow.offset)
-        .limit(500)
     ).all():
         if not _within_cutoff(row.occurred_at, cutoff):
             continue
@@ -2195,6 +2401,18 @@ def build_files(db: Session, export: models.Export) -> dict[str, bytes]:
                 "limitations": limitations,
             }
         )
+
+    # 证据闭包：凡是本包当前/历史记录引用到的原始记录，都要在 evidence_records.json
+    # 里可解析；事件分页只决定展示顺序，不能决定证据是否存在。
+    referenced_record_ids: set[str] = set()
+    for record in student_records + class_records:
+        referenced_record_ids.update(_record_refs_in(record.get("result") or {}))
+    for record in plan_records:
+        referenced_record_ids.update(_record_refs_in(record))
+    for record in micro_lessons:
+        referenced_record_ids.update(_record_refs_in(record))
+    for record_id in sorted(referenced_record_ids - evidence_record_ids):
+        _add_record_evidence(record_id)
 
     case_ids = selection["case_student_ids"]
     case_mode = selection.get("case_selection", "explicit")
@@ -2582,6 +2800,26 @@ def build_files(db: Session, export: models.Export) -> dict[str, bytes]:
         )
     if unpublished_analysis:
         content_issues.append(f"{unpublished_analysis} 份学情版本没有发布记录")
+
+    # 业务校验：metric/finding 引用的记录必须逐项能在证据文件里解析。
+    # SHA/JSON 回读只能证明文件完整，不能证明引用闭环。
+    metric_finding_refs: list[str] = []
+    for record in student_records + class_records:
+        metric_finding_refs.extend(
+            _metric_finding_record_refs(record.get("result") or {})
+        )
+    unique_metric_refs = set(metric_finding_refs)
+    missing_record_refs = sorted(unique_metric_refs - evidence_record_ids)
+    if missing_record_refs:
+        sample = "、".join(missing_record_refs[:5])
+        content_issues.append(
+            f"{len(missing_record_refs)} 个 metric/finding 记录引用无法在 "
+            f"evidence_records.json 中解析（样例：{sample}）"
+        )
+        manifest_limitations.append(
+            f"记录引用解析：{len(missing_record_refs)} 个 metric/finding 记录引用"
+            "在正式数据中找不到对应记录，证据文件不补造；需回到导入与分析核对"
+        )
     content_status = "passed" if not content_issues else "passed_with_limitations"
 
     closure_knowledge = sorted(closure.get("knowledge") or [])
@@ -2641,6 +2879,22 @@ def build_files(db: Session, export: models.Export) -> dict[str, bytes]:
             "lessons": len(micro_lessons),
             "lessons_without_source_refs": lessons_without_source,
             "lessons_with_unresolved_citation": lessons_with_unresolved_citation,
+            "records": len(evidence),
+            "records_covered_students": len(record_students),
+            "records_with_source_row": sum(
+                1
+                for item in evidence
+                if (item.get("detail") or {}).get("source_row_number") is not None
+            ),
+            "records_with_student_answer": sum(
+                1
+                for item in evidence
+                if (item.get("detail") or {}).get("student_answer") is not None
+            ),
+            "record_refs_total": len(metric_finding_refs),
+            "record_refs_unique": len(unique_metric_refs),
+            "record_refs_missing": len(missing_record_refs),
+            "record_refs_missing_ids": missing_record_refs[:20],
         },
         "knowledge_checks": {
             "current_version": knowledge_version,
