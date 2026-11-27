@@ -86,6 +86,9 @@ async def create_import(
             receipt=data,
             result_ref=receipt.import_id,
         )
+    # 依赖清理阶段的提交在响应之后；前端拿到 dataset_id 会立刻建会话并查询，
+    # 这里必须当场提交，避免"刚导入的数据集查不到"的竞态。
+    db.commit()
     if receipt.dataset_id:
         from study_companion.jobs.worker import ensure_worker_started
 

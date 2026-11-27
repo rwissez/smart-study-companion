@@ -272,6 +272,21 @@ def grade_solution_with_model(
             )
         scores.append(RubricScore(point_id=item.point_id, score=item.score, max_score=valid_points[item.point_id]))
 
+    if material.rubric_points and not scores:
+        return GradingResult(
+            grade_id=grade_id,
+            attempt_id=attempt.attempt_id,
+            revision=revision,
+            status="needs_review",
+            validation_status="not_checked",
+            score=None,
+            max_score=max_score,
+            rubric_scores=[],
+            method="model",
+            evidence_refs=[],
+            limitations=["模型未返回分项分，解答题评分不完整，保留作答等待复核"],
+            rule_version=RULE_VERSION,
+        )
     total = value.score if value.score is not None else sum(item.score for item in scores)
     if total < 0 or total > max_score:
         return GradingResult(

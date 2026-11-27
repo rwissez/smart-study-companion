@@ -88,6 +88,21 @@ def _student_version(
     )
     version = repo.read_formal(db, key)
     if version is None:
+        # 局部更新会推进 active run，但其他学生仍停留在上一次正式版本；
+        # 这里回退到该学生该节点最近一次已发布版本，避免"别人更新后我看不到"。
+        version = db.scalar(
+            select(models.Version)
+            .join(models.Publication, models.Publication.version_id == models.Version.version_id)
+            .where(
+                models.Version.dataset_id == dataset.id,
+                models.Version.kind == "student_analysis",
+                models.Version.node_key == node_id,
+                models.Version.target_key == student_id,
+            )
+            .order_by(models.Version.created_at.desc())
+            .limit(1)
+        )
+    if version is None:
         raise DomainError("RESULT_NOT_READY", "该学生在此节点尚无正式学情")
     return version
 
@@ -104,6 +119,19 @@ def _class_version(
         target_key=class_id,
     )
     version = repo.read_formal(db, key)
+    if version is None:
+        version = db.scalar(
+            select(models.Version)
+            .join(models.Publication, models.Publication.version_id == models.Version.version_id)
+            .where(
+                models.Version.dataset_id == dataset.id,
+                models.Version.kind == "class_analysis",
+                models.Version.node_key == node_id,
+                models.Version.target_key == class_id,
+            )
+            .order_by(models.Version.created_at.desc())
+            .limit(1)
+        )
     if version is None:
         raise DomainError("RESULT_NOT_READY", "该班级在此节点尚无正式学情")
     return version

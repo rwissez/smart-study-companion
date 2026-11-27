@@ -644,10 +644,115 @@ def _rule_fallback(db, scope, target, node_id: str | None) -> dict[str, Any] | N
     }
 
 
+
+def _resolve_binding(db, scope, payload: "ChatRequest") -> "ChatRequest":
+    """把"用户只说了一句话"补成服务端可执行的绑定（05 §6、§7）。
+
+    优先沿用请求显式给出的对象；缺省时：学生会话绑定本人，教师从消息里识别
+    学生/班级编号，运行取该数据集最近一次成功的分析，节点取该运行的首个节点。
+    这一步只做"默认唯一目标"的解析，不改变任何权限判断。
+    """
+
+    from study_companion.api.sessions import SessionScope  # noqa: F401
+    from study_companion.db import models
+    from sqlalchemy import select
+
+    update: dict = {}
+    if scope.dataset_id is None:
+        return payload
+
+    target = payload.target
+    if payload.student_id and target is None:
+        update["target"] = ChatTarget(type="student", id=payload.student_id)
+    elif target is None:
+        if scope.role == "student" and scope.student_id:
+            update["target"] = ChatTarget(type="student", id=scope.student_id)
+        else:
+            message = payload.message or (
+                payload.messages[-1].content if payload.messages else ""
+            )
+            roster = db.scalars(
+                select(models.Student).where(models.Student.dataset_id == scope.dataset_id)
+            ).all()
+            classes = sorted({row.class_id for row in roster})
+            found_student = next(
+                (row.student_id for row in roster if row.student_id and row.student_id in message),
+                None,
+            )
+            found_class = next((item for item in classes if item and item in message), None)
+            if found_student:
+                update["target"] = ChatTarget(type="student", id=found_student)
+            elif found_class:
+                update["target"] = ChatTarget(type="class", id=found_class)
+
+    explicit_task = None
+    if payload.task_type:
+        try:
+            from study_companion.agent.tasks import get_task
+
+            explicit_task = get_task(payload.task_type)
+        except DomainError:
+            explicit_task = None
+    if explicit_task is not None and not explicit_task.requires_run:
+        return payload.model_copy(update=update) if update else payload
+
+    if not payload.run_id:
+        resolved_target = update.get("target") or target
+        stmt = select(models.AnalysisRun).where(
+            models.AnalysisRun.dataset_id == scope.dataset_id,
+            models.AnalysisRun.status == "succeeded",
+        )
+        if resolved_target is not None:
+            stmt = stmt.where(
+                models.AnalysisRun.id.in_(
+                    select(models.AnalysisResult.run_id).where(
+                        models.AnalysisResult.subject_id == resolved_target.id,
+                        *(
+                            [models.AnalysisResult.node_id == payload.node_id]
+                            if payload.node_id
+                            else []
+                        ),
+                    )
+                )
+            )
+        else:
+            # 数据集范围的对话优先用导入形成的完整运行，而不是单学生的局部更新运行。
+            stmt = stmt.where(models.AnalysisRun.import_id.is_not(None))
+        run = db.scalar(stmt.order_by(models.AnalysisRun.created_at.desc()).limit(1))
+        if run is None:
+            run = db.scalar(
+                select(models.AnalysisRun)
+                .where(
+                    models.AnalysisRun.dataset_id == scope.dataset_id,
+                    models.AnalysisRun.status == "succeeded",
+                )
+                .order_by(models.AnalysisRun.created_at.desc())
+                .limit(1)
+            )
+        if run is not None:
+            update["run_id"] = run.id
+            if not payload.node_id and run.node_ids_json:
+                node = run.node_ids_json[0]
+                if resolved_target is not None:
+                    result = db.scalar(
+                        select(models.AnalysisResult).where(
+                            models.AnalysisResult.run_id == run.id,
+                            models.AnalysisResult.subject_id == resolved_target.id,
+                        )
+                    )
+                    if result is not None and result.node_id:
+                        node = result.node_id
+                update["node_id"] = node
+
+    return payload.model_copy(update=update) if update else payload
+
 @router.post("/chat")
 def post_chat(payload: ChatRequest, db: DbSession, scope: Scope, settings: AppSettings) -> dict[str, Any]:
     scope.require("chat_own" if scope.role == "student" else "chat_teacher")
-    provider = build_provider(settings)
+    from study_companion.model_settings import effective_settings
+
+    payload = _resolve_binding(db, scope, payload)
+    provider = build_provider(effective_settings(settings))
     # 未配置模型时先尝试确定性的正式学情摘要；拿不到上下文才返回明确不可用。
     if provider.name == "unconfigured":
         target = payload.target
@@ -799,7 +904,11 @@ def post_chat(payload: ChatRequest, db: DbSession, scope: Scope, settings: AppSe
             scope,
             payload,
             body,
-            status="failed" if result.stopped_reason else "completed",
+            status=(
+                "completed"
+                if result.stopped_reason in {None, "", "model_finished"}
+                else "failed"
+            ),
             trace_source=result.tool_trace,
         )
     )

@@ -74,6 +74,28 @@ def _find_event(db: Session, dataset_id: str, record_id: str) -> models.AnswerEv
     return None
 
 
+
+def _raw_record_row(db: Session, dataset_id: str, record_id: str | None) -> dict:
+    """取官方原始行，用于补齐事件里没有保存的作答原文。
+
+    事件只保存选中记录与评分，原始作答（学生最终作答/解答过程/提交时间）
+    仍在 source_rows；这里按记录编号精确匹配，找不到就返回空字典。
+    """
+
+    if not record_id:
+        return {}
+    rows = db.scalars(
+        select(models.SourceRow).where(
+            models.SourceRow.dataset_id == dataset_id,
+            models.SourceRow.table_name == "records",
+        )
+    ).all()
+    for row in rows:
+        payload = row.payload_json or {}
+        if str(payload.get("记录编号") or "") == str(record_id):
+            return payload
+    return {}
+
 def _resolve_record(
     db: Session, ref: EvidenceRef, context: EvidenceContext | None, scope
 ) -> EvidenceDetail:
@@ -125,16 +147,19 @@ def _resolve_record(
                 max_score=item.get("max_score"),
             )
         )
+    raw_record = _raw_record_row(
+        db, dataset_id, payload.get("selected_record_id") or ref.id
+    )
     detail = RecordDetail(
         question=_material_view(db, catalog_version, event.material_id, teacher=teacher),
         student_id=event.student_id,
         assessment_label=event.node_id,
-        submitted_at=payload.get("submitted_at"),
+        submitted_at=raw_record.get("模拟提交时间") or payload.get("submitted_at"),
         status=payload.get("status", "graded"),
         score=payload.get("score"),
         max_score=payload.get("max_score"),
-        final_answer=payload.get("final_answer"),
-        solution_steps=payload.get("solution_steps"),
+        final_answer=raw_record.get("学生最终作答") or payload.get("final_answer"),
+        solution_steps=raw_record.get("解答过程") or payload.get("solution_steps"),
         rubric_scores=scores,
         quality_issues=[],
         historical_revision=payload.get("revision"),

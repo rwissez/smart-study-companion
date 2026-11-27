@@ -69,6 +69,27 @@ class ModelTaskResult(Generic[T]):
         return self.status == "succeeded" and self.value is not None
 
 
+
+def _json_candidate(text: str) -> str:
+    """兼容模型返回代码块或前后夹带说明的 JSON。
+
+    只做结构提取，不猜测字段内容；提取不到时原样返回，让上层报"不是合法 JSON"。
+    """
+
+    value = (text or "").strip()
+    if value.startswith("```"):
+        lines = value.splitlines()
+        if lines and lines[0].startswith("```"):
+            lines = lines[1:]
+        if lines and lines[-1].strip() == "```":
+            lines = lines[:-1]
+        value = "\n".join(lines).strip()
+    start = value.find("{")
+    end = value.rfind("}")
+    if start != -1 and end > start:
+        return value[start : end + 1]
+    return value
+
 def _canonical(payload: Any) -> str:
     return json.dumps(payload, ensure_ascii=False, sort_keys=True, separators=(",", ":"), default=str)
 
@@ -149,17 +170,18 @@ class ModelService:
 
         system_text = load_prompt(request.namespace, request.task_key)
         system = COMMON_SYSTEM + ("\n\n" + system_text if system_text else "")
+        schema_json = json.dumps(schema.model_json_schema(), ensure_ascii=False)
         user = (
             f"任务 {request.task_key}，版本 {request.prompt_version}。\n"
             f"只处理 payload 中的对象与允许的引用。\n"
             f"<payload>{_canonical(request.input_payload)}</payload>\n"
-            "用给定 response_schema 返回一个 JSON 对象。"
+            f"<response_schema>{schema_json}</response_schema>\n"
+            "严格按 response_schema 返回一个 JSON 对象，不要输出解释或代码块。"
         )
         messages = [
             {"role": "system", "content": system},
             {"role": "user", "content": user},
         ]
-        schema_json = schema.model_json_schema()
         attempts = 0
         last_error: dict[str, Any] | None = None
         usage: dict[str, Any] | None = None
@@ -185,7 +207,19 @@ class ModelService:
                     "details": [],
                 }
                 continue
-            usage = dict(turn.usage) if getattr(turn, "usage", None) else None
+            usage_raw = getattr(turn, "usage", None)
+            if usage_raw is None:
+                usage = None
+            elif isinstance(usage_raw, dict):
+                usage = dict(usage_raw)
+            elif hasattr(usage_raw, "model_dump"):
+                usage = usage_raw.model_dump()
+            else:
+                usage = {
+                    key: value
+                    for key, value in vars(usage_raw).items()
+                    if not key.startswith("_")
+                }
             text = (getattr(turn, "text", "") or "").strip()
             if not text:
                 last_error = {
@@ -195,7 +229,7 @@ class ModelService:
                 }
                 continue
             try:
-                parsed = json.loads(text)
+                parsed = json.loads(_json_candidate(text))
             except json.JSONDecodeError:
                 last_error = {
                     "code": "MODEL_BAD_RESPONSE",

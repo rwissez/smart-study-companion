@@ -15,6 +15,8 @@ from study_companion.contracts import (
     CitationComponent,
     CitationLabel,
     ContrastComponent,
+    DerivationComponent,
+    DerivationStep,
     DomainError,
     EvidenceRef,
     FormulaComponent,
@@ -81,6 +83,91 @@ def build_rule_lesson(
     if expression:
         components.append(
             FormulaComponent(id="expr", type="formula", expr=expression, caption="观察这一步的结构")
+        )
+    context_text = " ".join([title, goal, *cleaned])
+    if "去括号" in context_text or "同类项" in context_text:
+        components.append(
+            ContrastComponent(
+                id="contrast-sign",
+                type="contrast",
+                before="-(2x-7)",
+                incorrect="-2x-7",
+                correct="-2x+7",
+                note="括号前是负号时，括号里每一项都要变号；-7 变成 +7。",
+            )
+        )
+        components.append(
+            DerivationComponent(
+                id="steps-sign",
+                type="derivation",
+                mode="expression",
+                steps=[
+                    DerivationStep(expr="-(2x-7)", note="先看括号前的负号"),
+                    DerivationStep(expr="-2x+7", note="逐项变号，去掉括号"),
+                ],
+            )
+        )
+    elif ("一元一次方程" in context_text or "等式性质" in context_text) and "不等式" not in context_text:
+        components.append(
+            DerivationComponent(
+                id="steps-equation",
+                type="derivation",
+                mode="equation",
+                steps=[
+                    DerivationStep(expr="2x+3=7", note="原方程"),
+                    DerivationStep(expr="2x=4", note="两边同减 3"),
+                    DerivationStep(expr="x=2", note="两边同除以 2"),
+                ],
+            )
+        )
+        components.append(
+            ContrastComponent(
+                id="contrast-equation",
+                type="contrast",
+                before="2x+3=7",
+                incorrect="2x=10",
+                correct="2x=4",
+                note="移项要变号：左边的 +3 移到右边写成 -3。",
+            )
+        )
+    elif "不等式" in context_text:
+        components.append(
+            ContrastComponent(
+                id="contrast-inequality",
+                type="contrast",
+                before="-2x>6",
+                incorrect="x>-3",
+                correct="x<-3",
+                note="两边同除以负数时，不等号方向要改变。",
+            )
+        )
+    elif "代入" in context_text or "求值" in context_text:
+        components.append(
+            DerivationComponent(
+                id="steps-substitute",
+                type="derivation",
+                mode="expression",
+                steps=[
+                    DerivationStep(expr="2x+5", note="当 x=3 时"),
+                    DerivationStep(expr="2*3+5", note="把 x 换成 3"),
+                    DerivationStep(expr="11", note="按运算顺序计算"),
+                ],
+            )
+        )
+    elif "方程组" in context_text or "消元" in context_text:
+        components.append(
+            DerivationComponent(
+                id="steps-system",
+                type="derivation",
+                mode="equation",
+                steps=[
+                    DerivationStep(expr="x+y=5", note="第一个方程"),
+                    DerivationStep(expr="x-y=1", note="第二个方程"),
+                    DerivationStep(expr="2x=6", note="两式相加消去 y"),
+                    DerivationStep(expr="x=3", note="解得 x"),
+                    DerivationStep(expr="y=2", note="代回得 y"),
+                ],
+            )
         )
     if evidence_refs:
         components.append(
