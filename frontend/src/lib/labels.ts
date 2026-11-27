@@ -1,5 +1,28 @@
 /** 展示用人类可读文案。内部编号、状态枚举与接口路径不直接出现在页面上。 */
 
+export const UNCLASSIFIED_TOPIC_LABEL = "未归类";
+
+export function relationTypeLabel(type: string | null | undefined): string {
+  switch ((type ?? "").toLowerCase()) {
+    case "prerequisite":
+      return "前置";
+    case "special_case":
+      return "特例";
+    case "composed_of":
+      return "构成";
+    case "derives_from":
+      return "来源";
+    case "related":
+      return "关联";
+    default:
+      return "关联";
+  }
+}
+
+export function knowledgeScopeLabel(scope: string | null | undefined): string {
+  return scope === "core" ? "核心概念" : "拓展概念";
+}
+
 export function datasetStatusLabel(status: string | null | undefined): string {
   switch (status) {
     case "ready":

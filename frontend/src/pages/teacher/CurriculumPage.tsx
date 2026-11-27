@@ -5,6 +5,7 @@ import { errorCode, errorRequestId, toErrorMessage } from "../../api/client";
 import { getCatalog, getKnowledge, getKnowledgeQuality, getSourcePage, listKnowledgeReviews, rebuildKnowledge } from "../../api/service";
 import type { KnowledgePoint, KnowledgeReviewItem, KnowledgeSnapshotView } from "../../api/types";
 import { useSession } from "../../app/session";
+import { UNCLASSIFIED_TOPIC_LABEL, relationTypeLabel } from "../../lib/labels";
 import { queryKeys } from "../../lib/queryKeys";
 import { StatePanel } from "../../components/feedback/StatePanel";
 import { KnowledgeGraph } from "../../components/learning/KnowledgeGraph";
@@ -83,6 +84,15 @@ export function CurriculumPage() {
     if (!text) return points;
     return points.filter((point) => point.name.toLowerCase().includes(text) || point.kp_id.toLowerCase().includes(text));
   }, [points, search]);
+
+  const knownTopicIds = useMemo(
+    () => new Set((catalog.data?.topics ?? []).map((topic) => topic.topic_id)),
+    [catalog.data],
+  );
+  const unclassifiedPoints = useMemo(
+    () => filteredPoints.filter((point) => !point.topic_ids.some((topicId) => knownTopicIds.has(topicId))),
+    [filteredPoints, knownTopicIds],
+  );
 
   const activePoint: KnowledgePoint | null =
     points.find((point) => point.kp_id === selectedId) ?? points[0] ?? null;
@@ -220,12 +230,23 @@ export function CurriculumPage() {
                         ))}
                     </div>
                   ))}
-                  {filteredPoints.filter((point) => point.topic_ids.length === 0).map((point) => (
-                    <button key={point.kp_id} type="button" className="treeItem" onClick={() => setSelectedId(point.kp_id)}>
-                      <span>{point.name}</span>
-                      <span className="treeItemMeta">未归类 · 观察指标</span>
-                    </button>
-                  ))}
+                  {unclassifiedPoints.length > 0 ? (
+                    <div>
+                      <div className="treeTopic">{UNCLASSIFIED_TOPIC_LABEL}</div>
+                      {unclassifiedPoints.map((point) => (
+                        <button
+                          key={point.kp_id}
+                          type="button"
+                          className={activePoint?.kp_id === point.kp_id ? "treeItem treeItemActive" : "treeItem"}
+                          aria-pressed={activePoint?.kp_id === point.kp_id}
+                          onClick={() => setSelectedId(point.kp_id)}
+                        >
+                          <span>{point.name}</span>
+                          <span className="treeItemMeta">{UNCLASSIFIED_TOPIC_LABEL} · 观察指标</span>
+                        </button>
+                      ))}
+                    </div>
+                  ) : null}
                 </div>
               </div>
 
@@ -332,7 +353,7 @@ export function CurriculumPage() {
                             .filter((relation) => relation.source_ids.includes(activePoint.kp_id) || relation.target_id === activePoint.kp_id)
                             .map((relation, index) => (
                               <li key={index}>
-                                {relation.source_ids.map((sourceId) => pointNames[sourceId] ?? "知识点").join("、")} → {pointNames[relation.target_id] ?? "知识点"} · {relation.relation_type === "prerequisite" || relation.type === "prerequisite" ? "前置" : "关联"}
+                                {relation.source_ids.map((sourceId) => pointNames[sourceId] ?? "知识点").join("、")} → {pointNames[relation.target_id] ?? "知识点"} · {relationTypeLabel(relation.relation_type ?? relation.type)}
                               </li>
                             ))}
                         </ul>

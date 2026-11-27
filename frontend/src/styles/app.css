@@ -482,15 +482,29 @@ ul, ol { padding-left: 20px; }
 .curriculumLayout { display: grid; grid-template-columns: 240px minmax(0, 1fr) 320px; gap: var(--space-6); align-items: start; min-width: 0; }
 .pane { min-width: 0; border-top: 1px solid var(--color-border); padding-top: var(--space-3); }
 .paneTitle { font-size: var(--font-sm); font-weight: 600; color: var(--color-text-secondary); margin-bottom: var(--space-2); }
-.treeList { display: flex; flex-direction: column; gap: 2px; }
+.treeList { display: flex; flex-direction: column; gap: 2px; max-height: 560px; overflow: auto; padding-right: var(--space-1); }
 .treeTopic { font-size: var(--font-xs); color: var(--color-text-secondary); margin: var(--space-3) 0 var(--space-1); }
 .treeItem { display: flex; flex-direction: column; gap: 2px; width: 100%; text-align: left; padding: var(--space-2); border: 1px solid transparent; border-radius: var(--radius-md); background: transparent; font-size: var(--font-sm); color: var(--color-text-primary); }
 .treeItem:hover { background: var(--color-hover); }
 .treeItemActive { background: var(--color-selected-bg); border-color: var(--color-selected-border); }
 .treeItemMeta { font-size: var(--font-xs); color: var(--color-text-secondary); }
-.graphBox { border: 1px solid var(--color-border); border-radius: var(--radius-md); min-height: 420px; overflow: hidden; background: var(--color-background); }
-.graphSvg { display: block; width: 100%; height: auto; }
-.graphLegend { display: flex; gap: var(--space-4); flex-wrap: wrap; font-size: var(--font-xs); color: var(--color-text-secondary); padding: var(--space-2) var(--space-3); border-top: 1px solid var(--color-border); }
+.graphRoot { gap: var(--space-3); }
+.graphTabs { display: flex; flex-wrap: wrap; gap: var(--space-1); border-bottom: 1px solid var(--color-border); }
+.graphTab { display: inline-flex; align-items: center; gap: 6px; min-height: 34px; padding: 0 var(--space-3); border: 1px solid transparent; border-bottom: 2px solid transparent; border-radius: var(--radius-sm) var(--radius-sm) 0 0; background: transparent; color: var(--color-text-secondary); font-size: var(--font-sm); }
+.graphTab:hover { background: var(--color-hover); color: var(--color-text-primary); }
+.graphTabActive { color: var(--color-text-primary); border-bottom-color: var(--color-primary); font-weight: 600; }
+.graphTabDot { width: 8px; height: 8px; border-radius: 50%; flex: 0 0 auto; }
+.graphTabCount { font-size: var(--font-xs); color: var(--color-text-muted); font-variant-numeric: tabular-nums; }
+.graphTabActive .graphTabCount { color: var(--color-text-secondary); }
+.graphToolbar { gap: var(--space-3); flex-wrap: wrap; }
+.graphNotice { display: flex; align-items: center; flex-wrap: wrap; gap: var(--space-2); margin: 0; padding: var(--space-2) var(--space-3); border: 1px solid var(--color-selected-border); border-radius: var(--radius-md); background: var(--color-selected-bg); font-size: var(--font-xs); color: var(--color-text-secondary); }
+.graphNoticeMuted { border-color: var(--color-border); background: var(--color-hover); }
+.graphBox { display: flex; flex-direction: column; border: 1px solid var(--color-border); border-radius: var(--radius-md); min-height: 420px; overflow: hidden; background: var(--color-background); }
+.graphViewport { flex: 1 1 auto; overflow: auto; max-height: 560px; min-height: 320px; padding: var(--space-2); overscroll-behavior: contain; scrollbar-width: thin; }
+.graphViewport:focus-visible { outline: 2px solid var(--color-primary); outline-offset: -2px; }
+.graphSvg { display: block; }
+.graphEmpty { margin: 0; padding: var(--space-4); font-size: var(--font-sm); color: var(--color-text-secondary); border-bottom: 1px solid var(--color-border); }
+.graphLegend { display: flex; gap: var(--space-4); flex-wrap: wrap; font-size: var(--font-xs); color: var(--color-text-secondary); padding: var(--space-2) var(--space-3); border-top: 1px solid var(--color-border); background: var(--color-background); }
 .legendLine { display: inline-flex; align-items: center; gap: 6px; }
 .definition { font-size: var(--font-body); overflow-wrap: anywhere; }
 
