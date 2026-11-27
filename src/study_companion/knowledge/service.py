@@ -176,9 +176,51 @@ def build_knowledge(
     if textbook_stats:
         for note in textbook_stats.get("model_notes") or []:  # type: ignore[union-attr]
             limitations.append(str(note))
+    merges: dict[str, str] = {}
+    if textbook_candidates and model_configured:
+        try:
+            from study_companion.knowledge.merge_model import resolve_merges
+            from study_companion.model_service import ModelService
+
+            merge_service = ModelService()
+            if merge_service.configured:
+                merges, merge_notes = resolve_merges(
+                    service=merge_service, candidates=textbook_candidates, points=points
+                )
+                limitations.extend(merge_notes)
+        except Exception:
+            limitations.append("教材候选合并判断异常，全部保留待审")
     if textbook_candidates:
         existing_names = {point.name for point in points}
         for candidate in textbook_candidates:
+            target = merges.get(getattr(candidate, "candidate_id", ""))
+            if target:
+                for index, point in enumerate(points):
+                    if point.kp_id != target:
+                        continue
+                    locator = SourceLocator(
+                        source_file=getattr(candidate, "file_id", "") or candidate.chapter_id,
+                        source_kind="textbook",
+                        page=candidate.page,
+                        quote=candidate.snippet,
+                        verification_status="verified",
+                    )
+                    points[index] = point.model_copy(
+                        update={
+                            "source_locators": list(point.source_locators) + [locator],
+                            "aliases": sorted(
+                                set(point.aliases)
+                                | {candidate.name}
+                                | set(getattr(candidate, "aliases", []) or [])
+                            ),
+                            "indicator_ids": sorted(
+                                set(point.indicator_ids)
+                                | set(getattr(candidate, "indicator_ids", []) or [])
+                            ),
+                        }
+                    )
+                    break
+                continue
             if candidate.name in existing_names:
                 continue
             existing_names.add(candidate.name)
