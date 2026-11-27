@@ -1,4 +1,4 @@
-"""analyze_dataset：基于 PreparedDataset 与课程目录的个体/班级统计。
+﻿"""analyze_dataset：基于 PreparedDataset 与课程目录的个体/班级统计。
 
 统计口径对应01文档"统计口径"一节，五个指标全部保存分子、分母、范围、
 记录引用与排除说明；分母为0时 value 为 null，不返回假数值。
@@ -26,6 +26,8 @@ from study_companion.contracts import (
 )
 
 # 表现较好判定线（得分率 >= 该值记 observed_strength）；阈值随 rule_version 可追溯
+MASTERED_THRESHOLD = 0.80
+DEVELOPING_THRESHOLD = 0.50
 STRENGTH_THRESHOLD = 0.8
 
 SCORE_RATIO = "valid_score_ratio"          # 得分率：得分和/满分和
@@ -229,6 +231,15 @@ def _finding_for_indicator(
         status = "conflicting"
         limitations.append(f"{len(quarantined)}个事件因记录冲突被隔离，判定基于其余有效记录")
 
+    # 掌握程度只在证据充分时给；不足或冲突一律 unknown，不默认"未掌握"。
+    mastery_level = "unknown"
+    if status == "sufficient" and score_ratio.value is not None:
+        if score_ratio.value >= MASTERED_THRESHOLD:
+            mastery_level = "mastered"
+        elif score_ratio.value >= DEVELOPING_THRESHOLD:
+            mastery_level = "developing"
+        else:
+            mastery_level = "emerging"
     return Finding(
         finding_id=finding_id,
         indicator_id=indicator_id,
@@ -237,6 +248,7 @@ def _finding_for_indicator(
         performance=performance,
         evidence_refs=refs,
         limitations=limitations,
+        mastery_level=mastery_level,  # type: ignore[arg-type]
     )
 
 

@@ -92,6 +92,12 @@ def test_import_runs_pipeline_and_publishes_plans(client: TestClient, imported: 
     assert by_indicator["T01I2"]["numerator"] == 0
     assert by_indicator["T01I2"]["denominator"] == 5
     assert by_indicator["T01I2"]["value"] == 0.0  # 真实 0 分，不是"缺失"
+    # 掌握程度只在证据充分时给；证据不足必须是 unknown，不能写成"未掌握"。
+    for finding in result["findings"]:
+        if finding["evidence_status"] == "sufficient":
+            assert finding["mastery_level"] in {"emerging", "developing", "mastered"}
+        else:
+            assert finding["mastery_level"] == "unknown"
 
 
 def test_class_profile_keeps_roster_denominator(client: TestClient, imported: dict) -> None:
