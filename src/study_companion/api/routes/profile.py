@@ -262,36 +262,28 @@ def class_compare(
     left = ClassResult.model_validate(_class_version(db, dataset, run_id, node_id, left_class_id).payload_json or {})
     right = ClassResult.model_validate(_class_version(db, dataset, run_id, node_id, right_class_id).payload_json or {})
 
-    left_metrics = {metric.metric_id: metric for metric in left.metrics}
-    right_metrics = {metric.metric_id: metric for metric in right.metrics}
+    left_metrics = {(metric.scope.indicator_id, metric.scope.kp_id, metric.unit): metric for metric in left.metrics}
+    right_metrics = {(metric.scope.indicator_id, metric.scope.kp_id, metric.unit): metric for metric in right.metrics}
     items: list[ComparisonItem] = []
     limitations: list[str] = []
-    comparable = True
-    for metric_id, metric in left_metrics.items():
-        other = right_metrics.get(metric_id)
+    comparable = bool(left_metrics) and bool(right_metrics)
+    for scope_key, metric in left_metrics.items():
+        other = right_metrics.get(scope_key)
+        indicator_key = scope_key[0]
+        if indicator_id and indicator_key != indicator_id:
+            continue
+        if kp_id and scope_key[1] != kp_id:
+            continue
         if other is None:
             comparable = False
-            limitations.append(f"右班缺少同口径指标 {metric_id}")
-            continue
-        if indicator_id and metric.scope.indicator_id != indicator_id:
-            continue
-        if kp_id and metric.scope.kp_id != kp_id:
-            continue
-        same_scope = (
-            metric.scope.indicator_id == other.scope.indicator_id
-            and metric.scope.kp_id == other.scope.kp_id
-            and metric.unit == other.unit
-        )
-        if not same_scope:
-            comparable = False
-            limitations.append(f"指标 {metric_id} 口径不同，不能直接比较")
+            limitations.append(f"右班缺少同口径指标 {indicator_key}")
             continue
         delta = None
         if metric.value is not None and other.value is not None:
             delta = round(metric.value - other.value, 6)
         items.append(
             ComparisonItem(
-                indicator_id=metric.scope.indicator_id or "",
+                indicator_id=indicator_key or "",
                 left_value=metric.value,
                 right_value=other.value,
                 delta=delta,

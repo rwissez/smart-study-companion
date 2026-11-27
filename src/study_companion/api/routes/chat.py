@@ -295,12 +295,103 @@ def _persist_turn(db, scope, payload: "ChatRequest", body: dict[str, Any], *, st
     return body
 
 
+def _rule_fallback(db, scope, target, node_id: str | None) -> dict[str, Any] | None:
+    """模型未配置时的确定性回答：只转述正式学情，不生成教学解释。
+
+    这是 01/05 允许的"规则摘要"降级路径，输出明确标注为规则结果，不冒充模型回答。
+    """
+
+    from study_companion.db import version_repository as repo
+
+    if scope.dataset_id is None:
+        return None
+    student_id = target.id if target is not None and target.type == "student" else None
+    if student_id is None and scope.role == "student":
+        student_id = scope.student_id
+    if not student_id:
+        return None
+    dataset = db.get(models.Dataset, scope.dataset_id)
+    if dataset is None or not dataset.family_id:
+        return None
+    node_key = node_id
+    if not node_key:
+        run_id = repo.latest_run_id(db, dataset.id)
+        run = db.get(models.AnalysisRun, run_id) if run_id else None
+        node_key = (run.node_ids_json or [None])[0] if run else None
+    if not node_key:
+        return None
+    run_id = repo.active_run_id(db, dataset.id, node_key) or repo.latest_run_id(db, dataset.id)
+    if not run_id:
+        return None
+    key = repo.FormalKey(
+        family_id=dataset.family_id,
+        dataset_id=dataset.id,
+        kind="student_analysis",
+        run_key=run_id,
+        node_key=node_key,
+        target_key=student_id,
+    )
+    version = repo.read_formal(db, key)
+    if version is None:
+        return None
+    payload = dict(version.payload_json or {})
+    lines = [f"以下内容直接来自 {student_id} 在节点 {node_key} 的正式学情（规则摘要，未使用模型）："]
+    for metric in payload.get("metrics", [])[:6]:
+        scope_info = metric.get("scope") or {}
+        label = scope_info.get("indicator_id") or scope_info.get("class_id") or "指标"
+        numerator = metric.get("numerator")
+        denominator = metric.get("denominator")
+        value = metric.get("value")
+        if numerator is None or denominator in (None, 0):
+            lines.append(f"- {label}：暂无有效分母（{metric.get('name', '')}）")
+        else:
+            lines.append(f"- {label}：{numerator}/{denominator}（{value}）")
+    for finding in payload.get("findings", [])[:4]:
+        lines.append(
+            f"- 诊断：{finding.get('description', '')}（证据状态 {finding.get('evidence_status')}，"
+            f"表现 {finding.get('performance')}）"
+        )
+    limitations = payload.get("limitations") or []
+    if limitations:
+        lines.append("限制：" + "；".join(str(item) for item in limitations[:3]))
+    lines.append("需要教学解释或修改学习方案时，请先配置模型后再提问。")
+    evidence = []
+    for finding in payload.get("findings", [])[:4]:
+        evidence.extend(finding.get("evidence_refs", []))
+    return {
+        "text": "\n".join(lines),
+        "tool_trace": [],
+        "evidence_refs": evidence[:20],
+        "segments": [
+            {"kind": "fact", "text": line, "evidence_refs": []}
+            for line in lines[1:-1]
+        ],
+        "stopped_reason": "model_not_configured",
+        "warnings": [
+            {
+                "code": "MODEL_NOT_CONFIGURED",
+                "message": "当前为规则摘要，未使用模型生成教学解释",
+            }
+        ],
+        "task_type": "student_analysis",
+        "route_source": "rule_fallback",
+    }
+
+
 @router.post("/chat")
 def post_chat(payload: ChatRequest, db: DbSession, scope: Scope, settings: AppSettings) -> dict[str, Any]:
     scope.require("chat_own" if scope.role == "student" else "chat_teacher")
     provider = build_provider(settings)
-    # Preserve the established response when no model is configured.
+    # 未配置模型时先尝试确定性的正式学情摘要；拿不到上下文才返回明确不可用。
     if provider.name == "unconfigured":
+        target = payload.target
+        if payload.student_id:
+            target = ChatTarget(type="student", id=payload.student_id)
+        elif target is None and scope.role == "student":
+            target = ChatTarget(type="student", id=scope.student_id)
+        fallback = _rule_fallback(db, scope, target, payload.node_id)
+        if fallback is not None:
+            return success(_persist_turn(db, scope, payload, fallback, status="partial"))
         turn = provider.generate([message.model_dump() for message in payload.messages or []])
         return success(
             _persist_turn(

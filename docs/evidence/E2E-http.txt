@@ -1,0 +1,27 @@
+health: ok / schema 1.1 / model_configured False
+dataset: ds-b117dd239a1e49ef81e5 students=3 classes=2
+class: DC01 roster=2
+class: DC02 roster=1
+S01 profile: version=ban-11c50216f00d4660923f metrics=8 findings=2
+  metric T01I1 = 5/5 value=1.0
+  metric T01I2 = 0/5 value=0.0
+DC01: roster=2 observed=1
+compare: comparable=False items=1 limitations=['右班缺少同口径指标 T01I2']
+plan: version=plan-e3852a81b42e4c37b5f1 groups=2 pending_activity=act-plan-1cb5369156f3400db6ed-01-01
+start: state=in_progress attempt=att-b64ad28d3603432495dd material=Q1
+material as student: has_reference_answer=False has_rubric=False
+hint: level=1 length=35
+submit: attempt_status=completed grade_status=graded score=5 assistance=assisted
+replay: same_submission_no=True
+student reading S02 -> 403 FORBIDDEN
+events: total=4 types=['activity_completed', 'answer_submitted', 'grading_completed', 'hint_requested']
+chat: status=200 chat_status=partial stops=model_not_configured text_len=317
+chat text head: 以下内容直接来自 S01 在节点 N01 的正式学情（规则摘要，未使用模型）：
+- T01I1：5/5（1.0）
+- T01I1：1/1（1.0）
+- T01I
+export created: export-b53ea8b324bb48cca32c status=queued
+export job: succeeded None
+export detail: status=ready bytes=19251 check=True
+download: 200 bytes=19251
+zip: entries=16 nodes=['N01', 'N02'] student_versions=6 files=14

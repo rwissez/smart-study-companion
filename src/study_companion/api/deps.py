@@ -17,6 +17,10 @@ from study_companion.db.session import get_sessionmaker
 def get_db() -> Iterator[Session]:
     session = get_sessionmaker()()
     try:
+        # 池化连接可能仍带着上一次连接池 ping 打开的读事务；在 SQLite WAL 下，
+        # 该快照会看不到之后提交的行（表现为"刚建的会话查不到"）。先结束旧事务，
+        # 让本次请求从最新已提交状态开始。
+        session.rollback()
         yield session
         session.commit()
     except Exception:
