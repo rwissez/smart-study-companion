@@ -3,7 +3,7 @@
   "project": "湛知（smart-study-companion）最终整合开发",
   "docs_commit": "1d6db6fc45e7f7d785f194a73b83b6bd5f67cefb",
   "base_sha": "49587a15430e4674a1a699e108c91e27b7a537b6",
-  "current_sha": "ba048c9",
+  "current_sha": "7747cf5",
   "branch": "codex/final-integration",
   "remote": "https://github.com/rwissez/smart-study-companion.git",
   "environment": {
@@ -367,5 +367,11 @@
   ],
   "updated_at": "2026-11-27T14:10:00+08:00",
   "last_update": "2026-11-27",
-  "backend_tests": "462 passed (uv run pytest -q)"
+  "backend_tests": "499 passed (uv run pytest -q)",
+  "frontend_gates": "typecheck/build/vitest/verify-pages all passed; 70 screenshots",
+  "remaining": [
+    "real model acceptance not_run",
+    "competition dataset not_run",
+    "textbook PDF end-to-end pending real material"
+  ]
 }

@@ -1,14 +1,14 @@
 health: ok / schema 1.1 / model_configured False
-dataset: ds-0fa0665c93e64b2c92bf students=3 classes=2
+dataset: ds-a4aed6a350924a2c9935 students=3 classes=2
 class: DC01 roster=2
 class: DC02 roster=1
-S01 profile: version=ban-eedb1dec355a45e5aea0 metrics=8 findings=2
+S01 profile: version=ban-b93f6b7ff72c4d05b455 metrics=8 findings=2
   metric T01I1 = 5/5 value=1.0
   metric T01I2 = 0/5 value=0.0
 DC01: roster=2 observed=1
 compare: comparable=False items=1 limitations=['右班缺少同口径指标 T01I2']
-plan: version=plan-b563ffbb535a4f51989a groups=2 pending_activity=act-plan-cfd902d4e5de436ea7b3-01-02
-start: state=in_progress attempt=att-037e7dcee9f343b59d02 material=Q3
+plan: version=plan-1f45803626974f21bac9 groups=2 pending_activity=act-plan-3c43d7b97b1842318984-01-02
+start: state=in_progress attempt=att-e71b8cc133834801b206 material=Q3
 material as student: has_reference_answer=False has_rubric=False
 hint: level=1 length=30
 submit: attempt_status=submitted grade_status=needs_review score=None assistance=assisted
@@ -20,8 +20,8 @@ chat text head: 以下是 S01 在第 1 次观察的正式学情（规则摘要�
 - 去括号时的符号处理：5/5
 - 去括号时的符号处理：1/1
 - 去括号时的符号处理：2
-export created: export-e06ad845fb0647e8b8f1 status=queued
+export created: export-fd2c81a83b034bdba9cd status=queued
 export job: succeeded None
-export detail: status=ready bytes=25220 check=True
-download: 200 bytes=25220
+export detail: status=ready bytes=25742 check=True
+download: 200 bytes=25742
 zip: entries=16 nodes=['N01', 'N02'] student_versions=6 files=14
