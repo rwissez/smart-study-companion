@@ -486,7 +486,9 @@ def build_knowledge(
             model_relation_notes = ["模型未配置，关系仅来自目录登记"]
     except Exception:  # 关系推断失败不影响其余候选构建
         model_relation_notes = ["关系推断异常，本轮未新增模型关系"]
-    limitations.extend(model_relation_notes)
+    for note in model_relation_notes:
+        if note and note not in limitations:
+            limitations.append(note)
 
     indicator_total = len(catalog.indicators)
     covered_indicators = len({point.indicator_ids[0] for point in points if point.indicator_ids})
