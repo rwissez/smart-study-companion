@@ -300,3 +300,45 @@ def undo_plan(
             "note": "恢复请求已记录；正式切换仍走教师预览/确认接口。",
         }
     )
+
+
+@router.get("/runs/{run_id}/quality/recommendations")
+def c_quality_report(
+    run_id: str,
+    db: DbSession,
+    scope: Scope,
+    node_id: str = Query(min_length=1, max_length=64),
+    date_from: str | None = Query(default=None, max_length=32),
+    date_to: str | None = Query(default=None, max_length=32),
+    class_id: str | None = Query(default=None, max_length=64),
+    page: int = Query(default=1, ge=1),
+    page_size: int = Query(default=20, ge=1, le=200),
+) -> dict:
+    """C 的质量报告：只统计已发生的发布、审核、顺延与介入事实。"""
+
+    scope.require("view_quality")
+    run = db.get(models.AnalysisRun, run_id)
+    if run is None:
+        raise DomainError("NOT_FOUND", "分析运行不存在")
+    dataset = _dataset_for_student(db, scope, run.dataset_id, "")
+    if class_id is not None and not scope.can_read_class(class_id):
+        raise DomainError("FORBIDDEN", "当前会话未获授权该班级")
+    from study_companion.recommendation.quality import QualityWindow, build_report
+
+    try:
+        window = QualityWindow.from_dates(date_from, date_to)
+    except ValueError as exc:
+        raise DomainError("VALIDATION_ERROR", str(exc)) from exc
+    report = build_report(
+        db, dataset_id=dataset.id, node_id=node_id, window=window, class_id=class_id
+    )
+    issues = report.issues or {}
+    items = list(issues.get("items", []))
+    start = (page - 1) * page_size
+    report.issues = {
+        "items": items[start : start + page_size],
+        "total": len(items),
+        "page": page,
+        "page_size": page_size,
+    }
+    return success(report.model_dump(mode="json"))

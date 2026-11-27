@@ -1,4 +1,4 @@
-"""C 的方案规划器（04 §3—§5、§7）。
+﻿"""C 的方案规划器（04 §3—§5、§7）。
 
 流程与设计一致：学情 → 教学需求 → 策略与优先级 → 必要前置 → 候选与评分 →
 负担与任务组 → 方案草稿（交给独立审核）。本模块不写数据库、不调用模型，
@@ -55,6 +55,14 @@ EVIDENCE_RELIABILITY = {"sufficient": 1.0, "insufficient": 0.45, "conflicting": 
 EFFECT_VALUE = {"ineffective": 1.0, "partial": 0.65, "improved": 0.2, "insufficient": 0.5}
 
 MAX_ROOTS = 2
+
+#: 连续无效后的替代策略（04 §7 的策略刹车）。
+FALLBACK_STRATEGY = {
+    "error_correction": "prerequisite_support",
+    "consolidation": "collect_evidence",
+    "transfer": "consolidation",
+    "prerequisite_support": "collect_evidence",
+}
 PREREQUISITE_MAX_EDGES = 3
 PREREQUISITE_MAX_NODES = 20
 ROUND_MINUTES = 20
@@ -82,6 +90,8 @@ class PlannerInputs:
     history: candidate_rules.LearningHistoryView
     now: datetime
     node_available_ids: list[str] | None = None
+    #: 目标 → 需要暂时换掉的策略（来自策略试验：连续无效才抑制）。
+    suppressed: dict[str, set[str]] = field(default_factory=dict)
     config: PlannerConfig = field(default_factory=PlannerConfig)
 
 
@@ -478,6 +488,22 @@ def build_plan(inputs: PlannerInputs) -> PlannerResult:
 
     intervention = [item for item in needs if item.primary_strategy == "teacher_intervention"]
     roots = [item for item in needs if item.primary_strategy != "teacher_intervention"]
+
+    # 策略刹车：连续无效的策略先换掉，且把换策略这件事写进限制说明。
+    for need in roots:
+        blocked = inputs.suppressed.get(need.target_key) or set()
+        if need.primary_strategy not in blocked:
+            continue
+        replacement = FALLBACK_STRATEGY.get(need.primary_strategy)
+        if replacement is None:
+            continue
+        limitations.append(
+            f"目标 {need.target_key} 的「{need.primary_strategy}」连续无效，本轮改为「{replacement}」"
+        )
+        need.primary_strategy = replacement  # type: ignore[assignment]
+        need.auxiliary_strategies = [
+            item for item in need.auxiliary_strategies if item != replacement
+        ]
 
     groups: list[tuple[TeachingNeed, str, list[candidate_rules.ScoredCandidate], bool]] = []
     deferred: list[TeachingNeed] = []

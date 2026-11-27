@@ -1,4 +1,4 @@
-"""正式读取：个人画像、班级画像、学习方案、进展、作答记录、比较与质量。
+﻿"""正式读取：个人画像、班级画像、学习方案、进展、作答记录、比较与质量。
 
 所有数字都来自 B/C 的正式版本，路由只做授权、裁剪与拼装，不重算统计。
 """
@@ -13,6 +13,8 @@ from sqlalchemy import select
 from study_companion.api.deps import DbSession, Scope
 from study_companion.api.envelope import success
 from study_companion.contracts import (
+    AnalysisBundle,
+    AnalysisConfig,
     AnswerRecordListItem,
     ClassComparisonView,
     ClassResult,
@@ -646,25 +648,48 @@ def analysis_quality(
     for item in payloads:
         code = str(item.get("code", "UNKNOWN"))
         counts[code] = counts.get(code, 0) + 1
-    events = db.scalars(
-        select(models.AnswerEvent).where(models.AnswerEvent.dataset_id == dataset.id)
+
+    from study_companion.analysis.quality import build_quality_report
+    from study_companion.library.datasets import load_catalog, load_prepared_dataset
+
+    results = db.scalars(
+        select(models.AnalysisResult).where(models.AnalysisResult.run_id == run_id)
     ).all()
-    by_status: dict[str, int] = {}
-    for event in events:
-        status = str((event.payload_json or {}).get("status", "unknown"))
-        by_status[status] = by_status.get(status, 0) + 1
-    return success(
-        {
-            "scope": {"dataset_id": dataset.id, "class_id": class_id},
-            "node_id": node_id,
-            "generated_at": repo.now_iso(),
-            "rule_version": run.rule_version,
-            "counts": {**counts, **{f"status_{key}": value for key, value in by_status.items()}},
-            "coverage": [],
-            "issues": payloads[:200],
-            "limitations": ["质量计数来自本次导入与清洗的真实记录"],
-        }
+    student_results = [
+        StudentResult.model_validate(row.payload_json)
+        for row in results
+        if row.subject_type == "student" and row.node_id == node_id
+    ]
+    class_results = [
+        ClassResult.model_validate(row.payload_json)
+        for row in results
+        if row.subject_type == "class" and row.node_id == node_id
+    ]
+    prepared = load_prepared_dataset(db, dataset.id)
+    catalog = load_catalog(db, run.catalog_version, dataset.id)
+    bundle = AnalysisBundle(
+        run_id=run_id,
+        dataset_id=dataset.id,
+        catalog_version=run.catalog_version,
+        rule_version=run.rule_version,
+        config=AnalysisConfig(rule_version=run.rule_version),
+        student_results=student_results,
+        class_results=class_results,
+        quality_summary=counts,
+        knowledge_version=run.knowledge_version,
     )
+    report = build_quality_report(
+        dataset_id=dataset.id,
+        node_id=node_id,
+        prepared=prepared,
+        bundle=bundle,
+        catalog=catalog,
+        rule_version=run.rule_version,
+        generated_at=repo.now_iso(),
+    )
+    data = report.model_dump(mode="json")
+    data["scope"] = {**data.get("scope", {}), "class_id": class_id}
+    return success(data)
 
 
 @router.get("/datasets/{dataset_id}/alerts")

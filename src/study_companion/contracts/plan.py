@@ -565,6 +565,7 @@ class CQualityReport(Contract):
     generated_at: str = ""
     rule_version: str = "c-rules-1"
     counts: dict[str, int] = Field(default_factory=dict)
+    coverage: list[dict[str, Any]] = Field(default_factory=list)
     issues: dict[str, Any] = Field(default_factory=dict)
     limitations: list[str] = Field(default_factory=list)
 

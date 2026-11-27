@@ -1,4 +1,4 @@
-﻿"""业务流水线：导入完成后的 A → B → C 调度与正式成果落库。
+"""业务流水线：导入完成后的 A → B → C 调度与正式成果落库。
 
 本模块是唯一"把纯函数结果变成正式版本"的地方：
 
@@ -107,6 +107,38 @@ def _analysis_input(
     )
 
 
+def _previous_student_result(
+    db: Session, family_id: str, dataset_id: str, node_key: str, student_id: str
+) -> StudentResult | None:
+    """取该学生该节点最近一次**已发布**的正式学情作为进展基线。
+
+    只沿正式指针读，不猜历史；没有基线就返回 None（不伪造"首次即改善"）。
+    """
+
+    head = db.scalar(
+        select(models.FormalHead)
+        .where(
+            models.FormalHead.family_id == family_id,
+            models.FormalHead.dataset_id == dataset_id,
+            models.FormalHead.kind == "student_analysis",
+            models.FormalHead.node_key == node_key,
+            models.FormalHead.target_key == student_id,
+            models.FormalHead.version_id.is_not(None),
+        )
+        .order_by(models.FormalHead.updated_at.desc())
+        .limit(1)
+    )
+    if head is None or not head.version_id:
+        return None
+    row = db.get(models.Version, head.version_id)
+    if row is None or not row.payload_json:
+        return None
+    try:
+        return StudentResult.model_validate(row.payload_json)
+    except Exception:
+        return None
+
+
 def persist_analysis_bundle(
     db: Session,
     bundle: AnalysisBundle,
@@ -150,6 +182,26 @@ def persist_analysis_bundle(
             node_key=result.node_id,
             target_key=result.student_id,
         )
+        version_id = repo.new_id("ban")
+        result.analysis_version = version_id
+        result.analysis_input = AnalysisInputRef(
+            dataset_id=bundle.dataset_id,
+            catalog_version=bundle.catalog_version,
+            knowledge_version=bundle.knowledge_version,
+            rule_version=bundle.rule_version,
+            config_hash=repo.digest(bundle.config.model_dump(mode="json")),
+            event_cutoff=event_cutoff,
+            included_event_ids=included_event_ids,
+            created_at=repo.now_iso(),
+        )
+        baseline = _previous_student_result(db, family_id, bundle.dataset_id, result.node_id, result.student_id)
+        if baseline is not None:
+            from study_companion.analysis.progress import compare_progress
+
+            try:
+                result.progress = compare_progress(baseline, result)
+            except Exception:  # 旧版本缺口径时保留"无法比较"而不是中断发布
+                result.progress = []
         payload = result.model_dump(mode="json")
         version = repo.create_version(
             db,
@@ -160,9 +212,8 @@ def persist_analysis_bundle(
             input_digest=repo.digest(payload),
             run_id=run_id,
             job_id=job_id,
-            version_id=repo.new_id("ban"),
+            version_id=version_id,
         )
-        result.analysis_version = version.version_id
         version.payload_json = result.model_dump(mode="json")
         version.body_hash = repo.digest(version.payload_json)
         head = repo.read_head(db, key)
@@ -668,6 +719,37 @@ def persist_plan(
             expected_generation=head.generation if head else 0,
         )
     db.flush()
+    # 记录策略试验：目标 + 主策略 + 素材指纹，供后续"无效则换策略"判定。
+    from study_companion.recommendation import trials as trial_rules
+
+    trial_groups = []
+    for group in normalised.task_groups:
+        rec = next(
+            (item for item in normalised.recommendations if item.group_id == group.group_id),
+            None,
+        )
+        if rec is None:
+            continue
+        trial_groups.append(
+            {
+                "group_id": group.group_id,
+                "strategy": (group.primary_strategy or (group.strategy_types or ["consolidation"])[0]),
+                "target_key": group.goal_target_key or rec.indicator_id,
+                "material_ids": [
+                    activity.material_id
+                    for activity in rec.activities
+                    if activity.material_id
+                ],
+            }
+        )
+    if trial_groups:
+        trial_rules.record_trials(
+            db,
+            plan_version=plan_version_id,
+            groups=trial_groups,
+            analysis_version=analysis_version_id,
+            created_at=repo.now_iso(),
+        )
     return {
         "plan_version": plan_version_id,
         "publication_id": publication.publication_id if publication else None,
@@ -1350,53 +1432,83 @@ def handle_student_update(ctx: JobContext) -> dict[str, Any]:
     old_head = repo.read_head(db, old_key)
     old_plan_version = old_head.version_id if old_head else None
 
-    # 先判断旧方案是否仍适用：没有实质变化就保留原方案，只记录复查结论。
+    # 策略试验：用新的进展分类更新上一轮试验，并据此决定换策略或开教师介入。
+    from study_companion.recommendation import trials as trial_rules
+
+    suppressed: dict[str, set[str]] = {}
+    old_plan: RecommendationBundle | None = None
     if old_plan_version:
         old_plan_row = db.get(models.Version, old_plan_version)
         if old_plan_row is not None and old_plan_row.payload_json:
             old_plan = RecommendationBundle.model_validate(old_plan_row.payload_json)
-            old_analysis_row = (
-                db.get(models.Version, old_plan.analysis_version)
-                if old_plan.analysis_version
-                else None
-            )
-            if old_analysis_row is not None and old_analysis_row.payload_json:
-                old_result = StudentResult.model_validate(old_analysis_row.payload_json)
-                applicable, reason, limits = evaluate_applicability(
-                    old_plan, old_result, affected_students[0]
+        trial_rules.update_trials_from_progress(
+            db,
+            plan_version=old_plan_version,
+            comparisons=[item.model_dump(mode="json") for item in affected_students[0].progress],
+            now_iso=repo.now_iso(),
+        )
+        targets = {group.goal_target_key for group in (old_plan.task_groups if old_plan else []) if group.goal_target_key}
+        for target in targets:
+            outcome = trial_rules.suppression_for(db, target_key=target)
+            if outcome["suppressed"]:
+                suppressed[target] = set(outcome["suppressed"])
+            if outcome["escalate"]:
+                trial_rules.open_intervention_for(
+                    db,
+                    dataset_id=dataset_id,
+                    student_uid=student.student_uid,
+                    student_id=student_id,
+                    target_key=target,
+                    reason_code="no_improvement_after_rounds",
+                    summary="连续多轮教学安排后仍无改善，需要教师介入",
+                    evidence_refs=[],
+                    now_iso=repo.now_iso(),
                 )
-                if applicable:
-                    _record_applicability(
-                        db,
-                        key=old_key,
-                        plan_version=old_plan_version,
-                        analysis_version=analysis_version,
-                        knowledge_version=context.knowledge_version,
-                        catalog_version=catalog.version,
-                        result="applicable",
-                        event_cutoff=len(included),
-                        activity_ids=[
-                            activity.activity_id
-                            for rec in old_plan.recommendations
-                            for activity in rec.activities
-                        ],
-                        limitations=limits,
-                        job_id=ctx.job.id,
-                    )
-                    upsert_step(
-                        db, ctx.job, "plan_student", label="复查学习方案", status="succeeded"
-                    )
-                    db.commit()
-                    return {
-                        "student_id": student_id,
-                        "node_id": node_id,
-                        "analysis_version": analysis_version,
-                        "plan_version": old_plan_version,
-                        "review_status": "validated",
-                        "publication_status": "published",
-                        "applicability": "applicable",
-                        "reason": reason,
-                    }
+
+    # 先判断旧方案是否仍适用：没有实质变化就保留原方案，只记录复查结论。
+    if old_plan_version and old_plan is not None:
+        old_analysis_row = (
+            db.get(models.Version, old_plan.analysis_version)
+            if old_plan.analysis_version
+            else None
+        )
+        if old_analysis_row is not None and old_analysis_row.payload_json:
+            old_result = StudentResult.model_validate(old_analysis_row.payload_json)
+            applicable, reason, limits = evaluate_applicability(
+                old_plan, old_result, affected_students[0]
+            )
+            if applicable:
+                _record_applicability(
+                    db,
+                    key=old_key,
+                    plan_version=old_plan_version,
+                    analysis_version=analysis_version,
+                    knowledge_version=context.knowledge_version,
+                    catalog_version=catalog.version,
+                    result="applicable",
+                    event_cutoff=len(included),
+                    activity_ids=[
+                        activity.activity_id
+                        for rec in old_plan.recommendations
+                        for activity in rec.activities
+                    ],
+                    limitations=limits,
+                    job_id=ctx.job.id,
+                )
+                upsert_step(
+                    db, ctx.job, "plan_student", label="复查学习方案", status="succeeded"
+                )
+                db.commit()
+                return {
+                    "student_id": student_id,
+                    "node_id": node_id,
+                    "analysis_version": analysis_version,
+                    "plan_version": old_plan_version,
+                    "review_status": "validated",
+                    "publication_status": "published",
+                    "applicability": "applicable",
+                    "reason": reason,
+                }
 
     from study_companion.library.history import build_history
     from study_companion.recommendation import planner as c_planner
@@ -1422,6 +1534,7 @@ def handle_student_update(ctx: JobContext) -> dict[str, Any]:
             history=history,
             now=now,
             node_available_ids=node_available,
+            suppressed=suppressed,
         )
     )
     plan_bundle = draft.bundle

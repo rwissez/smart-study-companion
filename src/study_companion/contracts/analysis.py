@@ -73,6 +73,8 @@ class Finding(Contract):
     error_types: list[ErrorType] = Field(default_factory=list)
     diagnostic_details: list[DiagnosticDetail] = Field(default_factory=list)
     generation_method: GenerationMethod = "rule"
+    #: 掌握程度（03 §5.4）；未达判定条件时为 unknown，不默认"未掌握"。
+    mastery_level: Literal["unknown", "emerging", "developing", "mastered"] | None = None
 
 
 class ProgressComparison(Contract):
@@ -83,6 +85,8 @@ class ProgressComparison(Contract):
     scope: MetricScope
     classification: ProgressClassification
     comparable: bool
+    #: 比较的指标名（valid_score_ratio 等）；契约显式保留，避免只靠 comparison_id 编码。
+    metric_name: str = ""
     baseline_value: float | None = None
     current_value: float | None = None
     evidence_refs: list[EvidenceRef] = Field(default_factory=list)
