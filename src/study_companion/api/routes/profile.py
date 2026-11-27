@@ -382,6 +382,37 @@ def plan_for_student(
     raise DomainError("RESULT_NOT_READY", "该学生尚无正式学习方案")
 
 
+def _overlay_live_state(
+    db: DbSession, plan: RecommendationBundle, student_uid: str
+) -> RecommendationBundle:
+    """用真实活动状态覆盖方案快照里的 state。
+
+    方案正文不可变（发布时的快照），但学生看到的"进行中/已完成"必须来自
+    ``activity_state``，否则页面会一直显示未开始。
+    """
+
+    rows = db.scalars(
+        select(models.ActivityStateRow).where(models.ActivityStateRow.student_uid == student_uid)
+    ).all()
+    states = {row.activity_id: row.state for row in rows}
+    if not states:
+        return plan
+    recommendations = [
+        rec.model_copy(
+            update={
+                "activities": [
+                    activity.model_copy(
+                        update={"state": states.get(activity.activity_id, activity.state)}
+                    )
+                    for activity in rec.activities
+                ]
+            }
+        )
+        for rec in plan.recommendations
+    ]
+    return plan.model_copy(update={"recommendations": recommendations})
+
+
 @router.get("/datasets/{dataset_id}/students/{student_id}/plan")
 def student_plan(
     dataset_id: str,
@@ -402,6 +433,9 @@ def student_plan(
     )
     payload = version.payload_json or {}
     plan = RecommendationBundle.model_validate(payload)
+    student_uid = _student_uid(dataset, db, student_id)
+    if student_uid:
+        plan = _overlay_live_state(db, plan, student_uid)
     applicability = db.scalar(
         select(models.PlanApplicability)
         .where(models.PlanApplicability.plan_version == version.version_id)

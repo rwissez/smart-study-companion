@@ -173,7 +173,14 @@ def save_dataset(
             family_id=family.family_id,
             snapshot_hash=snapshot_hash,
             state="ready",
-            display_name=display_name or family.label or f"数据集 {dataset_id[-6:]}",
+            display_name=(
+                display_name
+                or family.label
+                or (
+                    f"教学数据集（{len(prepared.students)} 名学生 / "
+                    f"{len({student.class_id for student in prepared.students})} 个班）"
+                )
+            ),
         )
     )
     db.flush()

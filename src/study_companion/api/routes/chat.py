@@ -335,21 +335,48 @@ def _rule_fallback(db, scope, target, node_id: str | None) -> dict[str, Any] | N
     if version is None:
         return None
     payload = dict(version.payload_json or {})
-    lines = [f"以下内容直接来自 {student_id} 在节点 {node_key} 的正式学情（规则摘要，未使用模型）："]
+    catalog_row = db.get(models.Catalog, payload.get("catalog_version") or "")
+    indicator_names: dict[str, str] = {}
+    if catalog_row is not None:
+        for indicator in (catalog_row.payload_json or {}).get("indicators", []):
+            indicator_names[indicator.get("indicator_id", "")] = indicator.get("description", "")
+    for row in db.scalars(
+        select(models.Indicator).where(
+            models.Indicator.catalog_version == (payload.get("catalog_version") or "")
+        )
+    ).all():
+        indicator_names.setdefault(
+            row.indicator_id, (row.payload_json or {}).get("description", "")
+        )
+    node_label = f"第 {node_key[-1]} 次观察" if node_key and node_key[-1].isdigit() else node_key
+    lines = [
+        f"以下是 {student_id} 在{node_label}的正式学情（规则摘要，未使用模型）："
+    ]
     for metric in payload.get("metrics", [])[:6]:
         scope_info = metric.get("scope") or {}
-        label = scope_info.get("indicator_id") or scope_info.get("class_id") or "指标"
+        indicator_id = scope_info.get("indicator_id") or ""
+        label = indicator_names.get(indicator_id) or scope_info.get("class_id") or "本次观察"
         numerator = metric.get("numerator")
         denominator = metric.get("denominator")
-        value = metric.get("value")
         if numerator is None or denominator in (None, 0):
             lines.append(f"- {label}：暂无有效分母（{metric.get('name', '')}）")
         else:
-            lines.append(f"- {label}：{numerator}/{denominator}（{value}）")
+            lines.append(f"- {label}：{numerator}/{denominator}")
+    status_text = {
+        "sufficient": "证据充分",
+        "insufficient": "证据不足",
+        "conflicting": "证据冲突",
+    }
+    performance_text = {
+        "observed_strength": "表现较好",
+        "needs_practice": "仍需练习",
+        "undetermined": "暂不判断",
+    }
     for finding in payload.get("findings", [])[:4]:
         lines.append(
-            f"- 诊断：{finding.get('description', '')}（证据状态 {finding.get('evidence_status')}，"
-            f"表现 {finding.get('performance')}）"
+            f"- 诊断：{finding.get('description', '')}"
+            f"（{status_text.get(finding.get('evidence_status'), finding.get('evidence_status'))}，"
+            f"{performance_text.get(finding.get('performance'), finding.get('performance'))}）"
         )
     limitations = payload.get("limitations") or []
     if limitations:

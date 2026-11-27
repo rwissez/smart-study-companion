@@ -202,10 +202,32 @@ def start_activity(
         raise DomainError("PLAN_SUSPENDED", "该活动已暂停，不能开始")
     if activity.kind == "question":
         attempt = _open_attempt(db, activity, student_uid, plan_version)
+        if state.state == "not_started":
+            state.state = "in_progress"
+            state.generation += 1
+            state.updated_at = ledger.now_iso()
+            ledger.append(
+                db,
+                family_id=dataset.family_id,
+                dataset_id=dataset.id,
+                run_id=repo.active_run_id(db, dataset.id, version.node_key),
+                student_uid=student_uid,
+                node_id=version.node_key,
+                plan_version=plan_version,
+                group_id=activity.group_id,
+                activity_id=activity_id,
+                material_id=activity.material_id,
+                attempt_id=attempt.attempt_id,
+                event_type="activity_started",
+                source="student",
+                payload={"activity_kind": "question"},
+                occurred_at=ledger.now_iso(),
+            )
+            db.flush()
         return success(
             {
                 "activity_id": activity_id,
-                "state": "in_progress",
+                "state": state.state,
                 "event_id": None,
                 "attempt": attempt_view(db, attempt, student_id),
             }
@@ -655,6 +677,19 @@ def get_attempt(attempt_id: str, db: DbSession, scope: Scope) -> dict:
         raise DomainError("FORBIDDEN", "不能查看他人的作答")
     grade_row = db.get(models.Grade, row.latest_grade_id) if row.latest_grade_id else None
     reveal = bool(grade_row and grade_row.status == "graded" and grade_row.validation_status == "validated")
+
+    # 已释放提示按层级回显：刷新页面后学生仍能看到自己已经拿到的提示文本。
+    hint_levels: list[str] = []
+    plan = _plan_payload(db, row.plan_version)
+    for recommendation in plan.recommendations:
+        for activity in recommendation.activities:
+            if activity.activity_id == row.activity_id:
+                hint_levels = list(activity.hint_levels)
+    released_level = int((row.answer_json or {}).get("hint_max_level") or 0)
+    released = [
+        {"level": index, "text": text}
+        for index, text in enumerate(hint_levels[:released_level], start=1)
+    ]
     return success(
         {
             "attempt": attempt_view(db, row, version.target_key),
@@ -662,6 +697,7 @@ def get_attempt(attempt_id: str, db: DbSession, scope: Scope) -> dict:
             "feedback": None,
             "group_status": None,
             "update_job_id": None,
+            "released_hints": released,
         }
     )
 

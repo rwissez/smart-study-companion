@@ -140,13 +140,26 @@ def _resolve_record(
         historical_revision=payload.get("revision"),
         related_findings=[],
     )
+    detail_payload = detail.model_dump(mode="json")
+    if not teacher:
+        # 学生投影必须**删除**教师字段，而不是置空：null/[] 仍然暴露字段存在。
+        for field in (
+            "reference_answer",
+            "reference_explanation",
+            "rubric_points",
+            "reviewed_variant_tag",
+        ):
+            detail_payload["question"].pop(field, None)
+        for point in detail_payload.get("rubric_scores", []):
+            point.pop("description", None)
     return EvidenceDetail(
         ref=ref,
         title=f"作答记录 {ref.id}",
         detail_type="record",
         summary=f"得分 {payload.get('score')}/{payload.get('max_score')}",
-        detail=detail.model_dump(mode="json"),
+        detail=detail_payload,
         limitations=["原始记录不可改写，评分修订以最新有效版本为准"],
+        visibility="full",
     )
 
 

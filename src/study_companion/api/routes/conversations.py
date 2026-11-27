@@ -84,4 +84,6 @@ def list_messages(
                 "operation_results": payload.get("operation_results", []),
             }
         )
-    return success({"items": items, "total": len(rows), "page": page, "page_size": page_size})
+    return success(
+        {"items": items, "total": len(rows), "page": page, "page_size": page_size}
+    )
