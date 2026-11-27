@@ -13,6 +13,7 @@ import csv
 import hashlib
 import io
 import json
+import logging
 import os
 import re
 import tempfile
@@ -34,6 +35,14 @@ from study_companion.contracts import (
 )
 from study_companion.db import models
 from study_companion.db import version_repository as repo
+from study_companion.sources import (
+    EnrichedSource,
+    EnrichmentReport,
+    MaterialInput,
+    RawMaterialRow,
+    TextbookPage,
+    enrich_sources,
+)
 
 SCHEMA_VERSION = "1.1"
 EXPORT_FORMAT = "zip"
@@ -1200,38 +1209,141 @@ def _module_method(methods: set[str]) -> str:
     return "rule"
 
 
-def _source_locator_ref(
-    locator: dict[str, Any],
+def _project_material_source(
+    enriched: EnrichedSource,
     *,
-    material_id: str,
     catalog_version: str,
-    source_label: str | None = None,
-) -> dict[str, Any]:
-    """材料出处投影；只搬运目录里已登记的定位字段，不补页码。"""
+) -> tuple[list[dict[str, Any]], str, str]:
+    """把来源核验结论投影成 ``materials_index`` 的出处字段。
 
-    ref: dict[str, Any] = {
-        "kind": "material_source",
-        "id": material_id,
-        "material_id": material_id,
-        "catalog_version": catalog_version,
-        "source_file": str(locator.get("source_file") or ""),
-        "verification_status": str(locator.get("verification_status") or "unverified"),
-    }
-    for field in (
-        "source_kind",
-        "file_id",
-        "chapter",
-        "section",
-        "pdf_page",
-        "page_end",
-        "printed_page",
-    ):
-        value = locator.get(field)
-        if value not in (None, ""):
-            ref[field] = value
-    if source_label:
-        ref["source_label"] = source_label
-    return ref
+    ``source_ref`` 由来源模块生成，携带真实命中的行号与引文；没有可解析出处时
+    不生成空引用。``source_status``/``source_note`` 直接采用核验结论，不按
+    ``locator_level`` 再推断一次。
+    """
+
+    ref = enriched.source_ref(catalog_version=catalog_version)
+    source_refs = [ref] if ref.get("source_file") else []
+    return source_refs, enriched.source_status, enriched.reason_detail
+
+
+def _extract_textbook_pages(
+    path: Path,
+    *,
+    file_id: str,
+    source_file: str,
+) -> tuple[TextbookPage, ...]:
+    """按来源审计同一口径读取 PDF 文本页；只读原件，不推断印刷页码。"""
+
+    try:
+        from pypdf import PdfReader
+    except ImportError:  # pragma: no cover - 依赖缺失时保持无页面文本
+        return ()
+
+    logging.getLogger("pypdf").setLevel(logging.ERROR)
+    try:
+        reader = PdfReader(str(path))
+    except Exception:
+        return ()
+
+    pages: list[TextbookPage] = []
+    for index, page in enumerate(reader.pages, start=1):
+        try:
+            text = page.extract_text() or ""
+        except Exception:
+            text = ""
+        pages.append(
+            TextbookPage(
+                file_id=file_id,
+                pdf_page=index,
+                text=text,
+                source_file=source_file or None,
+            )
+        )
+    return tuple(pages)
+
+
+def _textbook_source_inputs(
+    db: Session,
+    dataset_id: str,
+) -> tuple[dict[str, str], tuple[TextbookPage, ...]]:
+    """读取已登记教材 PDF 的文件名映射与逐页文本，供来源核验使用。"""
+
+    from study_companion.library import blobs
+
+    import_rows = db.execute(
+        select(models.ImportFileRow, models.FileObject)
+        .join(
+            models.FileObject,
+            models.FileObject.file_id == models.ImportFileRow.file_id,
+        )
+        .where(models.FileObject.media_type == "application/pdf")
+    ).all()
+    names: dict[str, str] = {}
+    file_ids: dict[str, str] = {}
+    for import_file, file_object in import_rows:
+        file_id = str(file_object.file_id)
+        original_name = str(import_file.original_name or "")
+        names.setdefault(file_id, original_name)
+        for key in (original_name, Path(original_name).name if original_name else ""):
+            if key:
+                file_ids.setdefault(key, file_id)
+    for source in db.scalars(
+        select(models.DatasetSource).where(
+            models.DatasetSource.dataset_id == dataset_id,
+            models.DatasetSource.source_key.in_(("standard", "textbook")),
+        )
+    ).all():
+        file_id = str(source.file_id)
+        file_ids.setdefault(source.source_key, file_id)
+        original_name = names.get(file_id, "")
+        if original_name:
+            file_ids.setdefault(Path(original_name).name, file_id)
+
+    pages: list[TextbookPage] = []
+    pdf_objects = db.scalars(
+        select(models.FileObject).where(models.FileObject.media_type == "application/pdf")
+    ).all()
+    for file_object in pdf_objects:
+        try:
+            path = blobs.resolve(file_object.storage_key)
+        except (DomainError, OSError):
+            continue
+        pages.extend(
+            _extract_textbook_pages(
+                path,
+                file_id=str(file_object.file_id),
+                source_file=names.get(str(file_object.file_id), ""),
+            )
+        )
+    return file_ids, tuple(pages)
+
+
+def _material_source_enrichment(
+    db: Session,
+    dataset_id: str,
+    catalog_materials: list[dict[str, Any]],
+) -> EnrichmentReport:
+    """用正式原始材料行与已登记教材页面核验目录材料。"""
+
+    materials = tuple(MaterialInput.from_payload(item) for item in catalog_materials)
+    material_rows = tuple(
+        RawMaterialRow.from_source_row(row)
+        for row in db.scalars(
+            select(models.SourceRow)
+            .where(
+                models.SourceRow.dataset_id == dataset_id,
+                models.SourceRow.table_name == "materials",
+            )
+            .order_by(models.SourceRow.row_number)
+        ).all()
+    )
+    file_ids, textbook_pages = _textbook_source_inputs(db, dataset_id)
+    return enrich_sources(
+        materials,
+        material_rows=material_rows,
+        textbook_pages=textbook_pages,
+        file_ids=file_ids,
+    )
 
 
 def _latest_published(
@@ -1602,49 +1714,22 @@ def build_files(db: Session, export: models.Export) -> dict[str, bytes]:
     materials_without_source = 0
     materials_without_kp = 0
     materials_difficulty_unknown = 0
+    enrichment_by_id = _material_source_enrichment(
+        db, dataset.id, catalog_materials
+    ).by_material_id()
     for material in catalog_materials:
         material_id = str(material["material_id"])
-        locator = material.get("source_locator") or {}
-        source_refs: list[dict[str, Any]] = []
-        if isinstance(locator, dict) and locator.get("source_file"):
-            source_refs.append(
-                _source_locator_ref(
-                    locator,
-                    material_id=material_id,
-                    catalog_version=selection["catalog_version"],
-                    source_label=material.get("source_label"),
-                )
+        enriched = enrichment_by_id.get(material_id)
+        if enriched is not None:
+            source_refs, source_status, source_note = _project_material_source(
+                enriched,
+                catalog_version=selection["catalog_version"],
             )
-            structured = any(
-                locator.get(field)
-                for field in ("file_id", "chapter", "section", "pdf_page", "printed_page")
-            )
-            if structured:
-                locator_level = "structured"
-            elif str(locator.get("source_file")) not in {"题目与材料", "材料表"}:
-                locator_level = "label_only"
-            else:
-                locator_level = "table_only"
-            source_refs[0]["locator_level"] = locator_level
-        if source_refs:
-            verified = (
-                source_refs[0].get("verification_status") == "verified"
-                and source_refs[0].get("locator_level") == "structured"
-            )
-            source_status = "verified" if verified else "unverified"
-            if source_refs[0].get("locator_level") == "table_only":
-                source_note = (
-                    "来源只登记到输入表名，未定位到教材文件、章节或页码，标记 unverified"
-                )
-            elif source_refs[0].get("locator_level") == "label_only":
-                source_note = (
-                    "来源只有文字标签，未登记可解析的文件、章节或页码，标记 unverified"
-                )
-            else:
-                source_note = "来源为目录登记的结构化定位，未在导出时复核原件"
-        else:
+        else:  # pragma: no cover - enrich_sources 覆盖全部目录材料
+            source_refs = []
             source_status = "unverified"
             source_note = "目录材料未登记出处定位，来源未知"
+        if not source_refs:
             materials_without_source += 1
 
         kp_refs: list[dict[str, Any]] = [
@@ -3062,7 +3147,7 @@ def _field_dictionary(payloads: dict[str, bytes]) -> dict[str, Any]:
                 "type": "list",
                 "required": True,
                 "nullable": False,
-                "meaning": "材料出处投影；空数组表示目录未登记出处，用 source_status=unverified 标明，不补造页码",
+                "meaning": "材料出处投影；空数组表示目录未登记可解析出处，用 source_status=unknown 标明，不补造页码",
                 "example": '[{"kind": "material_source", "source_file": "..."}]',
             },
             {
