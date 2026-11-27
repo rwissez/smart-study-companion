@@ -201,6 +201,121 @@ def _previous_student_result(
         return None
 
 
+def _append_limitation(result: Any, text: str) -> None:
+    """把限制写进结果且不重复；限制要能被导出读回，不能只留在日志里。"""
+
+    limitations = list(getattr(result, "limitations", []) or [])
+    if text in limitations:
+        return
+    result.limitations = limitations + [text]
+
+
+def _knowledge_dependency_limitation(reason: str | None) -> str:
+    detail = (reason or "").strip() or "本轮没有可解析的正式知识版本"
+    return f"未登记知识版本依赖：{detail}"
+
+
+def _has_observation(result: StudentResult) -> bool:
+    """有正式数值指标即视为该节点有观测；零分是有效观测，不当作缺失。"""
+
+    return any(metric.value is not None for metric in result.metrics)
+
+
+def _version_has_observation(db: Session, version_id: str) -> bool | None:
+    """读已发布学情版本判断该成员在该节点是否有观测；旧格式无法解析时返回 ``None``。"""
+
+    row = db.get(models.Version, version_id)
+    if row is None or not row.payload_json:
+        return None
+    try:
+        return _has_observation(StudentResult.model_validate(row.payload_json))
+    except Exception:
+        return None
+
+
+def _formal_student_version_id(
+    db: Session, family_id: str, dataset_id: str, node_id: str, student_id: str
+) -> str | None:
+    """该学生该节点最近一次已发布的正式学情版本。
+
+    学情头按运行分开存放（run_key=run_id），所以不能按空 run_key 查找；
+    这里按发布时间取最近一条，供局部更新时给班级成员边回落到真实成员版本。
+    """
+
+    head = db.scalar(
+        select(models.FormalHead)
+        .where(
+            models.FormalHead.family_id == family_id,
+            models.FormalHead.dataset_id == dataset_id,
+            models.FormalHead.kind == "student_analysis",
+            models.FormalHead.node_key == node_id,
+            models.FormalHead.target_key == student_id,
+            models.FormalHead.version_id.is_not(None),
+        )
+        .order_by(models.FormalHead.updated_at.desc())
+        .limit(1)
+    )
+    return head.version_id if head is not None else None
+
+
+def _class_member_entries(
+    db: Session,
+    *,
+    family_id: str,
+    dataset_id: str,
+    node_id: str,
+    class_id: str,
+    created: dict[tuple[str, str], str],
+    observations: dict[tuple[str, str], bool],
+) -> tuple[list[dict[str, Any]], list[str]]:
+    """列出班级版本覆盖的名册与每个成员当次使用的学情版本（06 §3.1）。
+
+    名册来自该数据集快照，分母不能因为学生没有作答而缩小；成员版本优先用
+    本次事务新发布的学情，局部更新时回落到该学生该节点的正式指针。
+    """
+
+    roster = db.scalars(
+        select(models.Student)
+        .where(
+            models.Student.dataset_id == dataset_id,
+            models.Student.class_id == class_id,
+        )
+        .order_by(models.Student.student_id)
+    ).all()
+    entries: list[dict[str, Any]] = []
+    limitations: list[str] = []
+    if not roster:
+        limitations.append("快照名册里没有该班级成员，未登记班级成员学情版本")
+    for student in roster:
+        if not student.student_uid:
+            limitations.append(
+                f"成员 {student.student_id} 缺少稳定身份，未登记班级成员版本"
+            )
+            continue
+        version_id = created.get((node_id, student.student_id)) or _formal_student_version_id(
+            db, family_id, dataset_id, node_id, student.student_id
+        )
+        if version_id is None:
+            member_state = "not_ready"
+        else:
+            observed = observations.get((node_id, student.student_id))
+            if observed is None:
+                observed = _version_has_observation(db, version_id)
+            if observed is None:
+                member_state = "not_ready"
+            else:
+                member_state = "available" if observed else "no_observation"
+        entries.append(
+            {
+                "student_id": student.student_id,
+                "student_uid": student.student_uid,
+                "analysis_version": version_id or "",
+                "member_state": member_state,
+            }
+        )
+    return entries, limitations
+
+
 def persist_analysis_bundle(
     db: Session,
     bundle: AnalysisBundle,
@@ -210,10 +325,31 @@ def persist_analysis_bundle(
     job_id: str | None,
     event_cutoff: int,
     included_event_ids: list[str],
+    knowledge_unavailable_reason: str | None = None,
 ) -> dict[str, Any]:
-    """把一次 B 计算写成正式个人/班级版本并发布指针。"""
+    """把一次 B 计算写成正式个人/班级版本并发布指针。
+
+    B 版本必须登记实际使用的知识版本（``role=knowledge``）；本轮确实没有
+    知识依赖时，把原因写进结果限制并保留 ``knowledge_version`` 为空，不允许
+    静默留空。班级版本同时登记成员学情边（``role=member_analysis``）。
+    """
 
     run_id = bundle.run_id
+    knowledge_version_row: models.Version | None = None
+    if bundle.knowledge_version:
+        knowledge_version_row = db.get(models.Version, bundle.knowledge_version)
+        if knowledge_version_row is None:
+            raise DomainError(
+                "RESULT_NOT_READY", "学情引用的知识版本不存在，不能登记正式依赖"
+            )
+    knowledge_limitation = (
+        _knowledge_dependency_limitation(knowledge_unavailable_reason)
+        if knowledge_version_row is None
+        else None
+    )
+    catalog_dep = _version_row(
+        db, repo.FormalKey(family_id=family_id, dataset_id=bundle.dataset_id, kind="catalog")
+    )
     stamp = repo.now_iso()
     run = db.get(models.AnalysisRun, run_id)
     if run is None:
@@ -235,6 +371,8 @@ def persist_analysis_bundle(
         db.flush()
 
     published: list[str] = []
+    created_members: dict[tuple[str, str], str] = {}
+    observations: dict[tuple[str, str], bool] = {}
     for result in bundle.student_results:
         key = repo.FormalKey(
             family_id=family_id,
@@ -264,6 +402,8 @@ def persist_analysis_bundle(
                 result.progress = compare_progress(baseline, result)
             except Exception:  # 旧版本缺口径时保留"无法比较"而不是中断发布
                 result.progress = []
+        if knowledge_limitation:
+            _append_limitation(result, knowledge_limitation)
         payload = result.model_dump(mode="json")
         version = repo.create_version(
             db,
@@ -292,17 +432,13 @@ def persist_analysis_bundle(
             expected_generation=expected_generation,
         )
         published.append(version.version_id)
+        created_members[(result.node_id, result.student_id)] = version.version_id
+        observations[(result.node_id, result.student_id)] = _has_observation(result)
         # 依赖边：B 版本实际使用了哪个目录/知识版本，导出闭包据此解析。
-        catalog_dep = _version_row(
-            db,
-            repo.FormalKey(family_id=family_id, dataset_id=bundle.dataset_id, kind="catalog"),
-        )
         if catalog_dep is not None:
             repo.register_edge(db, version, catalog_dep, role="catalog")
-        if bundle.knowledge_version:
-            knowledge_dep = db.get(models.Version, bundle.knowledge_version)
-            if knowledge_dep is not None:
-                repo.register_edge(db, version, knowledge_dep, role="knowledge")
+        if knowledge_version_row is not None:
+            repo.register_edge(db, version, knowledge_version_row, role="knowledge")
         repo.record_artifact_use(
             db,
             version_id=version.version_id,
@@ -367,13 +503,36 @@ def persist_analysis_bundle(
             node_key=result.node_id,
             target_key=result.class_id,
         )
+        member_entries, member_limitations = _class_member_entries(
+            db,
+            family_id=family_id,
+            dataset_id=bundle.dataset_id,
+            node_id=result.node_id,
+            class_id=result.class_id,
+            created=created_members,
+            observations=observations,
+        )
+        for limitation in member_limitations:
+            _append_limitation(result, limitation)
+        result.member_analysis_versions = member_entries
+        result.analysis_input = AnalysisInputRef(
+            dataset_id=bundle.dataset_id,
+            catalog_version=bundle.catalog_version,
+            knowledge_version=bundle.knowledge_version,
+            rule_version=bundle.rule_version,
+            config_hash=repo.digest(bundle.config.model_dump(mode="json")),
+            event_cutoff=event_cutoff,
+            included_event_ids=included_event_ids,
+            created_at=repo.now_iso(),
+        )
+        class_payload = result.model_dump(mode="json")
         version = repo.create_version(
             db,
             kind="class_analysis",
             key=key,
-            payload=result.model_dump(mode="json"),
+            payload=class_payload,
             rule_version=bundle.rule_version,
-            input_digest=repo.digest(result.model_dump(mode="json")),
+            input_digest=repo.digest(class_payload),
             run_id=run_id,
             job_id=job_id,
             version_id=repo.new_id("bcl"),
@@ -393,6 +552,25 @@ def persist_analysis_bundle(
             expected_generation=head.generation if head else 0,
         )
         published.append(version.version_id)
+        if catalog_dep is not None:
+            repo.register_edge(db, version, catalog_dep, role="catalog")
+        # 班级版本对成员学情负责：每个名册成员一条 member_analysis 边 + class_members 行。
+        for entry in member_entries:
+            member_version_id = entry.get("analysis_version") or ""
+            if not member_version_id:
+                continue
+            member_version = db.get(models.Version, member_version_id)
+            if member_version is None:
+                continue
+            repo.register_edge(db, version, member_version, role="member_analysis")
+            db.add(
+                models.ClassMember(
+                    class_version_id=version.version_id,
+                    student_uid=entry["student_uid"],
+                    student_version_id=member_version_id,
+                    member_state=entry["member_state"],
+                )
+            )
         db.add(
             models.AnalysisResult(
                 run_id=run_id,
@@ -709,7 +887,11 @@ def _take_lesson_model_budget(job_id: str | None) -> bool:
     return True
 
 def current_knowledge_payload(db: Session, dataset_id: str, family_id: str | None) -> dict[str, Any]:
-    """读取当前正式知识版本正文；没有构建过就返回空字典（C 会明确标注缺少依据）。"""
+    """读取当前正式知识版本正文；没有构建过就返回空字典（C 会明确标注缺少依据）。
+
+    返回体带上 ``knowledge_version``，调用方据此登记依赖边和证据引用；
+    少了这个字段会让微课堂/方案"看起来用了知识"却无法反查到精确版本。
+    """
 
     if not family_id:
         return {}
@@ -717,7 +899,9 @@ def current_knowledge_payload(db: Session, dataset_id: str, family_id: str | Non
     row = repo.read_formal(db, key)
     if row is None or not row.payload_json:
         return {}
-    return dict(row.payload_json)
+    payload = dict(row.payload_json)
+    payload["knowledge_version"] = row.version_id
+    return payload
 
 
 def annotate_strategies(
@@ -1151,7 +1335,11 @@ def handle_import_process(ctx: JobContext) -> dict[str, Any]:
         version_id=knowledge_version_id,
         origin_kind="system",
     )
-    if knowledge_result.review_info.status == "validated":
+    # 知识版本必须能反查到它实际依据的目录版本（06 §3.1）；缺这条边会导致
+    # 目录变化无法影响知识体系，也无法从知识版本解析到正式目录。
+    repo.register_catalog_edge(db, knowledge_version, catalog_version=catalog_row)
+    knowledge_published = knowledge_result.review_info.status == "validated"
+    if knowledge_published:
         repo.publish(
             db,
             key=knowledge_key,
@@ -1187,22 +1375,36 @@ def handle_import_process(ctx: JobContext) -> dict[str, Any]:
     upsert_step(db, ctx.job, "knowledge", label="构建课程知识体系", status="succeeded")
     db.commit()
 
+    # 只有通过复核并发布的 A 快照才是正式知识依赖；未通过时 B/C 不登记知识版本，
+    # 并把限制写进结果与方案，而不是静默留空。
+    knowledge_dependency_id = knowledge_version_id if knowledge_published else None
+    knowledge_unavailable_reason = None
+    if knowledge_dependency_id is None:
+        knowledge_unavailable_reason = (
+            f"知识体系未通过自动校验（review={knowledge_result.review_info.status}），"
+            "未发布为正式知识版本"
+        )
     context = RunContext(
         run_id=repo.new_id("run"),
         dataset_id=dataset_id,
         catalog_version=catalog_version,
         rule_version=RULE_VERSION,
         dataset_family_id=family_id,
-        knowledge_version=(
-            knowledge_version_id if knowledge_result.review_info.status == "validated" else None
-        ),
+        knowledge_version=knowledge_dependency_id,
     )
     upsert_step(db, ctx.job, "analysis", label="生成学情分析", status="running")
     db.commit()
 
     config = AnalysisConfig(rule_version=RULE_VERSION)
     bundle = analyze_dataset(prepared, catalog, context, config, service=_analysis_model_service())
-    _attach_error_types(bundle, prepared, catalog, None)
+    # B 的错误类型要按知识图谱判定前置缺口；只有正式知识版本才作为输入依据。
+    _attach_error_types(
+        bundle,
+        prepared,
+        catalog,
+        knowledge_payload if knowledge_dependency_id else None,
+    )
+    bundle = bundle.model_copy(update={"knowledge_version": knowledge_dependency_id})
     included = [event.event_id for event in prepared.selected_events]
     result = persist_analysis_bundle(
         db,
@@ -1212,6 +1414,7 @@ def handle_import_process(ctx: JobContext) -> dict[str, Any]:
         job_id=ctx.job.id,
         event_cutoff=len(included),
         included_event_ids=included,
+        knowledge_unavailable_reason=knowledge_unavailable_reason,
     )
     upsert_step(db, ctx.job, "analysis", label="生成学情分析", status="succeeded")
     db.commit()
@@ -1273,9 +1476,7 @@ def handle_import_process(ctx: JobContext) -> dict[str, Any]:
             plan_bundle,
             family_id=family_id,
             analysis_version_id=analysis_version,
-            knowledge_version_id=(
-                knowledge_version_id if knowledge_result.review_info.status == "validated" else None
-            ),
+            knowledge_version_id=knowledge_dependency_id,
             job_id=ctx.job.id,
             review=review,
             student_uid=student.student_uid if student else None,
@@ -1289,9 +1490,7 @@ def handle_import_process(ctx: JobContext) -> dict[str, Any]:
         )
         if published["publication_status"] == "published" and student is not None:
             lesson_payload = dict(knowledge_payload)
-            lesson_payload["knowledge_version"] = (
-                knowledge_version_id if knowledge_result.review_info.status == "validated" else None
-            )
+            lesson_payload["knowledge_version"] = knowledge_dependency_id
             with_lessons = attach_lessons(
                 db,
                 family_id=family_id,
@@ -1320,11 +1519,7 @@ def handle_import_process(ctx: JobContext) -> dict[str, Any]:
                     ),
                     plan_version=published["plan_version"],
                     analysis_version=analysis_version,
-                    knowledge_version=(
-                        knowledge_version_id
-                        if knowledge_result.review_info.status == "validated"
-                        else None
-                    ),
+                    knowledge_version=knowledge_dependency_id,
                     catalog_version=catalog.version,
                     result="applicable",
                     event_cutoff=len(included),
@@ -1543,6 +1738,10 @@ def attach_lessons(
             )
             if model_limitations:
                 payload["limitations"] = list(payload.get("limitations") or []) + model_limitations
+            if not knowledge_version:
+                payload["limitations"] = list(payload.get("limitations") or []) + [
+                    "未登记知识版本依赖：本轮没有可解析的正式知识版本，微课堂只按规则模板生成"
+                ]
             lesson_key = repo.FormalKey(
                 family_id=family_id,
                 dataset_id=dataset_id,
@@ -1561,6 +1760,22 @@ def attach_lessons(
                 version_id=content_version,
                 origin_kind="system",
             )
+            # 微课堂正文来自知识点与个人学情诊断：两条依赖都登记，知识或学情变化
+            # 才能反查到受影响的微课堂版本（06 §3.1、§3.2）。
+            if knowledge_version:
+                knowledge_row = db.get(models.Version, knowledge_version)
+                if knowledge_row is None:
+                    raise DomainError(
+                        "RESULT_NOT_READY", "微课堂引用的知识版本不存在，不能登记正式依赖"
+                    )
+                repo.register_edge(db, lesson_version, knowledge_row, role="knowledge")
+            analysis_version_ref = getattr(student_result, "analysis_version", "") or ""
+            if analysis_version_ref:
+                analysis_row = db.get(models.Version, analysis_version_ref)
+                if analysis_row is not None:
+                    repo.register_edge(
+                        db, lesson_version, analysis_row, role="student_analysis"
+                    )
             if review.status == "validated":
                 repo.publish(
                     db,
@@ -1850,23 +2065,33 @@ def handle_student_update(ctx: JobContext) -> dict[str, Any]:
     upsert_step(db, ctx.job, "analysis_student", label="更新学情", status="running")
     db.commit()
 
+    knowledge_payload = current_knowledge_payload(db, dataset_id, dataset.family_id)
+    knowledge_dependency_id = knowledge_payload.get("knowledge_version") or None
+    knowledge_unavailable_reason = None
+    if knowledge_dependency_id is None:
+        knowledge_unavailable_reason = "该数据集没有已发布的正式知识版本"
     context = RunContext(
         run_id=repo.new_id("run"),
         dataset_id=dataset_id,
         catalog_version=catalog_version,
         rule_version=RULE_VERSION,
         dataset_family_id=dataset.family_id,
+        knowledge_version=knowledge_dependency_id,
     )
     bundle = analyze_dataset(
         prepared, catalog, context, AnalysisConfig(rule_version=RULE_VERSION), service=_analysis_model_service()
     )
-    _attach_error_types(bundle, prepared, catalog, current_knowledge_payload(db, dataset_id, dataset.family_id))
+    _attach_error_types(bundle, prepared, catalog, knowledge_payload or None)
     affected_students = [item for item in bundle.student_results if item.student_id == student_id and item.node_id == node_id]
     affected_classes = [item for item in bundle.class_results if item.class_id == student.class_id and item.node_id == node_id]
     if not affected_students:
         raise DomainError("RESULT_NOT_READY", "无法为该学生生成学情")
     filtered = bundle.model_copy(
-        update={"student_results": affected_students, "class_results": affected_classes}
+        update={
+            "student_results": affected_students,
+            "class_results": affected_classes,
+            "knowledge_version": knowledge_dependency_id,
+        }
     )
     included = [event.event_id for event in prepared.selected_events]
     result = persist_analysis_bundle(
@@ -1877,6 +2102,7 @@ def handle_student_update(ctx: JobContext) -> dict[str, Any]:
         job_id=ctx.job.id,
         event_cutoff=len(included),
         included_event_ids=included,
+        knowledge_unavailable_reason=knowledge_unavailable_reason,
     )
     upsert_step(db, ctx.job, "analysis_student", label="更新学情", status="succeeded")
     db.commit()
@@ -1993,7 +2219,7 @@ def handle_student_update(ctx: JobContext) -> dict[str, Any]:
         c_planner.PlannerInputs(
             student_result=affected_students[0],
             catalog=catalog,
-            knowledge_payload=current_knowledge_payload(db, dataset_id, dataset.family_id),
+            knowledge_payload=knowledge_payload,
             history=history,
             now=now,
             node_available_ids=node_available,
@@ -2010,7 +2236,7 @@ def handle_student_update(ctx: JobContext) -> dict[str, Any]:
         plan_bundle,
         family_id=dataset.family_id,
         analysis_version_id=analysis_version,
-        knowledge_version_id=None,
+        knowledge_version_id=knowledge_dependency_id,
         job_id=ctx.job.id,
         review=review,
         student_uid=student.student_uid,

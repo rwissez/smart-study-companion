@@ -102,19 +102,65 @@ def create_version(
     )
     db.add(row)
     db.flush()
+    if kind == "knowledge":
+        # 知识体系必然依据某个目录版本构建；在唯一创建入口补齐目录边，
+        # 重建/导入两条路径都不会再漏写（06 §3.1）。尚无正式目录时返回 None。
+        register_catalog_edge(db, row)
     return row
+
+
+def _depends_on(db: Session, start_version_id: str, target_version_id: str) -> bool:
+    """沿已有出边判断 ``start`` 是否直接或间接依赖 ``target``。
+
+    边的方向是"派生版本 → 依赖版本"，因此从候选依赖出发能走到当前版本时，
+    再插入反向边就构成环。逐层遍历即可，正式成果的依赖闭包很小。
+    """
+
+    frontier = [start_version_id]
+    seen = {start_version_id}
+    while frontier:
+        current = frontier.pop()
+        if current == target_version_id:
+            return True
+        rows = db.scalars(
+            select(models.ArtifactEdge.dep_version_id).where(
+                models.ArtifactEdge.version_id == current
+            )
+        ).all()
+        for dep_id in rows:
+            if dep_id in seen:
+                continue
+            seen.add(dep_id)
+            frontier.append(dep_id)
+    return False
 
 
 def register_edge(
     db: Session, version: models.Version, dep: models.Version, role: str, object_key: str = ""
 ) -> None:
+    """登记"派生版本实际使用了哪个精确版本"（06 §3.1）。
+
+    插入前校验：禁止自环、禁止重复边、禁止让依赖图出现环。依赖不可变，
+    重复登记同一 (version, role, object_key, dep) 按幂等处理。
+    """
+
     if version.version_id == dep.version_id:
         raise DomainError("UNPROCESSABLE", "版本不能依赖自身")
+    if version.family_id != dep.family_id or version.dataset_id != dep.dataset_id:
+        raise DomainError(
+            "CONTEXT_MISMATCH",
+            "依赖边两端必须属于同一数据集系列与同一数据集快照",
+        )
     existing = db.get(
         models.ArtifactEdge, (version.version_id, dep.version_id, role, object_key)
     )
     if existing is not None:
         return
+    if _depends_on(db, dep.version_id, version.version_id):
+        raise DomainError(
+            "UNPROCESSABLE",
+            f"依赖边会形成环：{dep.version_id} 已经直接或间接依赖 {version.version_id}",
+        )
     db.add(
         models.ArtifactEdge(
             version_id=version.version_id,
@@ -123,6 +169,56 @@ def register_edge(
             object_key=object_key,
         )
     )
+
+
+def register_catalog_edge(
+    db: Session,
+    version: models.Version,
+    *,
+    catalog_version: models.Version | None = None,
+) -> models.Version | None:
+    """确保版本登记了目录依赖（06 §3.1 的必需角色）。
+
+    知识版本由 A 构建、目录版本由导入流程发布；两者分开落库时容易漏写边。
+    这里按作用域解析正式目录版本，缺目录时返回 ``None`` 由调用方记录限制。
+
+    解析顺序：调用方显式指定的目录版本 → 知识 payload 声明的
+    ``catalog_version`` 在同一数据集唯一对应的版本 → 当前目录指针。前者能
+    避免"知识按旧目录构建、边却指向新目录头"的历史错配。
+    """
+
+    if catalog_version is None:
+        declared = (version.payload_json or {}).get("catalog_version")
+        if declared:
+            candidates = db.scalars(
+                select(models.Version).where(
+                    models.Version.kind == "catalog",
+                    models.Version.family_id == version.family_id,
+                    models.Version.dataset_id == version.dataset_id,
+                )
+            ).all()
+            matches = [
+                candidate
+                for candidate in candidates
+                if (candidate.payload_json or {}).get("catalog_version") == declared
+            ]
+            if len(matches) == 1:
+                catalog_version = matches[0]
+    if catalog_version is None:
+        head = read_head(
+            db,
+            FormalKey(
+                family_id=version.family_id,
+                dataset_id=version.dataset_id,
+                kind="catalog",
+            ),
+        )
+        if head is not None and head.version_id:
+            catalog_version = db.get(models.Version, head.version_id)
+    if catalog_version is None:
+        return None
+    register_edge(db, version, catalog_version, role="catalog")
+    return catalog_version
 
 
 def dependencies(db: Session, version: models.Version) -> list[models.ArtifactEdge]:

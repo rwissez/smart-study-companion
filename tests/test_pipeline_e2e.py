@@ -221,3 +221,93 @@ def test_job_retry_requires_failed_job(client: TestClient, imported: dict) -> No
     )
     assert response.status_code == 409
     assert response.json()["error"]["code"] == "JOB_RETRY_NOT_AVAILABLE"
+
+
+def test_import_publishes_dependency_edges(client: TestClient, imported: dict) -> None:
+    """一次真实导入必须产生可反查的依赖边（06 §3.1、§4.3）。
+
+    合成六表是 3 名学生（S01/S03 在 DC01、S02 在 DC02）、2 个节点：
+    * 学生学情 3×2=6 条，各自登记 catalog + knowledge；
+    * 班级学情 2×2=4 条，每个名册成员一条 member_analysis（DC01 2 人 + DC02 1 人，
+      两个节点共 6 条），并写 6 行 class_members；
+    * 知识版本登记 catalog 边；
+    * 微课堂版本登记 knowledge（以及个人学情）边。
+    """
+
+    from sqlalchemy import func, select
+
+    from study_companion.db import models, version_repository as repo
+    from study_companion.db.session import get_sessionmaker
+
+    dataset_id = imported["dataset_id"]
+    db = get_sessionmaker()()
+    try:
+        versions = db.scalars(
+            select(models.Version).where(models.Version.dataset_id == dataset_id)
+        ).all()
+        by_kind: dict[str, list] = {}
+        for version in versions:
+            by_kind.setdefault(version.kind, []).append(version)
+        assert len(by_kind["student_analysis"]) == 6
+        assert len(by_kind["class_analysis"]) == 4
+        assert len(by_kind["knowledge"]) == 1
+        assert by_kind["lesson"], "合成数据应生成微课堂"
+
+        def edge_count(kind: str, role: str) -> int:
+            return db.scalar(
+                select(func.count())
+                .select_from(models.ArtifactEdge)
+                .join(
+                    models.Version,
+                    models.Version.version_id == models.ArtifactEdge.version_id,
+                )
+                .where(
+                    models.Version.dataset_id == dataset_id,
+                    models.Version.kind == kind,
+                    models.ArtifactEdge.role == role,
+                )
+            )
+
+        # 知识版本 → 目录版本。
+        assert edge_count("knowledge", "catalog") == 1
+        # 学生学情 → 目录 / 知识版本。
+        assert edge_count("student_analysis", "catalog") == 6
+        assert edge_count("student_analysis", "knowledge") == 6
+        for version in by_kind["student_analysis"]:
+            roles = {edge.role for edge in repo.dependencies(db, version)}
+            assert roles == {"catalog", "knowledge"}
+            assert version.payload_json["analysis_input"]["knowledge_version"]
+        runs = db.scalars(
+            select(models.AnalysisRun).where(models.AnalysisRun.dataset_id == dataset_id)
+        ).all()
+        assert runs and all(run.knowledge_version for run in runs)
+        # 班级学情 → 成员学情版本（6 条）与目录版本。
+        assert edge_count("class_analysis", "member_analysis") == 6
+        assert edge_count("class_analysis", "catalog") == 4
+        member_rows = db.scalars(
+            select(models.ClassMember)
+            .join(
+                models.Version,
+                models.Version.version_id == models.ClassMember.class_version_id,
+            )
+            .where(models.Version.dataset_id == dataset_id)
+        ).all()
+        assert len(member_rows) == 6
+        assert {row.member_state for row in member_rows} <= {
+            "available",
+            "no_observation",
+            "not_ready",
+        }
+        for version in by_kind["class_analysis"]:
+            members = version.payload_json["member_analysis_versions"]
+            assert members, "班级版本必须列出成员学情版本"
+            assert {item["analysis_version"] for item in members} == {
+                edge.dep_version_id
+                for edge in repo.dependencies(db, version)
+                if edge.role == "member_analysis"
+            }
+        # 微课堂 → 知识版本 / 个人学情版本。
+        assert edge_count("lesson", "knowledge") == len(by_kind["lesson"])
+        assert edge_count("lesson", "student_analysis") == len(by_kind["lesson"])
+    finally:
+        db.close()
