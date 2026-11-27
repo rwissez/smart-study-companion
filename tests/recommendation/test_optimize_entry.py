@@ -16,6 +16,7 @@ from study_companion.contracts import (
     Recommendation,
     RecommendationBundle,
     RevisionIntent,
+    TaskGroup,
 )
 from study_companion.db import models
 from study_companion.db import version_repository as repo
@@ -117,7 +118,18 @@ def _bundle() -> RecommendationBundle:
         validation_issues=[],
         plan_version=PLAN_VERSION,
         analysis_version="ban-1",
-        task_groups=[],
+        task_groups=[
+            TaskGroup(
+                group_id="grp-1",
+                goal="围绕「去括号时的符号处理」安排本轮学习",
+                strategy_types=["error_correction"],
+                activity_ids=["act-1", "act-2", "act-3"],
+                order=1,
+                primary_strategy="error_correction",
+                goal_target_key="M1",
+                required_activity_ids=["act-1", "act-2", "act-3"],
+            )
+        ],
         publication_status="published",
     )
 

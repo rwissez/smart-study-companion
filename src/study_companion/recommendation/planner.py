@@ -54,6 +54,18 @@ EVIDENCE_RELIABILITY = {"sufficient": 1.0, "insufficient": 0.45, "conflicting": 
 #: 04 §3.2 的 U 映射（上次同策略效果 → 复用价值）。
 EFFECT_VALUE = {"ineffective": 1.0, "partial": 0.65, "improved": 0.2, "insufficient": 0.5}
 
+#: B 判定"表现较好"的阈值（03 §5，与 analysis.service.STRENGTH_THRESHOLD 一致）。
+HIGH_PERFORMANCE_THRESHOLD = 0.80
+#: 可形成稳定结论的最少有效样题数（03 §5.1）。
+MIN_EVIDENCE_SAMPLES = 3
+#: 能支撑"具体错误"判断的错误类型。迁移困难只说明变式表现不一致，
+#: 不是某一步的具体错因；笼统的 other_supported 也不能当具体错误。
+CONCRETE_ERROR_TYPES = frozenset({"step_error"})
+#: 提示依赖是"借助提示才做对"，可作为调整练习的证据，但不是具体错步。
+SUPPORT_ERROR_TYPES = frozenset({"hint_dependency"})
+#: 只能支持迁移或巩固、不能单独支持纠错的轻微信号。
+MILD_ERROR_TYPES = frozenset({"transfer_difficulty", "other_supported"})
+
 MAX_ROOTS = 2
 
 #: 连续无效后的替代策略（04 §7 的策略刹车）。
@@ -145,21 +157,104 @@ def _material_kp_ids(payload: dict[str, Any], material_id: str) -> list[str]:
     return []
 
 
-def _strategy_for(finding: dict[str, Any]) -> str:
-    """04 §3.1 的启动谓词（按文档顺序判定，先命中先得）。"""
+def _indicator_stats(
+    result: StudentResult, indicator_id: str | None
+) -> dict[str, float | int | None]:
+    """取该指标在 B 结果里的得分率、满分题比例与有效样题数。
+
+    只在填报了同一指标范围的指标上取值；没有对应指标时返回空值，
+    让策略退回只依赖 ``evidence_status`` / ``performance`` 的旧路径。
+    """
+
+    stats: dict[str, float | int | None] = {
+        "score_ratio": None,
+        "full_ratio": None,
+        "valid_items": None,
+    }
+    if not indicator_id:
+        return stats
+    full_denominator: int | None = None
+    coverage_numerator: int | None = None
+    for metric in result.metrics:
+        if metric.scope.indicator_id != indicator_id:
+            continue
+        if metric.name == "valid_score_ratio":
+            stats["score_ratio"] = metric.value
+        elif metric.name == "full_score_ratio":
+            stats["full_ratio"] = metric.value
+            if metric.denominator is not None:
+                full_denominator = metric.denominator
+        elif metric.name == "item_coverage" and metric.numerator is not None:
+            coverage_numerator = metric.numerator
+    stats["valid_items"] = (
+        coverage_numerator if coverage_numerator is not None else full_denominator
+    )
+    return stats
+
+
+def _is_high_performance(finding: dict[str, Any], stats: dict[str, Any] | None = None) -> bool:
+    """高分表现：B 的 observed_strength / mastered，或有得分率可直接核对。"""
+
+    if finding.get("performance") == "observed_strength":
+        return True
+    if finding.get("mastery_level") == "mastered":
+        return True
+    score_ratio = (stats or {}).get("score_ratio")
+    return score_ratio is not None and float(score_ratio) >= HIGH_PERFORMANCE_THRESHOLD
+
+
+def _has_enough_samples(stats: dict[str, Any] | None) -> bool:
+    """样题太少时只保守安排，不据此宣称迁移已就绪。"""
+
+    valid_items = (stats or {}).get("valid_items")
+    if valid_items is None:
+        return True
+    return int(valid_items) >= MIN_EVIDENCE_SAMPLES
+
+
+def strategy_for_finding(
+    finding: dict[str, Any], stats: dict[str, Any] | None = None
+) -> str:
+    """04 §3.1 的启动谓词，但要先核对证据能否支撑该策略。
+
+    与旧规则相比只收紧"error_types 非空就纠错"这一步：``transfer_difficulty``
+    描述的是不同变式间一对一错，指向的是表现不稳定，不是某个具体错步；
+    ``other_supported`` 更只是笼统说明。两者都不能单独支撑"存在具体错误证据"。
+    具体错步仍走 ``error_correction``；高分加轻微信号改走 ``consolidation``；
+    真正证据不足时仍先 ``collect_evidence``。
+    """
 
     if finding.get("evidence_status") in {"insufficient", "conflicting"}:
         return "collect_evidence"
+
+    stats = stats or {}
     error_types = set(finding.get("error_types") or [])
+    performance = finding.get("performance")
+    high = _is_high_performance(finding, stats)
+    enough = _has_enough_samples(stats)
+
     if "foundation_gap" in error_types:
         return "prerequisite_support"
-    if error_types:
+    if "step_error" in error_types:
         return "error_correction"
-    if finding.get("performance") == "observed_strength":
-        return "transfer"
-    if finding.get("performance") == "needs_practice":
+    if "hint_dependency" in error_types:
+        # 提示依赖不是具体错步；高分且样本足够时先巩固，避免纠错名不副实。
+        return "consolidation" if high and enough else "error_correction"
+    if error_types:
+        # 只剩迁移困难或笼统信号：先稳定表现，不写成具体纠错。
+        return "consolidation"
+    if performance == "observed_strength":
+        # 迁移必须建立在高分且样本足够的证据上，否则退回巩固。
+        return "transfer" if high and enough else "consolidation"
+    if performance == "needs_practice":
         return "consolidation"
     return "collect_evidence"
+
+
+def _strategy_for(finding: dict[str, Any]) -> str:
+    """兼容旧调用点：没有指标统计时只按诊断字段判断。"""
+
+    return strategy_for_finding(finding)
 
 
 def aggregate_needs(inputs: PlannerInputs) -> list[TeachingNeed]:
@@ -175,7 +270,8 @@ def aggregate_needs(inputs: PlannerInputs) -> list[TeachingNeed]:
         point = _kp_for_indicator(payload, indicator_id)
         kp_id = (point or {}).get("kp_id")
         key = kp_id or indicator_id
-        strategy = _strategy_for(finding)
+        stats = _indicator_stats(inputs.student_result, indicator_id)
+        strategy = strategy_for_finding(finding, stats)
         entry = merged.setdefault(
             key,
             {
@@ -412,14 +508,19 @@ def _prerequisite_chain(payload: dict[str, Any], kp_id: str | None, config: Plan
 
 
 def _confirmed_weakness(result: StudentResult, kp_id: str) -> bool:
-    """B 已确认的薄弱才算必要前置；缺证不算（04 §3.2）。"""
+    """B 已确认的薄弱才算必要前置；缺证或只是高分迁移波动不算（04 §3.2）。"""
 
     for finding in result.findings:
         if finding.kp_id != kp_id:
             continue
         if finding.evidence_status != "sufficient":
             continue
-        if finding.performance == "needs_practice" or finding.error_types:
+        stats = _indicator_stats(result, finding.indicator_id)
+        if _is_high_performance(finding.model_dump(mode="json"), stats):
+            continue
+        if finding.performance == "needs_practice" or (
+            set(finding.error_types) & CONCRETE_ERROR_TYPES
+        ):
             return True
     return False
 
@@ -471,12 +572,88 @@ def _student_intro(need: TeachingNeed, kp_name: str, count: int, strategy: str) 
     openings = {
         "collect_evidence": f"今天先用 {count} 道小题看看「{kp_name}」到底卡在哪一步，不用急着做对。",
         "prerequisite_support": f"先把「{kp_name}」的基础再走一遍，站稳了再回到原来的目标。",
-        "error_correction": f"上次在「{kp_name}」上出错的地方，今天用 {count} 道题一起纠正过来。",
-        "consolidation": f"「{kp_name}」已经有点感觉了，今天换几种问法巩固一下。",
+        "error_correction": f"「{kp_name}」里还不稳的地方，今天用 {count} 道题逐步练到能独立完成。",
+        "consolidation": f"「{kp_name}」整体已经不错，今天换几种问法把还不稳的地方练稳。",
         "transfer": f"「{kp_name}」掌握得不错，今天试试把它用到新的情境里。",
         "teacher_intervention": "这部分先由老师和你一起看，按老师安排进行。",
     }
     return openings.get(strategy, openings["consolidation"])
+
+
+def _append_unique(items: list[str], value: str) -> None:
+    if value not in items:
+        items.append(value)
+
+
+def _transfer_ready(candidate: candidate_rules.ScoredCandidate) -> bool:
+    """能承担迁移或独立检查的题：进阶难度，或已标注为复核过的变式。"""
+
+    if candidate.difficulty is not None and candidate.difficulty.level == "advanced":
+        return True
+    return bool(candidate.material.reviewed_variant_tag)
+
+
+def _transfer_activity_index(
+    selected: list[candidate_rules.ScoredCandidate],
+) -> int | None:
+    """返回最靠后的合格迁移题下标；没有则返回 None，调用方据此降级。"""
+
+    for index in range(len(selected) - 1, -1, -1):
+        if _transfer_ready(selected[index]):
+            return index
+    return None
+
+
+def _activity_purpose(
+    strategy: str,
+    kp_name: str,
+    candidate: candidate_rules.ScoredCandidate,
+    *,
+    independent: bool,
+) -> str:
+    """活动目的跟随实际策略，避免 transfer 组里写着普通练习。"""
+
+    if independent and strategy == "transfer":
+        return f"在新情境中独立完成「{kp_name}」的迁移检查"
+    if independent and strategy == "collect_evidence":
+        return f"独立完成「{kp_name}」的诊断题，确认是否真的会做"
+    label = {
+        "collect_evidence": "诊断",
+        "prerequisite_support": "补前置",
+        "error_correction": "纠错",
+        "consolidation": "巩固",
+        "transfer": "迁移",
+    }.get(strategy, "练习")
+    focus = "直接考查目标知识" if candidate.role == "primary" else "辅助步骤"
+    return f"{label}「{kp_name}」：{focus}"
+
+
+def _mild_signal_note(need: TeachingNeed, result: StudentResult) -> str | None:
+    """高分加迁移类信号时，把“为什么不按具体错误纠错”写进方案限制。"""
+
+    findings = {item.finding_id: item for item in result.findings}
+    for finding_id in need.finding_ids:
+        finding = findings.get(finding_id)
+        if finding is None:
+            continue
+        error_types = set(finding.error_types or [])
+        if not error_types or not error_types <= MILD_ERROR_TYPES:
+            continue
+        if finding.performance != "observed_strength":
+            continue
+        stats = _indicator_stats(result, finding.indicator_id)
+        score_ratio = stats.get("score_ratio")
+        score_text = f"，得分率 {float(score_ratio):.2f}" if score_ratio is not None else ""
+        signal_text = (
+            "只有迁移类信号"
+            if "transfer_difficulty" in error_types
+            else "只有笼统错误信号"
+        )
+        return (
+            f"目标 {need.target_key} 整体表现较好{score_text}，"
+            f"{signal_text}，本轮按巩固安排，不按具体错误纠错"
+        )
+    return None
 
 
 def _teacher_reason(
@@ -486,14 +663,35 @@ def _teacher_reason(
     *,
     findings: list[Any] | None = None,
 ) -> str:
-    strategy_text = {
-        "collect_evidence": "证据不足，先补诊断性证据",
-        "prerequisite_support": "必要前置薄弱，先补前置",
-        "error_correction": "存在具体错误证据，安排纠错",
-        "consolidation": "初步掌握但不稳定，安排巩固",
-        "transfer": "已掌握，安排迁移应用",
-        "teacher_intervention": "需要教师介入",
-    }[strategy]
+    findings = findings or []
+    error_types = {
+        item for finding in findings for item in (getattr(finding, "error_types", []) or [])
+    }
+    high = any(
+        getattr(finding, "performance", "") == "observed_strength" for finding in findings
+    )
+    if strategy == "collect_evidence":
+        strategy_text = "证据不足，先补诊断性证据"
+    elif strategy == "prerequisite_support":
+        strategy_text = "必要前置薄弱，先补前置"
+    elif strategy == "error_correction":
+        if "step_error" in error_types:
+            strategy_text = "存在具体错误证据（步骤错误），安排纠错"
+        elif "hint_dependency" in error_types:
+            strategy_text = "存在提示依赖证据，安排降低提示的纠错练习"
+        else:
+            strategy_text = "存在已确认的薄弱证据，安排纠错"
+    elif strategy == "consolidation":
+        if "transfer_difficulty" in error_types and high:
+            strategy_text = "整体表现较好但不同变式表现不一致，安排巩固（不按具体错误纠错）"
+        elif high and error_types:
+            strategy_text = "整体表现较好，现有信号只支持巩固，不按具体错误纠错"
+        else:
+            strategy_text = "初步掌握但不稳定，安排巩固"
+    elif strategy == "transfer":
+        strategy_text = "证据充分且表现稳定，安排迁移应用（含独立检查）"
+    else:
+        strategy_text = "需要教师介入"
     findings_text = "、".join(need.finding_ids) or "无具体诊断编号"
     reason = (
         f"{strategy_text}；依据 {findings_text}（证据状态 {need.evidence_status}）；"
@@ -502,7 +700,7 @@ def _teacher_reason(
     # 把 B 已核验的表现与错因类型带进教师理由，供微课堂区分“具体错误”和
     # “只有整体表现”；不把分数改写成学生没出现过的具体错步。
     details: list[str] = []
-    for finding in findings or []:
+    for finding in findings:
         description = (getattr(finding, "description", "") or "").strip().replace("；", "，")[:160]
         causes = "、".join(getattr(finding, "error_types", []) or []) or "未记录"
         if description:
@@ -585,15 +783,41 @@ def build_plan(inputs: PlannerInputs) -> PlannerResult:
                     limitations.append(f"目标 {need.target_key} 因必要前置 {weak_prereq} 暂缓，先补前置")
                     continue
 
+        strategy_used = need.primary_strategy
         selection = _activities_for(
             need=need,
             point=points.get(need.kp_id or ""),
             inputs=inputs,
             remaining_minutes=inputs.config.round_minutes - spent,
             max_activities=activity_budget,
-            strategy=need.primary_strategy,
+            strategy=strategy_used,
             exclude_material_ids=used_materials,
         )
+        # 迁移组必须真有进阶题或复核变式可做独立检查；只有普通练习时降级巩固，
+        # 不能组内全是 practice 却对外声称 transfer。
+        if (
+            strategy_used == "transfer"
+            and selection.selected
+            and _transfer_activity_index(selection.selected) is None
+        ):
+            limitations.append(
+                f"目标 {need.target_key} 现有题目只能构成普通练习，缺少迁移或独立检查活动，"
+                "本轮由「transfer」降级为「consolidation」"
+            )
+            need.primary_strategy = "consolidation"
+            need.auxiliary_strategies = [
+                item for item in need.auxiliary_strategies if item != "consolidation"
+            ]
+            strategy_used = "consolidation"
+            selection = _activities_for(
+                need=need,
+                point=points.get(need.kp_id or ""),
+                inputs=inputs,
+                remaining_minutes=inputs.config.round_minutes - spent,
+                max_activities=activity_budget,
+                strategy=strategy_used,
+                exclude_material_ids=used_materials,
+            )
         if not selection.selected:
             deferred.append(need)
             issues.append(
@@ -608,7 +832,11 @@ def build_plan(inputs: PlannerInputs) -> PlannerResult:
             deferred.append(need)
             limitations.append(f"目标 {need.target_key} 超出本轮 {inputs.config.round_minutes} 分钟预算，顺延")
             continue
-        groups.append((need, need.primary_strategy, selection.selected, need.primary_strategy == "collect_evidence"))
+        if strategy_used == "consolidation":
+            note = _mild_signal_note(need, inputs.student_result)
+            if note:
+                _append_unique(limitations, note)
+        groups.append((need, strategy_used, selection.selected, strategy_used == "collect_evidence"))
         spent += sum(item.estimated_minutes for item in selection.selected)
         activity_budget -= len(selection.selected)
         used_materials.update(item.material.material_id for item in selection.selected)
@@ -632,29 +860,43 @@ def build_plan(inputs: PlannerInputs) -> PlannerResult:
         kp_name = point.get("name") or need.indicator_id
         group_id = ""  # 由发布层统一分配
         activities: list[Activity] = []
+        transfer_index = (
+            _transfer_activity_index(selected) if strategy == "transfer" else None
+        )
         for order, candidate in enumerate(selected, start=1):
             material = candidate.material
-            limitations: list[str] = []
+            hint_limitations: list[str] = []
             levels = hint_rules.build_hints(
                 material,
                 kp_name=kp_name,
                 strategy=strategy,
-                limitations=limitations,
+                limitations=hint_limitations,
+            )
+            is_independent = (independent and order == len(selected)) or (
+                transfer_index is not None and order - 1 == transfer_index
+            )
+            purpose = _activity_purpose(
+                strategy, kp_name, candidate, independent=is_independent
+            )
+            expected_outcome = (
+                f"能在新情境中独立迁移方法并说明依据"
+                if is_independent and strategy == "transfer"
+                else f"能独立完成该步并说明依据"
             )
             activities.append(
                 Activity(
                     order=order,
                     material_id=material.material_id,
-                    purpose=f"练「{kp_name}」：{candidate.role == 'primary' and '直接考查目标知识' or '辅助步骤'}",
+                    purpose=purpose,
                     hint_levels=levels,
                     observation_points=[need.indicator_id],
                     previously_attempted=candidate.parts.get("H", 1.0) < 1.0,
                     activity_kind="question",
                     state="not_started",
                     title=material.content[:60],
-                    expected_outcome=f"能独立完成该步并说明依据",
+                    expected_outcome=expected_outcome,
                     estimate_minutes=candidate.estimated_minutes,
-                    exposure_mode="independent" if independent and order == len(selected) else "practice",
+                    exposure_mode="independent" if is_independent else "practice",
                     repeat_reason=candidate.repeat_reason,
                     knowledge_ids=[need.kp_id] if need.kp_id else [],
                 )
