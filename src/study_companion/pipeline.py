@@ -353,6 +353,63 @@ def build_review_info(
     )
 
 
+STRATEGY_PRIORITY = (
+    "teacher_intervention",
+    "collect_evidence",
+    "prerequisite_support",
+    "error_correction",
+    "consolidation",
+    "transfer",
+)
+
+
+def annotate_strategies(
+    bundle: RecommendationBundle, student_result: StudentResult
+) -> RecommendationBundle:
+    """按 04 §3.1 的启动谓词，把 B 的诊断事实映射成 C 的策略标签。
+
+    只做确定性映射：证据不足先补证；有具体错误才纠错；前置薄弱才补前置；
+    已掌握且可迁移才迁移；没有支持的证据一律补证，不把"没证据"当"薄弱"。
+    """
+
+    findings = {finding.finding_id: finding for finding in student_result.findings}
+    recommendations = []
+    for rec in bundle.recommendations:
+        related = [findings[item] for item in rec.finding_ids if item in findings]
+        strategies: set[str] = set()
+        for finding in related:
+            if finding.evidence_status != "sufficient":
+                strategies.add("collect_evidence")
+            elif "foundation_gap" in finding.error_types:
+                strategies.add("prerequisite_support")
+            elif finding.error_types:
+                strategies.add("error_correction")
+            elif finding.performance == "observed_strength":
+                strategies.add("transfer")
+            elif finding.performance == "needs_practice":
+                strategies.add("consolidation")
+            else:
+                strategies.add("collect_evidence")
+        if not strategies:
+            strategies.add("collect_evidence")
+        ordered = [item for item in STRATEGY_PRIORITY if item in strategies]
+        recommendations.append(rec.model_copy(update={"strategy_types": ordered}))
+    groups = []
+    for group in bundle.task_groups:
+        rec = next((item for item in recommendations if item.group_id == group.group_id), None)
+        ordered = list(rec.strategy_types) if rec else ["collect_evidence"]
+        groups.append(
+            group.model_copy(
+                update={
+                    "strategy_types": ordered,
+                    "primary_strategy": ordered[0],
+                    "auxiliary_strategies": ordered[1:3],
+                }
+            )
+        )
+    return bundle.model_copy(update={"recommendations": recommendations, "task_groups": groups})
+
+
 def persist_plan(
     db: Session,
     bundle: RecommendationBundle,
@@ -583,7 +640,9 @@ def handle_import_process(ctx: JobContext) -> dict[str, Any]:
     for student_result in bundle.student_results:
         analysis_version = student_result.analysis_version
         try:
-            plan_bundle = recommend_rules(student_result, catalog, context, config_c)
+            plan_bundle = annotate_strategies(
+                recommend_rules(student_result, catalog, context, config_c), student_result
+            )
         except DomainError as exc:
             if exc.code in {"MATERIAL_NOT_FOUND", "TASK_NOT_AVAILABLE"}:
                 plans.append({"student_id": student_result.student_id, "status": "shortage", "reason": exc.message})
@@ -1076,7 +1135,10 @@ def handle_student_update(ctx: JobContext) -> dict[str, Any]:
     old_head = repo.read_head(db, old_key)
     old_plan_version = old_head.version_id if old_head else None
 
-    plan_bundle = recommend_rules(affected_students[0], catalog, context, RecommendationConfig())
+    plan_bundle = annotate_strategies(
+        recommend_rules(affected_students[0], catalog, context, RecommendationConfig()),
+        affected_students[0],
+    )
     validation = validate_recommendations(plan_bundle, affected_students[0], catalog, RecommendationConfig())
     review = build_review_info(plan_bundle, validation.issues)
     published = persist_plan(
