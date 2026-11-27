@@ -489,6 +489,10 @@ def assess_export_scope(
                 ),
             )
             if version is None:
+                version = _latest_published(
+                    db, dataset.id, "student_analysis", node, student_id
+                )
+            if version is None:
                 blocking.append(
                     _finding(
                         "STUDENT_ANALYSIS_MISSING",
@@ -514,6 +518,10 @@ def assess_export_scope(
                     target_key=class_id,
                 ),
             )
+            if version is None:
+                version = _latest_published(
+                    db, dataset.id, "class_analysis", node, class_id
+                )
             if version is None:
                 blocking.append(
                     _finding(
@@ -853,6 +861,29 @@ def _load(db: Session, version_id: str | None) -> dict[str, Any]:
     row = db.get(models.Version, version_id)
     return dict(row.payload_json or {}) if row is not None else {}
 
+
+
+def _latest_published(
+    db: Session, dataset_id: str, kind: str, node_key: str, target_key: str
+) -> models.Version | None:
+    """该对象该节点最近一次已发布版本。
+
+    局部更新会产生只含个别学生的运行，导出仍应使用每个对象最近一次正式版本，
+    而不是被"最新运行"卡住。
+    """
+
+    return db.scalar(
+        select(models.Version)
+        .join(models.Publication, models.Publication.version_id == models.Version.version_id)
+        .where(
+            models.Version.dataset_id == dataset_id,
+            models.Version.kind == kind,
+            models.Version.node_key == node_key,
+            models.Version.target_key == target_key,
+        )
+        .order_by(models.Version.created_at.desc())
+        .limit(1)
+    )
 
 def _within_cutoff(value: str | None, cutoff: str | None) -> bool:
     """冻结后新产生的在线记录不进入旧包。"""

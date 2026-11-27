@@ -270,7 +270,7 @@ export function ChatPanel({ role, context, onConfigure, initialConversationId }:
 
         {role === "teacher" && !context?.studentId ? (
           <div className="chatNotice" role="status">
-            教师对话需要先绑定学生：请从学生画像的“就此学生提问”进入，或在地址里带上学生与观察节点。
+            可以直接提问。Agent 会从消息里识别学生（例如“D01 为什么丢分”）；从学生画像进入会自动绑定该学生。
           </div>
         ) : null}
 
@@ -415,11 +415,9 @@ export function ChatPanel({ role, context, onConfigure, initialConversationId }:
             style={{ minHeight: 96 }}
             value={draft}
             maxLength={MAX_LENGTH}
-            disabled={busy || (role === "teacher" && !context?.studentId)}
+            disabled={busy}
             placeholder={
-              role === "teacher" && !context?.studentId
-                ? "先绑定学生与观察节点，再开始对话"
-                : "输入问题，Enter 发送，Shift+Enter 换行"
+              "输入问题，Enter 发送，Shift+Enter 换行"
             }
             onChange={(event) => setDraft(event.target.value)}
             onCompositionStart={() => setComposing(true)}
@@ -434,13 +432,13 @@ export function ChatPanel({ role, context, onConfigure, initialConversationId }:
           <div className="chatToolbar">
             <span className="xs muted">
               {draft.length} / {MAX_LENGTH}
-              {role === "teacher" && !context?.studentId ? " · 发送已禁用：未绑定学生" : ""}
+
             </span>
             <button
               type="button"
               className="btn btnPrimary"
               onClick={() => void send()}
-              disabled={busy || !draft.trim() || (role === "teacher" && !context?.studentId)}
+              disabled={busy || !draft.trim()}
             >
               {busy ? "发送中…" : "发送"}
             </button>
