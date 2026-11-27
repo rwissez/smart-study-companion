@@ -5,6 +5,7 @@
 
 from __future__ import annotations
 
+import csv
 import hashlib
 import io
 import json
@@ -12,12 +13,15 @@ import zipfile
 from pathlib import Path
 from typing import Any
 
+import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from study_companion.contracts import DomainError
 from study_companion.db import models
 from study_companion.db import version_repository as repo
+from study_companion.exports import service
 from study_companion.jobs.worker import drain
 
 FIXTURES = Path(__file__).parent / "fixtures" / "six_tables"
@@ -34,11 +38,33 @@ def _teacher(client: TestClient, dataset_id: str | None = None) -> dict[str, str
     return {"Authorization": f"Bearer {token}"}
 
 
-def _import(client: TestClient) -> dict:
-    files = [
-        ("files", (f"{name}.csv", (FIXTURES / f"{name}.csv").read_bytes(), "text/csv"))
-        for name in TABLES
-    ]
+def _filtered(name: str, students: tuple[str, ...], nodes: tuple[str, ...]) -> tuple[str, bytes, str]:
+    """只保留有完整正式方案的学生/节点，避免用未发布方案测试正常导出。"""
+
+    rows = list(
+        csv.reader(io.StringIO((FIXTURES / f"{name}.csv").read_text(encoding="utf-8-sig")))
+    )
+    header, body = rows[0], rows[1:]
+    if name == "students":
+        body = [row for row in body if row[0] in students]
+    elif name == "nodes":
+        body = [row for row in body if row[0] in nodes]
+    elif name == "records":
+        body = [row for row in body if row[1] in students and row[4] in nodes]
+    buffer = io.StringIO()
+    writer = csv.writer(buffer)
+    writer.writerow(header)
+    writer.writerows(body)
+    return (f"{name}.csv", buffer.getvalue().encode("utf-8"), "text/csv")
+
+
+def _import(
+    client: TestClient,
+    *,
+    students: tuple[str, ...] = ("S01", "S02"),
+    nodes: tuple[str, ...] = ("N01",),
+) -> dict:
+    files = [("files", _filtered(name, students, nodes)) for name in TABLES]
     receipt = client.post(
         "/api/v1/imports",
         headers=_teacher(client),
@@ -474,4 +500,180 @@ def test_manifest_explains_empty_task_group_fields(
     checks = detail["manifest"]["content_checks"]
     assert checks["groups_missing_teacher_reason"] >= len(groups)
     assert checks["groups_missing_primary_strategy"] >= len(groups)
+
+
+# --------------------------------------------------------------------------- #
+# 校验状态与知识版本依赖
+# --------------------------------------------------------------------------- #
+
+
+def test_manifest_validation_is_pending_before_verification_and_final_after(
+    client: TestClient, session: Session
+) -> None:
+    """manifest 的 payload 状态必须来自真实回读，不能提前写成 passed。"""
+
+    receipt = _import(client)
+    headers = _teacher(client, receipt["dataset_id"])
+    run_id = _run_id(client, receipt["dataset_id"], headers)
+    export, detail, archive = _export(client, headers, run_id)
+    with archive:
+        final_manifest = json.loads(archive.read("manifest.json"))
+        final_readme = archive.read("README.md").decode("utf-8")
+
+    frozen = session.get(models.Export, export["export_id"])
+    assert frozen is not None
+    files = service.build_files(session, frozen)
+    manifest = json.loads(files["manifest.json"])
+    readme = files["README.md"].decode("utf-8")
+
+    assert manifest["validation"]["preflight"] == "passed"
+    assert manifest["validation"]["payload"] == "pending"
+    assert manifest["validation"]["check_report_id"] is None
+    assert manifest["validation"]["checked_at"] is None
+    assert manifest["validation"]["content"] in {"passed", "passed_with_limitations"}
+    assert "payload：pending" in readme
+
+    assert final_manifest["validation"]["payload"] == "passed"
+    assert final_manifest["validation"]["check_report_id"].startswith("check-")
+    assert final_manifest["validation"]["checked_at"]
+    assert final_manifest["validation"]["content"] == detail["manifest"]["validation"]["content"]
+    assert f"payload：passed" in final_readme
+    assert final_manifest["validation"]["check_report_id"] in final_readme
+
+
+def test_export_includes_referenced_old_knowledge_version(
+    client: TestClient, session: Session
+) -> None:
+    """方案引用历史知识版本时，包内要带该版本图谱，不能只改 ID 或只列版本号。"""
+
+    receipt = _import(client)
+    dataset = session.get(models.Dataset, receipt["dataset_id"])
+    assert dataset is not None
+    plan = repo.read_formal(
+        session,
+        repo.FormalKey(
+            family_id=dataset.family_id or "",
+            dataset_id=dataset.id,
+            kind="plan",
+            node_key="N01",
+            target_key="S01",
+        ),
+    )
+    knowledge = repo.read_formal(
+        session,
+        repo.FormalKey(
+            family_id=dataset.family_id or "",
+            dataset_id=dataset.id,
+            kind="knowledge",
+        ),
+    )
+    assert plan is not None and knowledge is not None
+
+    old_version_id = "kn-old-export-test"
+    old_payload = json.loads(json.dumps(knowledge.payload_json))
+    old_payload["knowledge_version"] = old_version_id
+    old_payload["points"].append(
+        {
+            "kp_id": "kp-old-only",
+            "name": "历史依赖知识点",
+            "kind": "concept",
+            "indicator_ids": [],
+        }
+    )
+    old_payload["relations"].append(
+        {
+            "relation_id": "rel-old-only",
+            "type": "prerequisite",
+            "source_ids": ["kp-old-only"],
+            "target_id": "kp-T01I1",
+            "basis": "team_inference",
+        }
+    )
+    repo.create_version(
+        session,
+        kind="knowledge",
+        key=repo.FormalKey(
+            family_id=dataset.family_id or "",
+            dataset_id=dataset.id,
+            kind="knowledge",
+        ),
+        payload=old_payload,
+        rule_version="a-rules-1",
+        version_id=old_version_id,
+    )
+    session.add(
+        models.Publication(
+            publication_id="pub-old-knowledge",
+            version_id=old_version_id,
+            previous_version_id=None,
+            review_id="",
+            path="system_auto",
+            basis="automatic_review",
+            published_at=repo.now_iso(),
+        )
+    )
+    plan_payload = json.loads(json.dumps(plan.payload_json))
+    plan_payload["knowledge_version"] = old_version_id
+    plan.payload_json = plan_payload
+    session.commit()
+
+    headers = _teacher(client, dataset.id)
+    run_id = _run_id(client, dataset.id, headers)
+    _export_id, detail, archive = _export(client, headers, run_id)
+    with archive:
+        graph = _items(archive, "knowledge_graph.json")
+        manifest = json.loads(archive.read("manifest.json"))
+
+    current_version = knowledge.version_id
+    assert set(manifest["versions"]["knowledge"]) == {current_version, old_version_id}
+    old_points = [
+        item
+        for item in graph
+        if item["kind"] == "point" and item["knowledge_version"] == old_version_id
+    ]
+    assert any(
+        item["object_id"] == "kp-old-only" and item["current"] is False
+        for item in old_points
+    )
+    old_relations = [
+        item
+        for item in graph
+        if item["kind"] == "relation" and item["knowledge_version"] == old_version_id
+    ]
+    assert any(item["object_id"] == "rel-old-only" for item in old_relations)
+    assert all(
+        item["current"] is True
+        for item in graph
+        if item["knowledge_version"] == current_version
+    )
+    checks = manifest["knowledge_checks"]
+    assert checks["current_version"] == current_version
+    assert checks["referenced_history"] == [old_version_id]
+    assert any(c["version_id"] == old_version_id for c in checks["versions"])
+    assert any("知识版本依赖" in item for item in manifest["limitations"])
+
+
+def test_build_files_refuses_missing_frozen_version(
+    client: TestClient, session: Session
+) -> None:
+    """冻结后版本缺失时打包必须显式失败，不能静默生成缺记录半包。"""
+
+    receipt = _import(client)
+    headers = _teacher(client, receipt["dataset_id"])
+    run_id = _run_id(client, receipt["dataset_id"], headers)
+    export, _detail, _archive = _export(client, headers, run_id)
+    frozen = session.get(models.Export, export["export_id"])
+    assert frozen is not None
+    selection = json.loads(json.dumps(frozen.selection_json))
+    selection["versions"]["student"]["S01"]["N01"] = "ban-missing-after-freeze"
+    frozen.selection_json = selection
+
+    with pytest.raises(DomainError) as raised:
+        service.build_files(session, frozen)
+    assert raised.value.code == "EXPORT_INCOMPLETE"
+    assert any(
+        item["code"] == "FROZEN_VERSION_MISSING"
+        and item["object_key"] == "ban-missing-after-freeze"
+        for item in raised.value.details
+    )
 

@@ -98,6 +98,93 @@ def _merge_findings(items: list[dict[str, str]]) -> list[dict[str, str]]:
     return merged
 
 
+_FINDING_LABELS = {
+    "FAMILY_MISSING": "数据集缺少系列身份",
+    "NODE_SCOPE_EMPTY": "没有可导出的节点",
+    "NODE_OUT_OF_RUN": "节点不属于该运行",
+    "ROSTER_EMPTY": "数据集没有学生名册",
+    "STUDENT_ANALYSIS_MISSING": "缺少已发布学生学情",
+    "STUDENT_ANALYSIS_UNPUBLISHED": "学生学情未正式发布",
+    "CLASS_ANALYSIS_MISSING": "缺少已发布班级学情",
+    "CLASS_ANALYSIS_UNPUBLISHED": "班级学情未正式发布",
+    "PLAN_MISSING": "缺少已发布学习方案",
+    "PLAN_UNPUBLISHED": "学习方案未正式发布",
+    "PLAN_INVALID": "学习方案不可解析",
+    "PLAN_NO_ACTIVITY": "学习方案没有可执行活动",
+    "KNOWLEDGE_UNPUBLISHED": "知识体系未正式发布",
+    "CASE_STUDENT_NOT_IN_DATASET": "案例学生不在数据集",
+    "CASE_STUDENT_NO_ANALYSIS": "案例学生没有正式学情",
+    "CASE_STUDENT_NO_PLAN": "案例学生没有可用方案",
+    "CASE_STUDENT_NO_NODE_ANALYSIS": "案例学生在方案节点没有学情",
+    "CASE_NONE_AVAILABLE": "没有可用的案例学生",
+    "DEPENDENCY_DANGLING": "依赖版本不存在",
+    "DEPENDENCY_CROSS_FAMILY": "依赖版本跨系列",
+    "DEPENDENCY_UNPUBLISHED": "依赖版本未发布",
+    "DEPENDENCY_KIND_MISMATCH": "依赖版本类型不符",
+    "CATALOG_MISSING": "课程目录不存在",
+    "CATALOG_CROSS_FAMILY": "课程目录跨系列",
+    "APPLICABILITY_INCOMPATIBLE": "方案对当前学情不适用",
+    "FROZEN_VERSION_MISSING": "冻结版本已不可读",
+    "FROZEN_SCOPE_MISMATCH": "冻结范围缺少当前记录",
+}
+
+_FINDING_ORDER = (
+    "FAMILY_MISSING",
+    "NODE_SCOPE_EMPTY",
+    "NODE_OUT_OF_RUN",
+    "ROSTER_EMPTY",
+    "STUDENT_ANALYSIS_MISSING",
+    "STUDENT_ANALYSIS_UNPUBLISHED",
+    "CLASS_ANALYSIS_MISSING",
+    "CLASS_ANALYSIS_UNPUBLISHED",
+    "PLAN_MISSING",
+    "PLAN_UNPUBLISHED",
+    "PLAN_INVALID",
+    "KNOWLEDGE_UNPUBLISHED",
+    "CASE_STUDENT_NOT_IN_DATASET",
+    "CASE_STUDENT_NO_ANALYSIS",
+    "CASE_STUDENT_NO_PLAN",
+    "CASE_STUDENT_NO_NODE_ANALYSIS",
+    "CASE_NONE_AVAILABLE",
+    "DEPENDENCY_DANGLING",
+    "DEPENDENCY_UNPUBLISHED",
+    "DEPENDENCY_CROSS_FAMILY",
+    "DEPENDENCY_KIND_MISMATCH",
+    "CATALOG_MISSING",
+    "CATALOG_CROSS_FAMILY",
+    "APPLICABILITY_INCOMPATIBLE",
+    "FROZEN_VERSION_MISSING",
+    "FROZEN_SCOPE_MISMATCH",
+)
+
+
+def _incomplete_message(blocking: list[dict[str, str]]) -> str:
+    """把阻断项压成教师能直接读懂的一句话，完整明细仍放在 details。"""
+
+    grouped: dict[str, list[str]] = {}
+    for item in blocking:
+        grouped.setdefault(str(item.get("code") or "UNKNOWN"), []).append(
+            str(item.get("object_key") or "")
+        )
+    parts: list[str] = []
+    ordered = [code for code in _FINDING_ORDER if code in grouped]
+    ordered.extend(sorted(code for code in grouped if code not in _FINDING_ORDER))
+    for code in ordered:
+        keys = [key for key in grouped[code] if key]
+        label = _FINDING_LABELS.get(code, code)
+        if not keys:
+            parts.append(label)
+            continue
+        preview = "、".join(keys[:6])
+        suffix = f" 等 {len(keys)} 项" if len(keys) > 6 else ""
+        parts.append(f"{label}：{preview}{suffix}")
+    detail = "；".join(parts) if parts else "存在未列明的范围问题"
+    return (
+        f"正式成果不完整，不能生成正式包（共 {len(blocking)} 项阻断）。"
+        f"{detail}。请按 details 补齐或调整导出范围后重新预检。"
+    )
+
+
 def _is_published(db: Session, version_id: str) -> bool:
     return (
         db.scalar(
@@ -502,6 +589,15 @@ def assess_export_scope(
                     )
                 )
                 continue
+            if not _is_published(db, version.version_id):
+                blocking.append(
+                    _finding(
+                        "STUDENT_ANALYSIS_UNPUBLISHED",
+                        f"{student_id}/{node}",
+                        f"当前正式指针指向的学情版本 {version.version_id} 没有发布记录",
+                        "完成该学情版本的审核与发布，或恢复已发布的正式指针后重新导出",
+                    )
+                )
             student_versions.setdefault(student_id, {})[node] = version.version_id
 
     class_versions: dict[str, dict[str, str]] = {}
@@ -532,6 +628,15 @@ def assess_export_scope(
                     )
                 )
                 continue
+            if not _is_published(db, version.version_id):
+                blocking.append(
+                    _finding(
+                        "CLASS_ANALYSIS_UNPUBLISHED",
+                        f"{class_id}/{node}",
+                        f"当前正式指针指向的班级学情版本 {version.version_id} 没有发布记录",
+                        "完成该班级学情版本的审核与发布，或恢复已发布的正式指针后重新导出",
+                    )
+                )
             class_versions.setdefault(class_id, {})[node] = version.version_id
 
     plans: dict[str, dict[str, models.Version]] = {}
@@ -549,7 +654,47 @@ def assess_export_scope(
                 ),
             )
             if version is None:
+                draft = _latest_version(db, dataset.id, "plan", node, student_id)
+                if draft is not None:
+                    if _is_published(db, draft.version_id):
+                        expected = (
+                            f"该节点已有已发布方案版本 {draft.version_id}，"
+                            "但正式指针未指向它"
+                        )
+                        remedy = "恢复正式指针或重新发布该方案后重新预检"
+                    else:
+                        expected = (
+                            f"该节点已有方案版本 {draft.version_id}，"
+                            "但没有正式发布记录"
+                        )
+                        remedy = "完成该方案的审核与发布，或缩小导出范围后重新预检"
+                    blocking.append(
+                        _finding(
+                            "PLAN_UNPUBLISHED",
+                            f"{student_id}/{node}",
+                            expected,
+                            remedy,
+                        )
+                    )
+                else:
+                    blocking.append(
+                        _finding(
+                            "PLAN_MISSING",
+                            f"{student_id}/{node}",
+                            "已发布的正式学习方案",
+                            "为该学生该节点生成并发布方案，或缩小导出范围",
+                        )
+                    )
                 continue
+            if not _is_published(db, version.version_id):
+                blocking.append(
+                    _finding(
+                        "PLAN_UNPUBLISHED",
+                        f"{student_id}/{node}",
+                        f"当前正式指针指向的方案版本 {version.version_id} 没有发布记录",
+                        "完成该方案的审核与发布，或恢复已发布的正式指针后重新导出",
+                    )
+                )
             plans.setdefault(student_id, {})[node] = version
             try:
                 bundle = RecommendationBundle.model_validate(version.payload_json or {})
@@ -577,16 +722,6 @@ def assess_export_scope(
                         "导出会保留空活动与限制说明；如需可执行建议，请先补充可用材料",
                     )
                 )
-    for student_id in students:
-        if student_id not in plans:
-            blocking.append(
-                _finding(
-                    "PLAN_MISSING",
-                    student_id,
-                    "已发布的正式学习方案",
-                    "为该学生生成并发布方案，或缩小导出范围",
-                )
-            )
 
     knowledge_version = None
     knowledge_row = repo.read_formal(
@@ -595,6 +730,15 @@ def assess_export_scope(
     )
     if knowledge_row is not None:
         knowledge_version = knowledge_row.version_id
+        if not _is_published(db, knowledge_version):
+            blocking.append(
+                _finding(
+                    "KNOWLEDGE_UNPUBLISHED",
+                    knowledge_version,
+                    "当前正式知识体系已有发布记录",
+                    "完成知识体系的审核与发布后重新导出",
+                )
+            )
     else:
         warnings.append(
             _finding(
@@ -781,8 +925,8 @@ def freeze_export(
     if assessment["blocking"]:
         raise DomainError(
             "EXPORT_INCOMPLETE",
-            "正式成果不完整，不能生成正式包",
-            assessment["blocking"][:20],
+            _incomplete_message(assessment["blocking"]),
+            assessment["blocking"],
         )
 
     selection = {
@@ -988,6 +1132,24 @@ def _latest_published(
         .limit(1)
     )
 
+
+def _latest_version(
+    db: Session, dataset_id: str, kind: str, node_key: str, target_key: str
+) -> models.Version | None:
+    """仅用于诊断：该对象该节点最近的版本，不论是否发布。"""
+
+    return db.scalar(
+        select(models.Version)
+        .where(
+            models.Version.dataset_id == dataset_id,
+            models.Version.kind == kind,
+            models.Version.node_key == node_key,
+            models.Version.target_key == target_key,
+        )
+        .order_by(models.Version.created_at.desc())
+        .limit(1)
+    )
+
 def _within_cutoff(value: str | None, cutoff: str | None) -> bool:
     """冻结后新产生的在线记录不进入旧包。"""
 
@@ -997,6 +1159,135 @@ def _within_cutoff(value: str | None, cutoff: str | None) -> bool:
         return datetime.fromisoformat(value) <= datetime.fromisoformat(cutoff)
     except (TypeError, ValueError):
         return str(value) <= str(cutoff)
+
+
+def _frozen_version_findings(
+    db: Session, selection: dict[str, Any]
+) -> list[dict[str, str]]:
+    """冻结后回读：任何被 selection 引用的版本都必须仍然存在。
+
+    冻结与打包之间的版本缺失会让 ``_load`` 静默返回空载荷，最终生成缺记录的
+    半包；这里在写 ZIP 之前把它变成显式阻断。
+    """
+
+    versions = dict(selection.get("versions") or {})
+    closure = dict(selection.get("closure") or {})
+    referenced: set[str] = set()
+    for group in ("student", "class", "plans"):
+        for node_map in (versions.get(group) or {}).values():
+            if isinstance(node_map, dict):
+                referenced.update(str(item) for item in node_map.values() if item)
+    knowledge = versions.get("knowledge")
+    if knowledge:
+        referenced.add(str(knowledge))
+    for group in ("student", "class", "plan"):
+        referenced.update(str(item) for item in (closure.get(group) or {}) if item)
+    referenced.update(str(item) for item in (closure.get("content") or []) if item)
+    referenced.update(str(item) for item in (closure.get("knowledge") or []) if item)
+
+    missing = sorted(
+        version_id
+        for version_id in referenced
+        if db.get(models.Version, version_id) is None
+    )
+    return [
+        _finding(
+            "FROZEN_VERSION_MISSING",
+            version_id,
+            "冻结时选中的正式版本仍可读取",
+            "重新预检并导出；不要用缺失版本生成半包",
+        )
+        for version_id in missing
+    ]
+
+
+def _frozen_scope_findings(db: Session, selection: dict[str, Any]) -> list[dict[str, str]]:
+    """检查冻结的当前指针集合确实覆盖声明的学生/节点/班级。"""
+
+    versions = dict(selection.get("versions") or {})
+    closure = dict(selection.get("closure") or {})
+
+    def pairs(entries: dict[str, dict[str, Any]], student_key: str, node_key: str) -> set[tuple[str, str]]:
+        result: set[tuple[str, str]] = set()
+        for meta in entries.values():
+            if not isinstance(meta, dict) or not meta.get("current"):
+                continue
+            owner = str(meta.get(student_key) or "")
+            node = str(meta.get(node_key) or "")
+            if owner and node:
+                result.add((owner, node))
+        return result
+
+    findings: list[dict[str, str]] = []
+    expected_students = {
+        (str(student_id), str(node))
+        for student_id, node_map in (versions.get("student") or {}).items()
+        for node, version_id in (node_map or {}).items()
+        if version_id
+    }
+    student_closure = closure.get("student") or {}
+    if student_closure:
+        current_students = pairs(student_closure, "student_id", "node_id")
+        for student_id, node in sorted(expected_students - current_students):
+            findings.append(
+                _finding(
+                    "FROZEN_SCOPE_MISMATCH",
+                    f"{student_id}/{node}",
+                    "冻结范围内的当前学生学情记录",
+                    "重新预检并导出；不要生成缺少当前记录的学生分析包",
+                )
+            )
+
+    expected_classes = {
+        (str(class_id), str(node))
+        for class_id, node_map in (versions.get("class") or {}).items()
+        for node, version_id in (node_map or {}).items()
+        if version_id
+    }
+    class_closure = closure.get("class") or {}
+    if class_closure:
+        current_classes = pairs(class_closure, "class_id", "node_id")
+        for class_id, node in sorted(expected_classes - current_classes):
+            findings.append(
+                _finding(
+                    "FROZEN_SCOPE_MISMATCH",
+                    f"{class_id}/{node}",
+                    "冻结范围内的当前班级学情记录",
+                    "重新预检并导出；不要生成缺少当前记录的班级分析包",
+                )
+            )
+
+    expected_plans = {
+        (str(student_id), str(node))
+        for student_id, node_map in (versions.get("plans") or {}).items()
+        for node, version_id in (node_map or {}).items()
+        if version_id
+    }
+    plan_closure = closure.get("plan") or {}
+    if plan_closure:
+        current_plans = pairs(plan_closure, "student_id", "node_id")
+        for student_id, node in sorted(expected_plans - current_plans):
+            findings.append(
+                _finding(
+                    "FROZEN_SCOPE_MISMATCH",
+                    f"{student_id}/{node}",
+                    "冻结范围内的当前学习方案记录",
+                    "重新预检并导出；不要生成缺少当前方案的学生包",
+                )
+            )
+    return findings
+
+
+def _require_frozen_scope(db: Session, selection: dict[str, Any]) -> None:
+    findings = _frozen_version_findings(db, selection) + _frozen_scope_findings(
+        db, selection
+    )
+    if findings:
+        raise DomainError(
+            "EXPORT_INCOMPLETE",
+            _incomplete_message(findings),
+            findings,
+        )
 
 
 def build_files(db: Session, export: models.Export) -> dict[str, bytes]:
@@ -1015,6 +1306,11 @@ def build_files(db: Session, export: models.Export) -> dict[str, bytes]:
     versions = selection["versions"]
     closure = dict(selection.get("closure") or {})
     knowledge_version = versions.get("knowledge")
+    knowledge_versions = ([knowledge_version] if knowledge_version else []) + [
+        version_id
+        for version_id in sorted(closure.get("knowledge") or [])
+        if version_id and version_id != knowledge_version
+    ]
 
     student_entries: dict[str, dict[str, Any]] = dict(closure.get("student") or {})
     plan_entries: dict[str, dict[str, Any]] = dict(closure.get("plan") or {})
@@ -1044,6 +1340,8 @@ def build_files(db: Session, export: models.Export) -> dict[str, bytes]:
                 )
             ).all()
         )
+
+    _require_frozen_scope(db, selection)
 
     curriculum: list[dict[str, Any]] = []
     catalog_indicators = [item.model_dump(mode="json") for item in catalog.indicators] if catalog else []
@@ -1089,64 +1387,92 @@ def build_files(db: Session, export: models.Export) -> dict[str, bytes]:
         )
 
     knowledge: list[dict[str, Any]] = []
-    knowledge_payload = _load(db, versions.get("knowledge"))
-    knowledge_point_ids = {
-        str(point.get("kp_id")) for point in knowledge_payload.get("points", [])
+    knowledge_payloads = {
+        version_id: _load(db, version_id) for version_id in knowledge_versions
     }
+    knowledge_point_ids_by_version: dict[str, set[str]] = {
+        version_id: {
+            str(point.get("kp_id"))
+            for point in payload.get("points", [])
+            if point.get("kp_id")
+        }
+        for version_id, payload in knowledge_payloads.items()
+    }
+    knowledge_point_ids: set[str] = set()
+    for point_ids in knowledge_point_ids_by_version.values():
+        knowledge_point_ids.update(point_ids)
     kp_annotations: dict[str, list[dict[str, Any]]] = {}
-    for annotation in knowledge_payload.get("annotations", []):
-        if annotation.get("source_type") != "material":
-            continue
-        source_id = str(annotation.get("source_id") or "")
-        if not source_id:
-            continue
-        for target in annotation.get("target_ids") or []:
-            kp_annotations.setdefault(source_id, []).append(
+    seen_annotation_refs: set[tuple[str, str, str, str]] = set()
+    for version_id, payload in knowledge_payloads.items():
+        for annotation in payload.get("annotations", []):
+            if annotation.get("source_type") != "material":
+                continue
+            source_id = str(annotation.get("source_id") or "")
+            if not source_id:
+                continue
+            for target in annotation.get("target_ids") or []:
+                kp_id = str(target)
+                if kp_id not in knowledge_point_ids_by_version.get(version_id, set()):
+                    continue
+                marker = (
+                    source_id,
+                    kp_id,
+                    str(version_id),
+                    str(annotation.get("annotation_id") or ""),
+                )
+                if marker in seen_annotation_refs:
+                    continue
+                seen_annotation_refs.add(marker)
+                kp_annotations.setdefault(source_id, []).append(
+                    {
+                        "kp_id": kp_id,
+                        "role": annotation.get("knowledge_role") or "primary",
+                        "basis": annotation.get("basis") or "standard",
+                        "annotation_id": annotation.get("annotation_id"),
+                        "knowledge_version": version_id,
+                        "current": version_id == knowledge_version,
+                        "source": "annotation",
+                    }
+                )
+    for version_id in knowledge_versions:
+        payload = knowledge_payloads[version_id]
+        is_current = version_id == knowledge_version
+        for point in payload.get("points", []):
+            knowledge.append(
                 {
-                    "kp_id": str(target),
-                    "role": annotation.get("knowledge_role") or "primary",
-                    "basis": annotation.get("basis") or "standard",
-                    "annotation_id": annotation.get("annotation_id"),
-                    "knowledge_version": versions.get("knowledge"),
-                    "source": "annotation",
+                    "key": f"kp:{version_id}:{point['kp_id']}",
+                    "kind": "point",
+                    "knowledge_version": version_id,
+                    "object_id": point["kp_id"],
+                    "current": is_current,
+                    "data": point,
+                    "evidence_refs": [],
                 }
             )
-    for point in knowledge_payload.get("points", []):
-        knowledge.append(
-            {
-                "key": f"kp:{versions.get('knowledge')}:{point['kp_id']}",
-                "kind": "point",
-                "knowledge_version": versions.get("knowledge"),
-                "object_id": point["kp_id"],
-                "current": True,
-                "data": point,
-                "evidence_refs": [],
-            }
-        )
-    for relation in knowledge_payload.get("relations", []):
-        knowledge.append(
-            {
-                "key": f"rel:{versions.get('knowledge')}:{relation['relation_id']}",
-                "kind": "relation",
-                "knowledge_version": versions.get("knowledge"),
-                "object_id": relation["relation_id"],
-                "current": True,
-                "data": relation,
-                "evidence_refs": [],
-            }
-        )
-    for annotation in knowledge_payload.get("annotations", []):
-        knowledge.append(
-            {
-                "key": f"ann:{versions.get('knowledge')}:{annotation['annotation_id']}",
-                "kind": "annotation",
-                "knowledge_version": versions.get("knowledge"),
-                "object_id": annotation["annotation_id"],
-                "current": True,
-                "data": annotation,
-                "evidence_refs": [],
-            }
-        )
+        for relation in payload.get("relations", []):
+            knowledge.append(
+                {
+                    "key": f"rel:{version_id}:{relation['relation_id']}",
+                    "kind": "relation",
+                    "knowledge_version": version_id,
+                    "object_id": relation["relation_id"],
+                    "current": is_current,
+                    "data": relation,
+                    "evidence_refs": [],
+                }
+            )
+        for annotation in payload.get("annotations", []):
+            knowledge.append(
+                {
+                    "key": f"ann:{version_id}:{annotation['annotation_id']}",
+                    "kind": "annotation",
+                    "knowledge_version": version_id,
+                    "object_id": annotation["annotation_id"],
+                    "current": is_current,
+                    "data": annotation,
+                    "evidence_refs": [],
+                }
+            )
 
     materials: list[dict[str, Any]] = []
     materials_without_source = 0
@@ -1200,23 +1526,33 @@ def build_files(db: Session, export: models.Export) -> dict[str, bytes]:
         kp_refs: list[dict[str, Any]] = [
             dict(ref)
             for ref in kp_annotations.get(material_id, [])
-            if ref["kp_id"] in knowledge_point_ids
+            if ref["kp_id"] in knowledge_point_ids_by_version.get(ref["knowledge_version"], set())
         ]
         if not kp_refs:
             # 目录的材料-指标归属是正式映射，可回推到知识点；只在知识点确实存在时使用。
             for indicator_id in material.get("indicator_ids") or []:
                 kp_id = f"kp-{indicator_id}"
-                if kp_id in knowledge_point_ids:
-                    kp_refs.append(
-                        {
-                            "kp_id": kp_id,
-                            "role": "primary",
-                            "basis": "standard",
-                            "annotation_id": None,
-                            "knowledge_version": versions.get("knowledge"),
-                            "source": "indicator_mapping",
-                        }
-                    )
+                owner = next(
+                    (
+                        version_id
+                        for version_id in knowledge_versions
+                        if kp_id in knowledge_point_ids_by_version.get(version_id, set())
+                    ),
+                    None,
+                )
+                if owner is None:
+                    continue
+                kp_refs.append(
+                    {
+                        "kp_id": kp_id,
+                        "role": "primary",
+                        "basis": "standard",
+                        "annotation_id": None,
+                        "knowledge_version": owner,
+                        "current": owner == knowledge_version,
+                        "source": "indicator_mapping",
+                    }
+                )
         kp_status = "mapped" if kp_refs else "unknown"
         if not kp_refs:
             materials_without_kp += 1
@@ -1941,21 +2277,22 @@ def build_files(db: Session, export: models.Export) -> dict[str, bytes]:
     knowledge_methods: set[str] = set()
     knowledge_prompts: set[str] = set()
     knowledge_model_tagged = 0
-    for point in knowledge_payload.get("points", []):
-        review = point.get("review_info") or {}
-        if review.get("method"):
-            knowledge_methods.add(str(review["method"]))
-            if str(review["method"]) == "model":
-                knowledge_model_tagged += 1
-        if review.get("prompt_version"):
-            knowledge_prompts.add(str(review["prompt_version"]))
-    for collection in ("relations", "annotations"):
-        for item in knowledge_payload.get(collection, []):
-            review = item.get("review_info") or {}
+    for payload in knowledge_payloads.values():
+        for point in payload.get("points", []):
+            review = point.get("review_info") or {}
             if review.get("method"):
                 knowledge_methods.add(str(review["method"]))
+                if str(review["method"]) == "model":
+                    knowledge_model_tagged += 1
             if review.get("prompt_version"):
                 knowledge_prompts.add(str(review["prompt_version"]))
+        for collection in ("relations", "annotations"):
+            for item in payload.get(collection, []):
+                review = item.get("review_info") or {}
+                if review.get("method"):
+                    knowledge_methods.add(str(review["method"]))
+                if review.get("prompt_version"):
+                    knowledge_prompts.add(str(review["prompt_version"]))
 
     analysis_methods: set[str] = set()
     analysis_limitations: list[str] = []
@@ -2196,6 +2533,18 @@ def build_files(db: Session, export: models.Export) -> dict[str, bytes]:
         )
     if knowledge_version is None:
         manifest_limitations.append("本包没有正式知识版本，材料知识点关联只能是 unknown")
+    elif any(version_id != knowledge_version for version_id in knowledge_versions):
+        history_versions = [
+            version_id
+            for version_id in knowledge_versions
+            if version_id != knowledge_version
+        ]
+        manifest_limitations.append(
+            "知识版本依赖：本包当前知识版本为 "
+            f"{knowledge_version}，同时包含历史依赖版本 {'、'.join(history_versions)}。"
+            "knowledge_graph.json 逐条写入 knowledge_version，"
+            "current=false 表示该记录来自历史依赖版本；不能把这些记录当成当前版本内容"
+        )
     unpublished_analysis = (
         publication_counts["student_analysis"]["unpublished"]
         + publication_counts["class_analysis"]["unpublished"]
@@ -2292,6 +2641,39 @@ def build_files(db: Session, export: models.Export) -> dict[str, bytes]:
             "lessons": len(micro_lessons),
             "lessons_without_source_refs": lessons_without_source,
             "lessons_with_unresolved_citation": lessons_with_unresolved_citation,
+        },
+        "knowledge_checks": {
+            "current_version": knowledge_version,
+            "versions": [
+                {
+                    "version_id": version_id,
+                    "current": version_id == knowledge_version,
+                    "points": len(knowledge_payloads.get(version_id, {}).get("points", [])),
+                    "relations": len(
+                        knowledge_payloads.get(version_id, {}).get("relations", [])
+                    ),
+                    "annotations": len(
+                        knowledge_payloads.get(version_id, {}).get("annotations", [])
+                    ),
+                }
+                for version_id in knowledge_versions
+            ],
+            "points": sum(
+                len(payload.get("points", [])) for payload in knowledge_payloads.values()
+            ),
+            "relations": sum(
+                len(payload.get("relations", []))
+                for payload in knowledge_payloads.values()
+            ),
+            "annotations": sum(
+                len(payload.get("annotations", []))
+                for payload in knowledge_payloads.values()
+            ),
+            "referenced_history": [
+                version_id
+                for version_id in knowledge_versions
+                if version_id != knowledge_version
+            ],
         },
         "coverage": {
             "students": len(versions["student"]),
@@ -2539,6 +2921,26 @@ def _field_dictionary(payloads: dict[str, bytes]) -> dict[str, Any]:
                 "meaning": "打包与回读校验结论；payload=passed 时同时给出 check_report_id 与 checked_at，pending 表示尚未完成",
                 "example": '{"preflight": "passed", "payload": "passed"}',
             },
+            {
+                "key": "manifest.json:knowledge_checks",
+                "file": "manifest.json",
+                "field_path": "knowledge_checks",
+                "type": "dict",
+                "required": True,
+                "nullable": False,
+                "meaning": "知识版本闭包与图谱计数；current_version 是当前正式知识版本，referenced_history 是方案真实引用的历史依赖版本",
+                "example": '{"current_version": "kn-...", "referenced_history": []}',
+            },
+            {
+                "key": "knowledge_graph.json:knowledge_version",
+                "file": "knowledge_graph.json",
+                "field_path": "knowledge_version",
+                "type": "str",
+                "required": True,
+                "nullable": False,
+                "meaning": "该知识点/关系/标注所属的精确知识版本；current=false 表示它是历史依赖版本，不是当前版本内容",
+                "example": "kn-03465be407534636b73f",
+            },
         ]
     )
     items.append(
@@ -2594,6 +2996,14 @@ def _readme(manifest: dict[str, Any], dataset: models.Dataset) -> str:
     validation_status = str(validation.get("payload") or "pending")
     report_id = validation.get("check_report_id") or "未生成"
     checked_at = validation.get("checked_at") or "未生成"
+    knowledge_checks = dict(manifest.get("knowledge_checks") or {})
+    knowledge_versions_text = "、".join(
+        f"{item.get('version_id')}（{'当前' if item.get('current') else '历史依赖'}）"
+        for item in knowledge_checks.get("versions") or []
+        if item.get("version_id")
+    ) or "未包含正式知识版本"
+    versions = dict(manifest.get("versions") or {})
+    dependency_count = len(manifest.get("dependency_edges") or [])
     return f"""# 湛知正式成果包
 
 - 数据集：{dataset.id}（系列 {dataset.family_id}）
@@ -2624,6 +3034,13 @@ def _readme(manifest: dict[str, Any], dataset: models.Dataset) -> str:
 
 数据来源类型取自导入登记（{origin.get('declared_by') or '未登记'}），
 未与外部数据包原件逐项核对；不使用 `ready` 等状态词代替来源。
+
+## 版本依赖
+
+- 知识版本：{knowledge_versions_text}
+- 知识图谱：{knowledge_checks.get('points', 0)} 个知识点、{knowledge_checks.get('relations', 0)} 条关系、{knowledge_checks.get('annotations', 0)} 条标注；`knowledge_graph.json` 的每条记录用 `knowledge_version` 区分版本，`current=false` 为历史依赖
+- 冻结版本：学生学情 {len(versions.get('student') or [])}、班级学情 {len(versions.get('class') or [])}、学习方案 {len(versions.get('plans') or [])}、微课堂 {len(versions.get('content') or [])}
+- 依赖边：{dependency_count} 条（`manifest.json` 的 `dependency_edges`）
 
 ## 三项任务对应文件
 

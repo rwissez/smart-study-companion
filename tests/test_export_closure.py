@@ -5,6 +5,7 @@
 
 from __future__ import annotations
 
+import csv
 import io
 import json
 import time
@@ -39,11 +40,33 @@ def _teacher(client: TestClient, dataset_id: str | None = None) -> dict[str, str
     return {"Authorization": f"Bearer {token}"}
 
 
-def _import(client: TestClient) -> dict:
-    files = [
-        ("files", (f"{name}.csv", (FIXTURES / f"{name}.csv").read_bytes(), "text/csv"))
-        for name in TABLES
-    ]
+def _filtered(name: str, students: tuple[str, ...], nodes: tuple[str, ...]) -> tuple[str, bytes, str]:
+    """只保留有完整正式方案的学生/节点，正常导出测试不依赖未发布方案。"""
+
+    rows = list(
+        csv.reader(io.StringIO((FIXTURES / f"{name}.csv").read_text(encoding="utf-8-sig")))
+    )
+    header, body = rows[0], rows[1:]
+    if name == "students":
+        body = [row for row in body if row[0] in students]
+    elif name == "nodes":
+        body = [row for row in body if row[0] in nodes]
+    elif name == "records":
+        body = [row for row in body if row[1] in students and row[4] in nodes]
+    buffer = io.StringIO()
+    writer = csv.writer(buffer)
+    writer.writerow(header)
+    writer.writerows(body)
+    return (f"{name}.csv", buffer.getvalue().encode("utf-8"), "text/csv")
+
+
+def _import(
+    client: TestClient,
+    *,
+    students: tuple[str, ...] = ("S01", "S02"),
+    nodes: tuple[str, ...] = ("N01",),
+) -> dict:
+    files = [("files", _filtered(name, students, nodes)) for name in TABLES]
     receipt = client.post(
         "/api/v1/imports",
         headers=_teacher(client),
@@ -247,7 +270,7 @@ def test_preflight_is_read_only_and_reports_blocking(client: TestClient) -> None
     data = ready.json()["data"]
     assert data["ready"] is True
     assert data["blocking"] == []
-    assert data["coverage"] == {"students": 3, "classes": 2, "cases": 2}
+    assert data["coverage"] == {"students": 2, "classes": 2, "cases": 2}
     assert {item["code"] for item in data["warnings"]} >= {"CASE_AUTO_SELECTED"}
 
     # 非法案例学生与越界节点只返回 blocking，不落库、不入队。
@@ -446,6 +469,134 @@ def test_case_student_requires_dataset_analysis_and_plan(
         and item["object_key"] == "S99/N01"
         for item in details
     )
+
+
+def test_unpublished_plan_head_blocks_export_with_consistent_details(
+    client: TestClient, session: Session
+) -> None:
+    """正式指针指向未发布方案时，预检与导出必须一致阻断并列出学生/节点。"""
+
+    receipt = _import(client)
+    dataset = _dataset(session, receipt["dataset_id"])
+    headers = _teacher(client, dataset.id)
+    run_id = _run_id(client, dataset.id, headers)
+    plan = _current_plan(session, dataset, "S01", "N01")
+    key = repo.FormalKey(
+        family_id=dataset.family_id or "",
+        dataset_id=dataset.id,
+        kind="plan",
+        node_key="N01",
+        target_key="S01",
+    )
+    unpublished = repo.create_version(
+        session,
+        kind="plan",
+        key=key,
+        payload=json.loads(json.dumps(plan.payload_json)),
+        rule_version="c-rules-1",
+    )
+    head = repo.read_head(session, key)
+    assert head is not None
+    head.version_id = unpublished.version_id
+    head.generation = (head.generation or 0) + 1
+    session.commit()
+
+    preflight = client.get(
+        f"/api/v1/runs/{run_id}/exports/preflight", headers=headers
+    )
+    assert preflight.status_code == 200, preflight.text
+    preflight_data = preflight.json()["data"]
+    assert preflight_data["ready"] is False
+    codes = {(item["code"], item["object_key"]) for item in preflight_data["blocking"]}
+    assert ("PLAN_UNPUBLISHED", "S01/N01") in codes
+
+    before = _record_counts()
+    response = client.post(
+        f"/api/v1/runs/{run_id}/exports", headers=headers, json={"format": "zip"}
+    )
+    assert response.status_code == 422, response.text
+    error = response.json()["error"]
+    assert error["code"] == "EXPORT_INCOMPLETE"
+    assert error["details"] == preflight_data["blocking"], "预检与导出的阻断明细必须同源"
+    assert "S01/N01" in error["message"]
+    assert "学习方案未正式发布" in error["message"]
+    assert _record_counts() == before, "阻断导出不得创建导出记录或任务"
+
+
+def test_missing_plan_node_blocks_export_and_names_node(
+    client: TestClient, session: Session
+) -> None:
+    """有学情但完全没有方案的节点，阻断明细要写到 学生/节点，而不是只写学生。"""
+
+    receipt = _import(client)
+    dataset = _dataset(session, receipt["dataset_id"])
+    headers = _teacher(client, dataset.id)
+    run_id = _run_id(client, dataset.id, headers)
+    analysis = repo.read_formal(
+        session,
+        repo.FormalKey(
+            family_id=dataset.family_id or "",
+            dataset_id=dataset.id,
+            kind="student_analysis",
+            run_key=run_id,
+            node_key="N01",
+            target_key="S01",
+        ),
+    )
+    assert analysis is not None
+
+    session.add(
+        models.Student(
+            dataset_id=dataset.id,
+            student_id="S98",
+            class_id="DC01",
+            student_uid="uid-s98",
+        )
+    )
+    key = repo.FormalKey(
+        family_id=dataset.family_id or "",
+        dataset_id=dataset.id,
+        kind="student_analysis",
+        run_key=run_id,
+        node_key="N01",
+        target_key="S98",
+    )
+    analysis_version = repo.create_version(
+        session,
+        kind="student_analysis",
+        key=key,
+        payload=json.loads(json.dumps(analysis.payload_json)),
+        rule_version="b-rules-1",
+    )
+    repo.publish(
+        session,
+        key=key,
+        version=analysis_version,
+        path="system_auto",
+        basis="automatic_review",
+    )
+    session.commit()
+
+    preflight = client.get(
+        f"/api/v1/runs/{run_id}/exports/preflight", headers=headers
+    )
+    assert preflight.status_code == 200, preflight.text
+    preflight_data = preflight.json()["data"]
+    assert preflight_data["ready"] is False
+    codes = {(item["code"], item["object_key"]) for item in preflight_data["blocking"]}
+    assert ("PLAN_MISSING", "S98/N01") in codes
+
+    before = _record_counts()
+    response = client.post(
+        f"/api/v1/runs/{run_id}/exports", headers=headers, json={"format": "zip"}
+    )
+    assert response.status_code == 422, response.text
+    error = response.json()["error"]
+    assert error["code"] == "EXPORT_INCOMPLETE"
+    assert error["details"] == preflight_data["blocking"]
+    assert "S98/N01" in error["message"]
+    assert "缺少已发布学习方案" in error["message"]
+    assert _record_counts() == before
 
 
 # --------------------------------------------------------------------------- #
@@ -652,13 +803,16 @@ def test_same_freeze_is_unchanged_after_new_grade(
 def test_export_includes_plan_for_every_selected_node(client: TestClient) -> None:
     """多节点 run：每个选中节点都要有对应方案，不能只导出第一个节点。"""
 
-    receipt = _import(client)
+    # 只用两节点都有已发布方案的 S02，避免把“缺少方案”与正常导出混在一起。
+    receipt = _import(client, students=("S02",), nodes=("N01", "N02"))
     headers = _teacher(client, receipt["dataset_id"])
     run_id = _run_id(client, receipt["dataset_id"], headers)
-    export = _export(client, headers, run_id, ["S01"])
+    export = _export(client, headers, run_id, ["S02"])
     assert drain() >= 1
     with _archive(client, headers, export["export_id"]) as archive:
         records = json.loads(archive.read("recommendations.json"))["items"]
         manifest = json.loads(archive.read("manifest.json"))
-    nodes = {item["node_id"] for item in records if item["student_id"] == "S01"}
-    assert nodes == set(manifest["node_ids"]), f"方案节点 {nodes} 与导出范围 {manifest['node_ids']} 不一致"
+    nodes = {item["node_id"] for item in records if item["student_id"] == "S02"}
+    assert nodes == set(manifest["node_ids"]) == {"N01", "N02"}, (
+        f"方案节点 {nodes} 与导出范围 {manifest['node_ids']} 不一致"
+    )

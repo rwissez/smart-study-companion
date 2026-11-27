@@ -5,6 +5,7 @@
 
 from __future__ import annotations
 
+import csv
 import io
 import json
 import zipfile
@@ -26,10 +27,34 @@ def _teacher(client: TestClient, dataset_id: str | None = None) -> dict:
     return {"Authorization": f"Bearer {token}"}
 
 
-def _import(client: TestClient) -> dict:
+def _filtered(name: str, students: tuple[str, ...], nodes: tuple[str, ...]) -> tuple[str, bytes, str]:
+    """只保留有完整正式方案的学生/节点，避免用未发布方案测试正常导出。"""
+
+    rows = list(
+        csv.reader(io.StringIO((FIXTURES / f"{name}.csv").read_text(encoding="utf-8-sig")))
+    )
+    header, body = rows[0], rows[1:]
+    if name == "students":
+        body = [row for row in body if row[0] in students]
+    elif name == "nodes":
+        body = [row for row in body if row[0] in nodes]
+    elif name == "records":
+        body = [row for row in body if row[1] in students and row[4] in nodes]
+    buffer = io.StringIO()
+    writer = csv.writer(buffer)
+    writer.writerow(header)
+    writer.writerows(body)
+    return (f"{name}.csv", buffer.getvalue().encode("utf-8"), "text/csv")
+
+
+def _import(
+    client: TestClient,
+    *,
+    students: tuple[str, ...] = ("S01", "S02"),
+    nodes: tuple[str, ...] = ("N01",),
+) -> dict:
     files = [
-        ("files", (f"{name}.csv", (FIXTURES / f"{name}.csv").read_bytes(), "text/csv"))
-        for name in TABLES
+        ("files", _filtered(name, students, nodes)) for name in TABLES
     ]
     receipt = client.post(
         "/api/v1/imports",
