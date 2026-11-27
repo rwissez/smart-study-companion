@@ -33,3 +33,47 @@ def test_openai_compatible_maps_timeout(monkeypatch):
     with pytest.raises(DomainError) as exc:
         provider.generate([])
     assert exc.value.code == "MODEL_TIMEOUT"
+
+
+def test_openai_compatible_streams_text_deltas():
+    stream = (
+        'data: {"choices":[{"delta":{"content":"先看"}}]}\n\n'
+        'data: {"choices":[{"delta":{"content":"符号"}}]}\n\n'
+        "data: [DONE]\n\n"
+    )
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        body = json.loads(request.content)
+        assert body["stream"] is True
+        return httpx.Response(200, content=stream.encode("utf-8"))
+
+    provider = OpenAICompatibleProvider("http://model.test/v1", "demo")
+    provider._client = httpx.Client(transport=httpx.MockTransport(handler), base_url="http://model.test/v1")
+    seen: list[str] = []
+    turn = provider.generate_stream(
+        [{"role": "user", "content": "解释"}],
+        on_text=seen.append,
+    )
+    assert seen == ["先看", "符号"]
+    assert turn.text == "先看符号"
+    assert turn.tool_calls == []
+
+
+def test_openai_compatible_stream_accumulates_tool_call_fragments():
+    stream = (
+        'data: {"choices":[{"delta":{"tool_calls":[{"index":0,"id":"call-1",'
+        '"function":{"name":"get_student_analysis","arguments":"{\\"student_id\\":"}}]}}]}\n\n'
+        'data: {"choices":[{"delta":{"tool_calls":[{"index":0,'
+        '"function":{"arguments":"\\"S01\\"}"}}]}}]}\n\n'
+        "data: [DONE]\n\n"
+    )
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(200, content=stream.encode("utf-8"))
+
+    provider = OpenAICompatibleProvider("http://model.test/v1", "demo")
+    provider._client = httpx.Client(transport=httpx.MockTransport(handler), base_url="http://model.test/v1")
+    turn = provider.generate_stream([{"role": "user", "content": "分析"}])
+    assert [call.name for call in turn.tool_calls] == ["get_student_analysis"]
+    assert turn.tool_calls[0].arguments == {"student_id": "S01"}
+    assert turn.text is None
