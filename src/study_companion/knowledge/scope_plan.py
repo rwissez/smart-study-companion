@@ -200,6 +200,9 @@ def split_chapters(document: PdfDocument) -> list[Chapter]:
         if boundaries and boundaries[-1][0] == page.page:
             # 同一页已有标题（例如章标题与节标题同页）：以先出现的行为章边界。
             continue
+        if boundaries and boundaries[-1][1].strip() == heading[1].strip():
+            # 页眉重复同一标题时不再切章，否则每页都会变成一个"章"。
+            continue
         boundaries.append((page.page, heading[1]))
 
     last_page = max(page.page for page in pages)
