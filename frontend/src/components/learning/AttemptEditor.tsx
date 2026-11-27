@@ -325,7 +325,7 @@ export function AttemptEditor({ plan, planVersion, activity, onChanged, onBack }
       </div>
       <div className="pageHeader">
         <div>
-          <h1 className="pageTitle">{activity.title || "在线作答"}</h1>
+          <h1 className="pageTitle">在线作答</h1>
           <p className="pageSub">
             {questionTypeLabel(questionType)} · 满分 {materialData?.max_score ?? "—"} · 预计 {activity.estimate_minutes} 分钟
             {locked ? " · 已提交" : ""}

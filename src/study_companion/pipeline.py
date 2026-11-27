@@ -1,4 +1,4 @@
-"""业务流水线：导入完成后的 A → B → C 调度与正式成果落库。
+﻿"""业务流水线：导入完成后的 A → B → C 调度与正式成果落库。
 
 本模块是唯一"把纯函数结果变成正式版本"的地方：
 
@@ -253,8 +253,28 @@ def persist_analysis_bundle(
 # --------------------------------------------------------------------------- #
 
 
-def _normalise_plan(bundle: RecommendationBundle, plan_version: str) -> RecommendationBundle:
-    """为旧规则结果补上正式活动/任务组身份（稳定、可重放）。"""
+def _normalise_plan(
+    bundle: RecommendationBundle,
+    plan_version: str,
+    indicator_names: dict[str, str] | None = None,
+    material_titles: dict[str, str] | None = None,
+) -> RecommendationBundle:
+    """为旧规则结果补上正式活动/任务组身份（稳定、可重放）。
+
+    同时把面向教师/内部的语言换成学生可读文本：指标编号换成指标名称，
+    任务组补上预计时长与预期结果，避免学生端出现 ``T01I1`` 这类内部标识。
+    """
+
+    names = indicator_names or {}
+
+    def humanise(text: str) -> str:
+        cleaned = text
+        for indicator_id, name in names.items():
+            if not indicator_id or not name:
+                continue
+            cleaned = cleaned.replace(f"指标 {indicator_id}", name)
+            cleaned = cleaned.replace(indicator_id, name)
+        return cleaned
 
     recommendations = []
     groups: list[TaskGroup] = []
@@ -269,13 +289,20 @@ def _normalise_plan(bundle: RecommendationBundle, plan_version: str) -> Recommen
                         "group_id": group_id,
                         "activity_kind": "question" if activity.material_id else "study_material",
                         "state": "not_started",
+                        "purpose": humanise(activity.purpose),
+                        "title": activity.title
+                        or (material_titles or {}).get(activity.material_id or "", ""),
                     }
                 )
             )
+        goal = humanise(rec.goal)
         recommendations.append(
             rec.model_copy(
                 update={
                     "activities": activities,
+                    "goal": goal,
+                    "reason": humanise(rec.reason),
+                    "student_intro": humanise(rec.student_intro),
                     "group_id": group_id,
                     "strategy_types": rec.strategy_types or ["consolidation"],
                     "review_status": "validated",
@@ -285,13 +312,15 @@ def _normalise_plan(bundle: RecommendationBundle, plan_version: str) -> Recommen
         groups.append(
             TaskGroup(
                 group_id=group_id,
-                goal=rec.goal,
+                goal=goal,
                 strategy_types=rec.strategy_types or ["consolidation"],
                 activity_ids=[item.activity_id for item in activities],
                 order=index,
                 required_activity_ids=[item.activity_id for item in activities],
                 goal_target_key=rec.indicator_id,
-                student_intro=rec.student_intro,
+                expected_outcome=goal,
+                estimated_minutes=sum(item.estimate_minutes for item in activities),
+                student_intro=humanise(rec.student_intro),
                 evidence_refs=rec.evidence_refs,
             )
         )
@@ -524,6 +553,8 @@ def persist_plan(
     review: ReviewInfo,
     student_uid: str | None,
     publish: bool,
+    indicator_names: dict[str, str] | None = None,
+    material_titles: dict[str, str] | None = None,
 ) -> dict[str, Any]:
     node_key = bundle.node_id
     key = repo.FormalKey(
@@ -534,7 +565,7 @@ def persist_plan(
         target_key=bundle.student_id,
     )
     plan_version_id = repo.new_id("plan")
-    normalised = _normalise_plan(bundle, plan_version_id)
+    normalised = _normalise_plan(bundle, plan_version_id, indicator_names, material_titles)
     normalised = normalised.model_copy(
         update={
             "analysis_version": analysis_version_id,
@@ -798,6 +829,12 @@ def handle_import_process(ctx: JobContext) -> dict[str, Any]:
             review=review,
             student_uid=student.student_uid if student else None,
             publish=review.status == "validated",
+            indicator_names={
+                indicator.indicator_id: indicator.description for indicator in catalog.indicators
+            },
+            material_titles={
+                material.material_id: material.content[:60] for material in catalog.materials
+            },
         )
         if published["publication_status"] == "published" and student is not None:
             lesson_payload = dict(knowledge_payload)
@@ -1335,6 +1372,12 @@ def handle_student_update(ctx: JobContext) -> dict[str, Any]:
         review=review,
         student_uid=student.student_uid,
         publish=review.status == "validated",
+        indicator_names={
+            indicator.indicator_id: indicator.description for indicator in catalog.indicators
+        },
+        material_titles={
+            material.material_id: material.content[:60] for material in catalog.materials
+        },
     )
     _carry_over_states(
         db,
