@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useSearchParams } from "react-router-dom";
 import { errorCode, errorRequestId, toErrorMessage } from "../../api/client";
-import { getCatalog, getKnowledge, getKnowledgeQuality, getSourcePage, listKnowledgeReviews } from "../../api/service";
+import { getCatalog, getKnowledge, getKnowledgeQuality, getSourcePage, listKnowledgeReviews, rebuildKnowledge } from "../../api/service";
 import type { KnowledgePoint, KnowledgeReviewItem, KnowledgeSnapshotView } from "../../api/types";
 import { useSession } from "../../app/session";
 import { queryKeys } from "../../lib/queryKeys";
@@ -30,6 +30,8 @@ export function CurriculumPage() {
   const [sourceUrl, setSourceUrl] = useState<string | null>(null);
   const [sourceBusy, setSourceBusy] = useState(false);
   const [sourceError, setSourceError] = useState<string | null>(null);
+  const [rebuildBusy, setRebuildBusy] = useState(false);
+  const [rebuildNotice, setRebuildNotice] = useState("");
 
   useEffect(() => {
     return () => {
@@ -124,6 +126,26 @@ export function CurriculumPage() {
           </p>
         </div>
         <div className="pageActions">
+          <button
+            type="button"
+            className="btn"
+            disabled={rebuildBusy || !datasetId}
+            onClick={async () => {
+              if (!datasetId) return;
+              setRebuildBusy(true);
+              setRebuildNotice("");
+              try {
+                const job = await rebuildKnowledge(datasetId);
+                setRebuildNotice(`已提交重建任务 ${job.job_id}，可在数据管理的任务进度里查看。`);
+              } catch (reason) {
+                setRebuildNotice(toErrorMessage(reason));
+              } finally {
+                setRebuildBusy(false);
+              }
+            }}
+          >
+            {rebuildBusy ? "提交中…" : "重建知识体系"}
+          </button>
           {TABS.map((item) => (
             <button
               key={item.key}
@@ -137,6 +159,7 @@ export function CurriculumPage() {
           ))}
         </div>
       </div>
+      {rebuildNotice ? <p className="small muted" role="status">{rebuildNotice}</p> : null}
 
       {tab === "graph" ? (
         <>

@@ -9,6 +9,7 @@ import {
   getProgress,
   getStudentProfile,
   listPlanReviews,
+  rerunStudentAnalysis,
 } from "../../api/service";
 import type { AnswerRecordListItem, EvidenceRef, PlanView, StudentResultView } from "../../api/types";
 import { useSession } from "../../app/session";
@@ -45,6 +46,8 @@ export function StudentProfilePage() {
   const [recordsPage, setRecordsPage] = useState(1);
   const [editorOpen, setEditorOpen] = useState(false);
   const [reviewOpen, setReviewOpen] = useState(searchParams.get("review") === "1");
+  const [rerunBusy, setRerunBusy] = useState(false);
+  const [rerunNotice, setRerunNotice] = useState("");
 
   const savedView = useMemo(() => {
     try {
@@ -146,6 +149,30 @@ export function StudentProfilePage() {
         <div className="pageActions">
           <button
             type="button"
+            className="btn"
+            disabled={rerunBusy}
+            onClick={async () => {
+              if (!datasetId) return;
+              setRerunBusy(true);
+              setRerunNotice("");
+              try {
+                const job = await rerunStudentAnalysis(
+                  datasetId,
+                  studentId,
+                  result?.node_id ?? nodeId ?? null,
+                );
+                setRerunNotice(`已提交重新分析任务 ${job.job_id}，完成后刷新本页查看新结果。`);
+              } catch (reason) {
+                setRerunNotice(toErrorMessage(reason));
+              } finally {
+                setRerunBusy(false);
+              }
+            }}
+          >
+            {rerunBusy ? "提交中…" : "重新分析"}
+          </button>
+          <button
+            type="button"
             className="btn btnPrimary"
             onClick={() => navigate(`/teacher/chat?student=${encodeURIComponent(studentId)}&node=${encodeURIComponent(result?.node_id ?? nodeId ?? "")}`)}
           >
@@ -167,6 +194,7 @@ export function StudentProfilePage() {
 
       {result ? (
         <>
+          {rerunNotice ? <p className="small muted" role="status">{rerunNotice}</p> : null}
           <div className="tabs" role="tablist" aria-label="学生画像页签">
             {TABS.map((item) => (
               <button

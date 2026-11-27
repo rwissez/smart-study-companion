@@ -786,3 +786,53 @@ def list_alerts(
     return success(
         {"items": items[start : start + page_size], "total": len(items), "page": page, "page_size": page_size}
     )
+
+@router.post("/datasets/{dataset_id}/students/{student_id}/analysis/rerun", status_code=202)
+def rerun_student_analysis(
+    dataset_id: str,
+    student_id: str,
+    db: DbSession,
+    scope: Scope,
+    node_id: str = Query(default="", max_length=64),
+) -> dict:
+    """重新运行一个学生的 B→C，用于失败重试或数据修订后的重算。
+
+    只创建新的任务，不删除上一次结果；正式版本仍由发布门控制。
+    """
+
+    scope.require("view_student_analysis")
+    scope.require_teacher()
+    from study_companion.jobs.service import enqueue
+    from study_companion.jobs.worker import ensure_worker_started
+
+    node_ids = [node_id] if node_id else []
+    if not node_ids:
+        run = db.scalar(
+            select(models.AnalysisRun)
+            .where(
+                models.AnalysisRun.dataset_id == dataset_id,
+                models.AnalysisRun.status == "succeeded",
+            )
+            .order_by(models.AnalysisRun.created_at.desc())
+            .limit(1)
+        )
+        node_ids = list((run.node_ids_json if run else []) or [])
+    if not node_ids:
+        raise DomainError("RESULT_NOT_READY", "该数据集还没有可用的观察节点")
+    job = enqueue(
+        db,
+        kind="student_update",
+        scope={
+            "dataset_id": dataset_id,
+            "student_id": student_id,
+            "node_id": node_ids[0],
+        },
+        payload={"reason": "manual_rerun"},
+        dataset_id=dataset_id,
+        student_id=student_id,
+        requested_by=scope.session_id,
+    )
+    db.commit()
+    ensure_worker_started()
+    return success({"job_id": job.id, "status": job.status, "node_id": node_ids[0]})
+

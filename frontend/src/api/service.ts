@@ -1,4 +1,4 @@
-import { request, requestBlob, requestEnvelope, type ApiResult } from "./client";
+import { newIdempotencyKey, request, requestBlob, requestEnvelope, type ApiResult } from "./client";
 import * as demo from "./demo/demoService";
 import type {
   AlertItem,
@@ -837,3 +837,38 @@ export async function decidePlanReview(
     },
   );
 }
+
+export async function rerunStudentAnalysis(
+  datasetId: string,
+  studentId: string,
+  nodeId: string | null,
+): Promise<{ job_id: string; status: string; node_id: string }> {
+  if (isDemo) {
+    return { job_id: "job-demo-rerun", status: "queued", node_id: nodeId ?? "N01" };
+  }
+  return request<{ job_id: string; status: string; node_id: string }>(
+    `/datasets/${segment(datasetId)}/students/${segment(studentId)}/analysis/rerun${query({
+      node_id: nodeId,
+    })}`,
+    {
+      method: "POST",
+      body: JSON.stringify({}),
+      idempotencyKey: newIdempotencyKey("rerun-analysis"),
+    },
+  );
+}
+
+export async function rebuildKnowledge(datasetId: string): Promise<{ job_id: string; status: string }> {
+  if (isDemo) {
+    return { job_id: "job-demo-rebuild", status: "queued" };
+  }
+  return request<{ job_id: string; status: string }>(
+    `/datasets/${segment(datasetId)}/knowledge/rebuild${query({ reason: "teacher_manual_rerun" })}`,
+    {
+      method: "POST",
+      body: JSON.stringify({}),
+      idempotencyKey: newIdempotencyKey("rebuild-knowledge"),
+    },
+  );
+}
+
