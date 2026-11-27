@@ -15,6 +15,8 @@ from study_companion.contracts import (
     Activity,
     AdjustmentCondition,
     Catalog,
+    EvidenceRef,
+    Material,
     Recommendation,
     RecommendationBundle,
     ReviewCheck,
@@ -80,6 +82,10 @@ PREREQUISITE_MAX_NODES = 20
 ROUND_MINUTES = 20
 MAX_ACTIVITIES = 8
 GROUP_SWITCH_MINUTES = 1
+
+#: 无任何发现/观察证据时的补观察组：只补证据，不判断掌握（04 §3.1）。
+NO_OBSERVATION_TARGET_SUFFIX = "补观察"
+NO_OBSERVATION_MAX_ACTIVITIES = 3
 
 
 @dataclass
@@ -710,12 +716,284 @@ def _teacher_reason(
     return reason
 
 
+def _available_question_indicators(inputs: PlannerInputs) -> list[str]:
+    """节点可用正式题覆盖的指标；题多者优先，同题数按目录顺序。"""
+
+    order = {item.indicator_id: index for index, item in enumerate(inputs.catalog.indicators)}
+    allowed = set(inputs.node_available_ids) if inputs.node_available_ids is not None else None
+    counts: dict[str, int] = {}
+    for material in inputs.catalog.materials:
+        if material.material_type != "question" or material.question_type is None:
+            continue
+        if allowed is not None and material.material_id not in allowed:
+            continue
+        for indicator_id in sorted(set(material.indicator_ids)):
+            if indicator_id not in order:
+                continue
+            counts[indicator_id] = counts.get(indicator_id, 0) + 1
+    return sorted(counts, key=lambda item: (-counts[item], order[item]))
+
+
+def _no_observation_conditions(node_id: str) -> list[AdjustmentCondition]:
+    """补观察组的调整条件：只描述下一步如何继续取证，不预设掌握结论。"""
+
+    return [
+        AdjustmentCondition(
+            observable_condition=f"节点 {node_id} 的补观察题完成并可以评分",
+            next_action="交给下一次正式学情分析判断掌握程度，本轮不直接升级",
+            group="advance",
+        ),
+        AdjustmentCondition(
+            observable_condition="补观察题仍没有有效作答或无法评分",
+            next_action="继续补观察，必要时请教师安排面对面诊断",
+            group="fall_back",
+        ),
+        AdjustmentCondition(
+            observable_condition="补观察后证据仍不足以判断掌握程度",
+            next_action="保留缺证标记，不把证据不足当作薄弱",
+            group="wrap_up",
+        ),
+    ]
+
+
+def _plan_bundle(
+    inputs: PlannerInputs,
+    *,
+    recommendations: list[Recommendation],
+    task_groups: list[TaskGroup],
+    issues: list[ValidationIssue],
+    limitations: list[str],
+) -> RecommendationBundle:
+    return RecommendationBundle(
+        run_id=inputs.student_result.run_id,
+        dataset_id=inputs.student_result.dataset_id,
+        catalog_version=inputs.student_result.catalog_version,
+        student_id=inputs.student_result.student_id,
+        node_id=inputs.student_result.node_id,
+        recommendations=recommendations,
+        validation_issues=issues,
+        knowledge_version=(
+            inputs.student_result.analysis_input.knowledge_version
+            if inputs.student_result.analysis_input
+            else None
+        ),
+        task_groups=task_groups,
+        analysis_version=inputs.student_result.analysis_version,
+        dataset_family_id=inputs.student_result.dataset_family_id,
+        limitations=limitations,
+    )
+
+
+def _plan_for_no_observation(inputs: PlannerInputs) -> PlannerResult:
+    """没有诊断发现时，生成指标级补观察组；没有正式材料则保持空方案。
+
+    04 §3.1：不能定位知识点时只建指标级补证。这里不推断学生薄弱或掌握，
+    只把正式题安排成一次补观察，并用限制说明“缺记录不等于未掌握”。
+    """
+
+    node_id = inputs.student_result.node_id
+    limitations = [
+        f"学生 {inputs.student_result.student_id} 在节点 {node_id} 没有可用观察记录，"
+        "本轮只补诊断证据，不判断掌握程度",
+        "缺记录不等于未掌握；补观察结果只作为后续正式分析的依据",
+    ]
+    if inputs.node_available_ids is None:
+        limitations.append("该节点未登记可用题目清单，按目录内正式题选取补观察材料")
+
+    indicator_ids = _available_question_indicators(inputs)
+    if not indicator_ids:
+        limitations.append(
+            f"节点 {node_id} 没有可用于补观察的正式题，本轮保持空方案，由发布空方案门阻止发布"
+        )
+        issues = [
+            ValidationIssue(
+                code="NO_FEASIBLE_GROUP",
+                message=f"节点 {node_id} 没有可用于补观察的正式题，无法生成任务组",
+                severity="error",
+            )
+        ]
+        return PlannerResult(
+            bundle=_plan_bundle(
+                inputs,
+                recommendations=[],
+                task_groups=[],
+                issues=issues,
+                limitations=limitations,
+            ),
+            issues=issues,
+            limitations=limitations,
+        )
+
+    need: TeachingNeed | None = None
+    selected: list[candidate_rules.ScoredCandidate] = []
+    shortage_reason: str | None = None
+    for indicator_id in indicator_ids:
+        candidate_need = TeachingNeed(
+            target_key=f"node:{node_id}:{NO_OBSERVATION_TARGET_SUFFIX}",
+            indicator_id=indicator_id,
+            evidence_status="insufficient",
+            limitations=list(limitations),
+            primary_strategy="collect_evidence",
+            priority=0.0,
+        )
+        selection = _activities_for(
+            need=candidate_need,
+            point=None,
+            inputs=inputs,
+            remaining_minutes=inputs.config.round_minutes,
+            max_activities=min(inputs.config.max_activities, NO_OBSERVATION_MAX_ACTIVITIES),
+            strategy="collect_evidence",
+        )
+        if selection.selected:
+            need = candidate_need
+            selected = selection.selected
+            break
+        shortage_reason = selection.shortage_reason or shortage_reason
+
+    if need is None or not selected:
+        reason = shortage_reason or "没有合格材料"
+        limitations.append(
+            f"节点 {node_id} 的正式题均不满足补观察条件（{reason}），本轮保持空方案"
+        )
+        issues = [
+            ValidationIssue(
+                code="NO_FEASIBLE_GROUP",
+                message=f"节点 {node_id} 的正式题无法构成补观察任务：{reason}",
+                severity="error",
+            )
+        ]
+        return PlannerResult(
+            bundle=_plan_bundle(
+                inputs,
+                recommendations=[],
+                task_groups=[],
+                issues=issues,
+                limitations=limitations,
+            ),
+            issues=issues,
+            limitations=limitations,
+        )
+    assert need is not None
+
+    node_label = f"节点 {node_id}"
+    goal = f"{node_label}补观察：先用正式题补充诊断证据"
+    student_intro = (
+        f"本节点还没有你的作答记录。今天先做 {len(selected)} 道正式题，"
+        "把思路写下来即可；这轮只补观察，不判断掌握程度。"
+    )
+    material_ids = [item.material.material_id for item in selected]
+    reason = (
+        "该生本节点没有可用观察记录，不能判断掌握程度；"
+        f"先安排 {len(selected)} 道正式诊断题补充证据；"
+        f"选用材料 {'、'.join(material_ids)}。"
+    )
+    # 指标本身就是本轮的观察范围；引用目录指标而不是编造记录或诊断。
+    evidence_refs = [
+        EvidenceRef(
+            kind="curriculum",
+            id=need.indicator_id,
+            catalog_version=inputs.catalog.version,
+            curriculum_type="indicator",
+        )
+    ]
+
+    activities: list[Activity] = []
+    for order, candidate in enumerate(selected, start=1):
+        material = candidate.material
+        hint_limitations: list[str] = []
+        levels = hint_rules.build_hints(
+            material,
+            kp_name="本节点要求的基础方法",
+            strategy="collect_evidence",
+            limitations=hint_limitations,
+        )
+        for note in hint_limitations:
+            _append_unique(limitations, note)
+        independent = order == len(selected)
+        purpose = (
+            f"补诊断证据：独立完成{node_label}的正式题，记录作答过程"
+            if independent
+            else f"补诊断证据：完成{node_label}的正式题，记录作答过程"
+        )
+        activities.append(
+            Activity(
+                order=order,
+                material_id=material.material_id,
+                purpose=purpose,
+                hint_levels=levels,
+                observation_points=[need.indicator_id],
+                previously_attempted=candidate.parts.get("H", 1.0) < 1.0,
+                activity_kind="question",
+                state="not_started",
+                title=material.content[:60],
+                expected_outcome=(
+                    "独立完成并留下可核验的作答过程"
+                    if independent
+                    else "留下可核验的作答过程"
+                ),
+                estimate_minutes=candidate.estimated_minutes,
+                exposure_mode="independent" if independent else "practice",
+                repeat_reason=candidate.repeat_reason,
+                knowledge_ids=[],
+            )
+        )
+
+    recommendation = Recommendation(
+        recommendation_id=f"rec-node-{node_id}-collect-evidence",
+        indicator_id=need.indicator_id,
+        finding_ids=[],
+        goal=goal,
+        reason=reason,
+        student_intro=student_intro,
+        activities=activities,
+        adjustment_conditions=_no_observation_conditions(node_id),
+        review_status="draft",
+        generation_method="rule",
+        strategy_types=["collect_evidence"],
+        kp_ids=[],
+        evidence_refs=evidence_refs,
+    )
+    task_group = TaskGroup(
+        group_id="pending-1",
+        goal=goal,
+        strategy_types=["collect_evidence"],
+        activity_ids=[],
+        order=1,
+        primary_strategy="collect_evidence",
+        goal_target_key=need.target_key,
+        expected_outcome=(
+            f"完成本轮 {len(selected)} 道题并留下可核验的作答过程，不据此判定掌握"
+        ),
+        estimated_minutes=sum(item.estimate_minutes for item in activities),
+        required_activity_ids=[],
+        evidence_refs=evidence_refs,
+        student_intro=student_intro,
+        teacher_reason=reason,
+    )
+    bundle = _plan_bundle(
+        inputs,
+        recommendations=[recommendation],
+        task_groups=[task_group],
+        issues=[],
+        limitations=limitations,
+    )
+    return PlannerResult(
+        bundle=bundle,
+        needs=[need],
+        issues=[],
+        limitations=limitations,
+    )
+
+
 def build_plan(inputs: PlannerInputs) -> PlannerResult:
     """生成方案草稿：最多两个目标组，负担受全轮预算约束。"""
 
     issues: list[ValidationIssue] = []
     limitations: list[str] = []
     needs = rank_needs(aggregate_needs(inputs), inputs)
+    if not needs:
+        # 无任何发现/观察证据：不能编掌握结论，也不能交空方案；先补观察。
+        return _plan_for_no_observation(inputs)
     payload = inputs.knowledge_payload
     points = _points(payload)
     findings_by_id = {item.finding_id: item for item in inputs.student_result.findings}
@@ -942,22 +1220,11 @@ def build_plan(inputs: PlannerInputs) -> PlannerResult:
             )
         )
 
-    bundle = RecommendationBundle(
-        run_id=inputs.student_result.run_id,
-        dataset_id=inputs.student_result.dataset_id,
-        catalog_version=inputs.student_result.catalog_version,
-        student_id=inputs.student_result.student_id,
-        node_id=inputs.student_result.node_id,
+    bundle = _plan_bundle(
+        inputs,
         recommendations=recommendations,
-        validation_issues=issues,
-        knowledge_version=(
-            inputs.student_result.analysis_input.knowledge_version
-            if inputs.student_result.analysis_input
-            else None
-        ),
         task_groups=task_groups,
-        analysis_version=inputs.student_result.analysis_version,
-        dataset_family_id=inputs.student_result.dataset_family_id,
+        issues=issues,
         limitations=limitations,
     )
     return PlannerResult(

@@ -20,7 +20,14 @@ from study_companion.contracts import (
     Topic,
     Indicator,
 )
-from study_companion.recommendation import candidates, difficulty, fingerprint, hints, planner
+from study_companion.recommendation import (
+    candidates,
+    difficulty,
+    fingerprint,
+    hints,
+    planner,
+    publication,
+)
 
 
 def make_material(
@@ -72,6 +79,24 @@ def make_result(findings: list[Finding], *, signals: list[StrategySignal] | None
         limitations=[],
         analysis_version="ban-1",
         strategy_signals=signals or [],
+    )
+
+
+def make_no_record_result(*, node_id: str = "N02") -> StudentResult:
+    """D17/N02 一类：本节点没有任何作答记录，B 不产生 metric 与 finding。"""
+
+    return StudentResult(
+        run_id="run-1",
+        dataset_id="ds-1",
+        catalog_version="cat-1",
+        student_id="S01",
+        class_id="DC01",
+        node_id=node_id,
+        metrics=[],
+        findings=[],
+        limitations=["该节点无作答记录"],
+        analysis_version="ban-1",
+        strategy_signals=[],
     )
 
 
@@ -413,6 +438,87 @@ def test_priority_is_higher_for_core_weak_target() -> None:
     needs = planner.rank_needs(planner.aggregate_needs(inputs), inputs)
     assert needs[0].indicator_id == "T01I2", "核心知识点 + 已确认薄弱应排在前"
     assert needs[0].priority > needs[-1].priority
+
+
+def test_no_findings_with_materials_builds_collect_evidence_group() -> None:
+    """无发现但有正式题：生成补观察组，不伪造掌握结论。"""
+
+    materials = [
+        make_material("Q1", content="化简 -(2x-7) 的结果是（）"),
+        make_material("Q2", content="化简 -(3x-5) 的结果是（）"),
+    ]
+    inputs = planner.PlannerInputs(
+        student_result=make_no_record_result(),
+        catalog=make_catalog(materials),
+        knowledge_payload=knowledge_payload(),
+        history=candidates.LearningHistoryView(),
+        now=datetime(2026, 11, 27, tzinfo=UTC),
+        node_available_ids=["Q1", "Q2"],
+    )
+    result = planner.build_plan(inputs)
+    bundle = result.bundle
+
+    assert len(bundle.task_groups) == 1
+    assert len(bundle.recommendations) == 1
+    rec = bundle.recommendations[0]
+    group = bundle.task_groups[0]
+    assert rec.strategy_types == ["collect_evidence"]
+    assert group.primary_strategy == "collect_evidence"
+    assert rec.finding_ids == []
+    assert 1 <= len(rec.activities) <= 3
+    assert all(item.material_id in {"Q1", "Q2"} for item in rec.activities)
+    assert all("补诊断证据" in item.purpose for item in rec.activities)
+    assert "N02" in rec.goal and "补观察" in rec.goal
+    assert "N02" in (group.goal_target_key or "")
+    assert "补观察" in (group.goal_target_key or "")
+    assert any("没有可用观察记录" in item for item in bundle.limitations)
+    assert any("不判断掌握程度" in item for item in bundle.limitations)
+    assert planner.review_plan_rules(bundle).status == "validated"
+
+
+def test_no_findings_without_materials_returns_empty_plan_with_limitation() -> None:
+    """无发现且节点没有正式题：保持空方案，写清限制，由空方案门拦截。"""
+
+    inputs = planner.PlannerInputs(
+        student_result=make_no_record_result(),
+        catalog=make_catalog([make_material("Q1", content="化简 -(2x-7) 的结果是（）")]),
+        knowledge_payload=knowledge_payload(),
+        history=candidates.LearningHistoryView(),
+        now=datetime(2026, 11, 27, tzinfo=UTC),
+        node_available_ids=[],
+    )
+    result = planner.build_plan(inputs)
+    bundle = result.bundle
+
+    assert bundle.recommendations == []
+    assert bundle.task_groups == []
+    assert any("没有可用于补观察的正式题" in item for item in bundle.limitations)
+    assert any(issue.code == "NO_FEASIBLE_GROUP" for issue in bundle.validation_issues)
+    assert publication.formal_content_issues(bundle), "空方案必须由发布门拦截"
+
+
+def test_normal_findings_path_does_not_use_no_observation_fallback() -> None:
+    """有正常 findings 时保持原策略与证据，不进入补观察兜底。"""
+
+    materials = [
+        make_material("Q1", content="化简 -(2x-7) 的结果是（）"),
+        make_material("Q2", content="化简 -(3x-5) 的结果是（）"),
+    ]
+    inputs = planner.PlannerInputs(
+        student_result=make_result([make_finding("F1", error_types=["step_error"])]),
+        catalog=make_catalog(materials),
+        knowledge_payload=knowledge_payload(),
+        history=candidates.LearningHistoryView(),
+        now=datetime(2026, 11, 27, tzinfo=UTC),
+        node_available_ids=["Q1", "Q2"],
+    )
+    result = planner.build_plan(inputs)
+    rec = result.bundle.recommendations[0]
+
+    assert rec.strategy_types == ["error_correction"]
+    assert rec.finding_ids == ["F1"]
+    assert "补观察" not in rec.goal
+    assert not any("没有可用观察记录" in item for item in result.bundle.limitations)
 
 
 def test_planner_keeps_teacher_intervention_group_parallel() -> None:
