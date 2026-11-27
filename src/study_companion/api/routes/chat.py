@@ -307,6 +307,8 @@ def _server_context(
     student_rows = db.scalars(
         select(models.Student).where(models.Student.dataset_id == scope.dataset_id)
     ).all()
+    if scope.role == "teacher":
+        student_rows = [row for row in student_rows if scope.can_read_class(row.class_id)]
     students_by_id = {row.student_id: row for row in student_rows}
     classes = {row.class_id for row in student_rows}
 
@@ -1385,6 +1387,10 @@ def _execute_chat(
             target = ChatTarget(type="student", id=payload.student_id)
         elif target is None and scope.role == "student":
             target = ChatTarget(type="student", id=scope.student_id)
+        if scope.role == "student" and target and (
+            target.type != "student" or target.id != scope.student_id
+        ):
+            raise DomainError("FORBIDDEN", "学生会话只能访问本人数据")
         if on_event is not None:
             on_event({"type": "tool", "tool_name": "rule_summary", "label": "读取正式学情规则摘要", "status": "running"})
         fallback = _rule_fallback(db, scope, target, payload.node_id)

@@ -145,6 +145,10 @@ def _require_scope(db: DbSession, scope: Scope, dataset: models.Dataset, *, stud
         raise DomainError("FORBIDDEN", "当前会话无权访问该数据集")
     if class_id is not None and not scope.can_read_class(class_id):
         raise DomainError("FORBIDDEN", "当前会话未获授权该班级")
+    if class_id is None and student is not None and scope.role == "teacher":
+        row = db.get(models.Student, (dataset.id, student))
+        if row is not None and not scope.can_read_class(row.class_id):
+            raise DomainError("FORBIDDEN", "当前会话未获授权该学生的班级")
 
 
 def _student_view(payload: dict[str, Any]) -> dict[str, Any]:
