@@ -328,6 +328,65 @@ def build_knowledge(
     # 前置环检测：只用拓扑排序隔离环上的新边
     clean_relations = _break_cycles(clean_relations, issues)
 
+    # 关系推断：模型只提候选，程序校验 + 独立复核通过后才进正式候选。
+    model_relation_notes: list[str] = []
+    try:
+        from study_companion.knowledge.relation_model import infer_relations
+        from study_companion.model_service import ModelService
+
+        relation_service = ModelService()
+        if relation_service.configured and len(points) >= 2:
+            payload_relations, model_relation_notes = infer_relations(
+                service=relation_service,
+                points=[point.model_dump(mode="json") for point in points],
+                knowledge_version=knowledge_version,
+            )
+            existing_signatures = {
+                (item.type, tuple(sorted(item.source_ids)), item.target_id)
+                for item in clean_relations
+            }
+            for item in payload_relations:
+                signature = (
+                    item["type"],
+                    tuple(sorted(item["source_ids"])),
+                    item["target_id"],
+                )
+                if signature in existing_signatures:
+                    continue
+                existing_signatures.add(signature)
+                clean_relations.append(
+                    KnowledgeRelationDraft(
+                        relation_id=item["relation_id"],
+                        type=item["type"],
+                        source_ids=list(item["source_ids"]),
+                        target_id=item["target_id"],
+                        basis=item.get("basis", "team_inference"),
+                        note=item.get("note", ""),
+                        source_locators=[
+                            SourceLocator.model_validate(locator)
+                            for locator in item.get("source_locators", [])
+                        ],
+                        review_info=ReviewInfo(
+                            status="validated",
+                            method="model",
+                            checks=[
+                                ReviewCheck(
+                                    code="relation_independent_review",
+                                    passed=True,
+                                    reason="关系由独立模型复核通过",
+                                )
+                            ],
+                            reviewed_at="",
+                            rule_version=config.rule_version,
+                        ),
+                    )
+                )
+        elif len(points) >= 2:
+            model_relation_notes = ["模型未配置，关系仅来自目录登记"]
+    except Exception:  # 关系推断失败不影响其余候选构建
+        model_relation_notes = ["关系推断异常，本轮未新增模型关系"]
+    limitations.extend(model_relation_notes)
+
     indicator_total = len(catalog.indicators)
     covered_indicators = len({point.indicator_ids[0] for point in points if point.indicator_ids})
     material_total = len([item for item in catalog.materials if item.material_type == "question"])
