@@ -669,6 +669,8 @@ def _normalise_plan(
                 expected_outcome=goal,
                 estimated_minutes=sum(item.estimate_minutes for item in activities),
                 student_intro=humanise(rec.student_intro),
+                primary_strategy=(rec.strategy_types or ["consolidation"])[0],
+                teacher_reason=humanise(rec.reason) or goal,
                 evidence_refs=rec.evidence_refs,
             )
         )
