@@ -184,6 +184,26 @@ export function ChatPanel({ role, context, onConfigure, initialConversationId }:
   const [finishedMessageId, setFinishedMessageId] = useState<string | null>(null);
   const logRef = useRef<HTMLDivElement>(null);
   const autoSelectedRef = useRef(false);
+  const stickToBottom = useRef(true);
+  const [showJump, setShowJump] = useState(false);
+
+  const onLogScroll = () => {
+    const node = logRef.current;
+    if (!node) return;
+    const distance = node.scrollHeight - node.scrollTop - node.clientHeight;
+    const stick = distance < 80;
+    stickToBottom.current = stick;
+    setShowJump(!stick);
+  };
+
+  const jumpToBottom = () => {
+    const node = logRef.current;
+    if (!node) return;
+    stickToBottom.current = true;
+    setShowJump(false);
+    if (typeof node.scrollTo === "function") node.scrollTo({ top: node.scrollHeight, behavior: "smooth" });
+    else node.scrollTop = node.scrollHeight;
+  };
 
   const conversations = useQuery<{ items: ConversationSummary[] }>({
     queryKey: queryKeys.conversations(scopeKey),
@@ -233,6 +253,7 @@ export function ChatPanel({ role, context, onConfigure, initialConversationId }:
   });
 
   useEffect(() => {
+    if (!stickToBottom.current) return;
     const timer = window.setTimeout(() => {
       const node = logRef.current;
       if (!node) return;
@@ -565,7 +586,7 @@ export function ChatPanel({ role, context, onConfigure, initialConversationId }:
           </div>
         </div>
 
-        <div className="chatLog" ref={logRef} aria-live="polite">
+        <div className="chatLog" ref={logRef} aria-live="polite" onScroll={onLogScroll}>
           {messages.isPending && selectedId ? <StatePanel kind="loading" title="正在读取会话消息" /> : null}
           {messages.isError ? (
             <StatePanel
@@ -646,6 +667,11 @@ export function ChatPanel({ role, context, onConfigure, initialConversationId }:
             </article>
           ) : null}
         </div>
+        {showJump ? (
+          <button type="button" className="btn btnSm chatJumpBottom" onClick={jumpToBottom}>
+            回到底部
+          </button>
+        ) : null}
 
         {proposalError ? <p className="fieldError" role="alert">{proposalError}</p> : null}
 
