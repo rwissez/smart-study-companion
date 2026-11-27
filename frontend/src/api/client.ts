@@ -144,6 +144,39 @@ export async function request<T>(path: string, options: RequestOptions = {}): Pr
   return result.data;
 }
 
+/** 授权下载：与其他请求共用 Bearer token；调用方负责用后 revoke Blob URL。 */
+export async function requestBlob(path: string): Promise<{ blob: Blob; filename: string | null }> {
+  const headers = new Headers();
+  if (authToken) headers.set("Authorization", `Bearer ${authToken}`);
+  let response: Response;
+  try {
+    response = await fetch(`${API_BASE_URL}${path}`, { headers });
+  } catch (error) {
+    if (isAbortError(error)) throw error;
+    throw new NetworkError("无法连接服务，下载没有开始。");
+  }
+  if (!response.ok) {
+    const text = await response.text();
+    let body: ApiErrorBody | null = null;
+    try {
+      body = text ? (JSON.parse(text) as ApiErrorBody) : null;
+    } catch {
+      body = null;
+    }
+    const code = body?.error?.code ?? `HTTP_${response.status}`;
+    throw new ApiError(
+      code,
+      CODE_MESSAGES[code] ?? body?.error?.message ?? "下载失败。",
+      response.status,
+      body?.request_id ?? response.headers.get("X-Request-ID"),
+      body?.error?.details ?? [],
+    );
+  }
+  const disposition = response.headers.get("Content-Disposition") ?? "";
+  const match = /filename="?([^";]+)"?/i.exec(disposition);
+  return { blob: await response.blob(), filename: match ? match[1] : null };
+}
+
 const STATUS_FALLBACK: Record<number, string> = {
   401: "登录状态已失效，请重新选择身份。",
   403: "当前身份无权查看这部分内容。",

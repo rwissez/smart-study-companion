@@ -911,12 +911,13 @@ def attach_lessons(
                 ]
             draft = lesson_service.build_rule_lesson(
                 title=point.get("name", "") or group.goal,
-                goal=group.goal or point.get("definition", ""),
+                goal=point.get("definition", "") or group.expected_outcome or group.goal,
                 kp_id=kp_id,
                 evidence_refs=[EvidenceRef(**item) for item in evidence],
                 teaching_points=[
                     point.get("definition", ""),
-                    group.student_intro or group.expected_outcome or "",
+                    group.student_intro or "",
+                    group.expected_outcome or "",
                 ],
                 fallback_text=point.get("definition", ""),
             )

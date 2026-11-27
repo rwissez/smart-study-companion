@@ -56,9 +56,19 @@ def build_rule_lesson(
 ) -> LessonDraft:
     """用知识依据生成最小可读微课堂：解释 + 公式（可就地验证时）+ 出处。"""
 
-    paragraphs = [item.strip() for item in teaching_points if item and item.strip()][:3]
-    if not paragraphs:
-        paragraphs = ["这一步的关键是把注意力放在结构上，先看要处理的对象，再决定用什么运算。"]
+    cleaned = []
+    seen: set[str] = set()
+    for item in teaching_points:
+        text = (item or "").strip()
+        if not text or text == title.strip() or text in seen:
+            continue
+        seen.add(text)
+        cleaned.append(text[:MAX_COMPONENT_TEXT])
+    if not cleaned:
+        cleaned = [
+            "先看清楚要处理的对象与符号，再决定用哪一步运算；每写一步都回头核对一遍。"
+        ]
+    paragraphs = cleaned[:3]
     components: list[Any] = [
         TextComponent(
             id="intro",

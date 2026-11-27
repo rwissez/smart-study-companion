@@ -234,7 +234,7 @@ ul, ol { padding-left: 20px; }
 .tagError { color: var(--color-error); border-color: var(--color-border); }
 
 .demoBadge {
-  display: inline-flex; align-items: center; gap: 4px;
+  display: inline-flex; align-items: center; gap: 4px; align-self: flex-start;
   padding: 1px var(--space-2); border: 1px solid var(--color-warning); border-radius: var(--radius-sm);
   color: var(--color-warning); font-size: var(--font-xs); white-space: nowrap;
 }
@@ -352,6 +352,19 @@ ul, ol { padding-left: 20px; }
 .mathToolbar { display: flex; gap: var(--space-1); flex-wrap: wrap; margin-bottom: var(--space-2); }
 .mathKey { min-width: 32px; min-height: 32px; padding: 0 var(--space-2); border: 1px solid var(--color-border); border-radius: var(--radius-sm); background: var(--color-background); font-family: var(--font-math); }
 
+/* --------------------------------------------------------------- 微课堂组件 */
+
+.mathFormula { margin: 0; text-align: center; overflow-wrap: anywhere; }
+.derivationList { list-style: none; padding: 0; margin: var(--space-2) 0; display: flex; flex-direction: column; gap: var(--space-3); }
+.derivationStep { display: grid; grid-template-columns: minmax(0, 1fr); gap: 2px; padding-left: var(--space-4); border-left: 2px solid var(--color-border); }
+.derivationExpr { overflow-wrap: anywhere; }
+.contrastGrid { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: var(--space-4); margin: var(--space-3) 0; }
+.contrastCell { border: 1px solid var(--color-border); border-radius: var(--radius-md); padding: var(--space-3); min-width: 0; }
+.contrastCell p { overflow-wrap: anywhere; }
+.numberLineWrap { border: 1px solid var(--color-border); border-radius: var(--radius-md); padding: var(--space-2); overflow-x: auto; }
+.numberLineWrap svg { display: block; width: 100%; min-width: 560px; height: auto; }
+
+
 /* ------------------------------------------------------------------ 证据抽屉 */
 
 .overlay { position: fixed; inset: 0; background: var(--overlay); display: flex; justify-content: flex-end; z-index: 60; }
@@ -459,6 +472,19 @@ ul, ol { padding-left: 20px; }
 .chatNotice { border: 1px solid var(--color-border); border-radius: var(--radius-md); padding: var(--space-4); background: var(--color-background); color: var(--color-text-secondary); }
 .chatToolbar { display: flex; justify-content: space-between; align-items: center; gap: var(--space-3); flex-wrap: wrap; }
 .chatHistoryEmpty { font-size: var(--font-sm); color: var(--color-text-secondary); }
+.conversationList { display: flex; flex-direction: column; gap: 2px; margin-top: var(--space-3); max-height: 320px; overflow: auto; }
+.conversationItem {
+  display: flex; flex-direction: column; align-items: flex-start; gap: 2px;
+  width: 100%; text-align: left; padding: var(--space-2);
+  border: 1px solid transparent; border-radius: var(--radius-md); background: transparent;
+}
+.conversationItem:hover { background: var(--color-hover); }
+.conversationItemActive { background: var(--color-selected-bg); border-color: var(--color-selected-border); }
+.conversationTitle { font-size: var(--font-sm); color: var(--color-text-primary); overflow-wrap: anywhere; }
+.conversationMeta { font-size: var(--font-xs); color: var(--color-text-secondary); }
+.segmentList { list-style: none; padding: 0; margin: var(--space-2) 0 0; display: flex; flex-direction: column; gap: var(--space-2); }
+.segmentItem { display: grid; grid-template-columns: 64px minmax(0, 1fr); gap: var(--space-2); align-items: start; }
+.segmentText { font-size: var(--font-body); overflow-wrap: anywhere; white-space: pre-wrap; }
 
 /* --------------------------------------------------------------------- 响应 */
 

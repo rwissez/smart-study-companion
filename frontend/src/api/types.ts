@@ -502,6 +502,20 @@ export interface KnowledgeReviewItem {
   source_locators: MaterialSourceLocator[];
 }
 
+export interface KnowledgeQualityReport {
+  dataset_id: string;
+  catalog_version: string;
+  knowledge_version: string | null;
+  candidate_version: string;
+  job_id?: string | null;
+  generated_at: string;
+  counts: Record<string, number>;
+  coverage: Array<Record<string, unknown>>;
+  audit?: Record<string, number>;
+  issues: Array<Record<string, unknown>>;
+  limitations: string[];
+}
+
 export interface QualityIssue {
   issue_id: string;
   code: string;
@@ -732,3 +746,163 @@ export interface ModelSettings {
   model_id: string | null;
   has_api_key: boolean;
 }
+
+// ------------------------------------------------------------------- 对话历史
+
+export interface ConversationSummary {
+  conversation_id: string;
+  title: string;
+  role: string;
+  dataset_id: string;
+  created_at: string;
+  updated_at: string;
+  last_message: Record<string, unknown> | null;
+}
+
+export interface ChatSegment {
+  kind: string;
+  text: string;
+  evidence_refs: EvidenceRef[];
+}
+
+export interface ChatMessageRecord {
+  message_id: string;
+  conversation_id: string;
+  sequence: number;
+  role: string;
+  content: string;
+  status: string;
+  created_at: string;
+  segments: ChatSegment[];
+  job_id: string | null;
+  tool_trace: Array<Record<string, unknown>>;
+  evidence_refs: EvidenceRef[];
+  operation_results: Array<Record<string, unknown>>;
+}
+
+export interface ChatReply {
+  text: string;
+  tool_trace?: Array<Record<string, unknown>>;
+  evidence_refs?: EvidenceRef[];
+  segments?: ChatSegment[];
+  stopped_reason?: string | null;
+  task_type?: string;
+  route_source?: string;
+  conversation_id?: string;
+  message_id?: string;
+  status?: string;
+  operation_results?: Array<Record<string, unknown>>;
+}
+
+// --------------------------------------------------------------------- 微课堂
+
+export interface LessonTextComponent {
+  type: "text";
+  id: string;
+  heading?: string | null;
+  paragraphs: string[];
+}
+
+export interface LessonFormulaComponent {
+  type: "formula";
+  id: string;
+  expr: string;
+  caption?: string | null;
+}
+
+export interface LessonDerivationComponent {
+  type: "derivation";
+  id: string;
+  mode: string;
+  steps: Array<{ expr: string; note: string }>;
+}
+
+export interface LessonContrastComponent {
+  type: "contrast";
+  id: string;
+  before: string;
+  incorrect: string;
+  correct: string;
+  note?: string | null;
+}
+
+export interface LessonInterval {
+  lo: string | null;
+  hi: string | null;
+  lo_closed: boolean;
+  hi_closed: boolean;
+}
+
+export interface LessonNumberLineComponent {
+  type: "number_line";
+  id: string;
+  min: string;
+  max: string;
+  tick: string;
+  sets: Array<{ label: string; intervals: LessonInterval[] }>;
+  operation: string | null;
+  result_index?: number | null;
+}
+
+export interface LessonCitationComponent {
+  type: "citation";
+  id: string;
+  labels: Array<{ label: string; source_index?: number | null; evidence_index?: number | null }>;
+}
+
+export type LessonComponent =
+  | LessonTextComponent
+  | LessonFormulaComponent
+  | LessonDerivationComponent
+  | LessonContrastComponent
+  | LessonNumberLineComponent
+  | LessonCitationComponent;
+
+export interface MicroLessonView {
+  content_id: string;
+  content_version: string;
+  schema_version: string;
+  title: string;
+  goal: string;
+  components: LessonComponent[];
+  safe_sources: Array<Record<string, unknown>>;
+  fallback_text: string;
+  review_status: string;
+  activity_id: string;
+  plan_version: string;
+}
+
+export interface MicroLessonCompleteResponse {
+  activity_id: string;
+  state: ActivityState;
+  event_id: string | null;
+  group_completed: boolean;
+}
+
+// --------------------------------------------------------------------- 导出
+
+export interface ExportItem {
+  export_id: string;
+  snapshot_id: string;
+  job_id: string | null;
+  run_id: string;
+  status: string;
+  created_at: string;
+  updated_at: string;
+  bytes: number | null;
+  check_report: Record<string, unknown> | null;
+  manifest: Record<string, unknown> | null;
+}
+
+export interface ExportPreview {
+  items: ExportItem[];
+  total: number;
+}
+
+export interface ExportCreateResponse {
+  export_id: string;
+  snapshot_id: string;
+  job_id: string;
+  status: string;
+}
+
