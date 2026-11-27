@@ -9,7 +9,7 @@
 
 from __future__ import annotations
 
-from typing import Annotated, Any
+from typing import Annotated, Any, Literal
 
 from fastapi import APIRouter, Header, Query
 from pydantic import BaseModel, ConfigDict, Field
@@ -25,6 +25,7 @@ from study_companion.contracts import (
     GradingResult,
     Material,
     RecommendationBundle,
+    RubricScore,
 )
 from study_companion.db import models
 from study_companion.db import version_repository as repo
@@ -901,3 +902,165 @@ def list_learning_events(
     start = (page - 1) * page_size
     items = [ledger.view(row, student_id) for row in rows[start : start + page_size]]
     return success({"items": items, "total": len(rows), "page": page, "page_size": page_size})
+
+
+class GradeRevisionRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    status: Literal["graded", "needs_review", "pending", "unanswered"]
+    score: int | None = Field(default=None, ge=0)
+    max_score: int = Field(ge=1, le=100)
+    rubric_scores: list[dict[str, Any]] = Field(default_factory=list)
+    reason: str = Field(min_length=1, max_length=500)
+
+
+@router.get("/attempts/{attempt_id}/grades")
+def list_grade_history(attempt_id: str, db: DbSession, scope: Scope) -> dict:
+    """教师查看同一作答的全部评分修订；原卷与每一版都保留。"""
+
+    scope.require("view_student_analysis")
+    scope.require_teacher()
+    row = db.get(models.AttemptRow, attempt_id)
+    if row is None:
+        raise DomainError("NOT_FOUND", "作答尝试不存在")
+    version = db.get(models.Version, row.plan_version)
+    if version is None:
+        raise DomainError("NOT_FOUND", "学习方案版本不存在")
+    _student_ctx(db, scope, version.dataset_id, version.target_key)
+    rows = db.scalars(
+        select(models.Grade)
+        .where(models.Grade.attempt_id == attempt_id)
+        .order_by(models.Grade.revision.asc())
+    ).all()
+    return success(
+        {
+            "attempt_id": attempt_id,
+            "latest_grade_id": row.latest_grade_id,
+            "items": [grade_view(item, reveal=True) for item in rows],
+        }
+    )
+
+
+@router.post("/attempts/{attempt_id}/grade-revisions", status_code=201)
+def revise_grade(
+    attempt_id: str,
+    payload: GradeRevisionRequest,
+    db: DbSession,
+    scope: Scope,
+    idempotency_key: Annotated[str | None, Header(alias="Idempotency-Key", max_length=128)] = None,
+) -> dict:
+    """教师对已提交作答追加一版评分，不删除原卷与原评分。"""
+
+    scope.require("revise_grading")
+    scope.require_teacher()
+    row = db.get(models.AttemptRow, attempt_id)
+    if row is None:
+        raise DomainError("NOT_FOUND", "作答尝试不存在")
+    version = db.get(models.Version, row.plan_version)
+    if version is None:
+        raise DomainError("NOT_FOUND", "学习方案版本不存在")
+    student_uid, dataset = _student_ctx(db, scope, version.dataset_id, version.target_key)
+    if row.status not in {"submitted", "completed"}:
+        raise DomainError("CONFLICT", "只有已提交的作答可以修订评分")
+    if payload.status == "graded" and payload.score is None:
+        raise DomainError("VALIDATION_ERROR", "改判为已评分时必须给出分数")
+    if payload.status != "graded" and payload.score is not None:
+        raise DomainError("VALIDATION_ERROR", "未完成评分时不能带分数")
+    if payload.score is not None and payload.score > payload.max_score:
+        raise DomainError("VALIDATION_ERROR", "分数不能超过满分")
+
+    token = (idempotency_key or "").strip() or None
+    digest = request_digest({"attempt": attempt_id, "payload": payload.model_dump(mode="json")})
+    if token:
+        cached = find_receipt(
+            db,
+            session_id=scope.session_id,
+            endpoint="grading.revise",
+            key=token,
+            digest=digest,
+        )
+        if cached:
+            return success(cached)
+
+    history = db.scalars(
+        select(models.Grade).where(models.Grade.attempt_id == attempt_id)
+    ).all()
+    revision = max((item.revision for item in history), default=0) + 1
+    previous_grade_id = row.latest_grade_id
+    grade_id = ledger.new_id("grade")
+    validated = "validated" if payload.status == "graded" else "not_checked"
+    result = GradingResult(
+        grade_id=grade_id,
+        attempt_id=attempt_id,
+        revision=revision,
+        status=payload.status,
+        validation_status=validated,  # type: ignore[arg-type]
+        score=payload.score if payload.status == "graded" else None,
+        max_score=payload.max_score,
+        rubric_scores=[RubricScore.model_validate(item) for item in payload.rubric_scores],
+        method="teacher",
+        limitations=["教师修订：以本版为准，原评分保留在历史中"],
+        created_at=ledger.now_iso(),
+        rule_version="teacher-revision-1",
+    )
+    db.add(
+        models.Grade(
+            grade_id=grade_id,
+            attempt_id=attempt_id,
+            revision=revision,
+            status=payload.status,
+            validation_status=validated,
+            score=result.score,
+            max_score=payload.max_score,
+            payload_json={**result.model_dump(mode="json"), "reason": payload.reason},
+            created_at=ledger.now_iso(),
+        )
+    )
+    row.latest_grade_id = grade_id
+    if payload.status == "graded":
+        row.status = "completed"
+    activity = _plan_activity(db, row.plan_version, row.activity_id)
+    ledger.append(
+        db,
+        family_id=dataset.family_id,
+        dataset_id=dataset.id,
+        run_id=repo.active_run_id(db, dataset.id, version.node_key),
+        student_uid=student_uid,
+        node_id=version.node_key,
+        plan_version=row.plan_version,
+        group_id=activity.group_id,
+        activity_id=row.activity_id,
+        material_id=row.material_id,
+        attempt_id=attempt_id,
+        event_type="grade_revised",
+        source="teacher",
+        payload={
+            "grade_id": grade_id,
+            "revision": revision,
+            "previous_grade_id": previous_grade_id,
+            "grading_status": payload.status,
+            "score": result.score,
+            "max_score": payload.max_score,
+            "reason": payload.reason,
+        },
+        occurred_at=ledger.now_iso(),
+        dedupe={"revision": revision},
+    )
+    db.flush()
+    receipt = {
+        "grade": grade_view(
+            db.get(models.Grade, grade_id), reveal=payload.status == "graded"
+        ),
+        "previous_grade_id": previous_grade_id,
+    }
+    if token:
+        store_receipt(
+            db,
+            session_id=scope.session_id,
+            endpoint="grading.revise",
+            key=token,
+            digest=digest,
+            receipt=receipt,
+            result_ref=grade_id,
+        )
+    return success(receipt)

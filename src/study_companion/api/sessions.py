@@ -45,6 +45,7 @@ TEACHER_CAPABILITIES = (
     "manage_jobs",
     "view_learning_events",
     "resolve_intervention",
+    "revise_grading",
     "model_settings",
 )
 
