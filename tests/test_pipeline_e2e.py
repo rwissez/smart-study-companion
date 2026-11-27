@@ -109,6 +109,11 @@ def test_class_profile_keeps_roster_denominator(client: TestClient, imported: di
     result = response.json()["data"]["result"]
     assert result["roster_count"] == 2  # S01 + S03（S03 无记录也不能被剔除）
     assert result["observed_student_count"] == 1
+    assert result["performance_distribution"], "班级要有表现分布，分母含未观测学生"
+    assert all(item["roster_count"] == 2 for item in result["performance_distribution"])
+    attention = {item["student_id"]: item["reason"] for item in result["attention_students"]}
+    assert "S01" in attention
+    assert "证据" in attention["S01"]
 
 
 def test_student_cannot_read_another_student(client: TestClient, imported: dict) -> None:

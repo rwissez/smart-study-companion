@@ -1,4 +1,4 @@
-﻿"""analyze_dataset：基于 PreparedDataset 与课程目录的个体/班级统计。
+"""analyze_dataset：基于 PreparedDataset 与课程目录的个体/班级统计。
 
 统计口径对应01文档"统计口径"一节，五个指标全部保存分子、分母、范围、
 记录引用与排除说明；分母为0时 value 为 null，不返回假数值。
@@ -96,6 +96,27 @@ def analyze_dataset(
                     reviewed_variants, context, config, unmapped,
                 )
             )
+
+    from study_companion.analysis.class_insights import enrich_class
+
+    for result in class_results:
+        members = [
+            item
+            for item in student_results
+            if item.class_id == result.class_id and item.node_id == result.node_id
+        ]
+        if not members:
+            continue
+        insight = enrich_class(
+            class_id=result.class_id,
+            node_id=result.node_id,
+            roster_count=result.roster_count,
+            members=members,
+        )
+        result.common_findings = insight["common_findings"]
+        result.performance_distribution = insight["performance_distribution"]
+        result.attention_students = insight["attention_students"]
+        result.limitations = list(result.limitations) + list(insight["limitations"])
 
     return AnalysisBundle(
         run_id=context.run_id,
