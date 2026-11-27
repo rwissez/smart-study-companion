@@ -1,4 +1,4 @@
-﻿"""正式读取：个人画像、班级画像、学习方案、进展、作答记录、比较与质量。
+"""正式读取：个人画像、班级画像、学习方案、进展、作答记录、比较与质量。
 
 所有数字都来自 B/C 的正式版本，路由只做授权、裁剪与拼装，不重算统计。
 """
@@ -366,7 +366,8 @@ def plan_for_student(
         if version is not None:
             return version
     # 没指定节点时取该学生最近发布的方案指针（不猜节点，只按发布时间取最新）。
-    head = db.scalar(
+    # 没指定节点时优先取"有可执行活动"的最近方案，避免落到空方案节点。
+    heads = db.scalars(
         select(models.FormalHead)
         .where(
             models.FormalHead.dataset_id == dataset.id,
@@ -375,12 +376,21 @@ def plan_for_student(
             models.FormalHead.version_id.is_not(None),
         )
         .order_by(models.FormalHead.updated_at.desc())
-        .limit(1)
-    )
-    if head is not None and head.version_id:
-        version = db.get(models.Version, head.version_id)
-        if version is not None:
-            return version
+    ).all()
+    fallback_version: models.Version | None = None
+    for head in heads:
+        if not head.version_id:
+            continue
+        candidate = db.get(models.Version, head.version_id)
+        if candidate is None or not candidate.payload_json:
+            continue
+        if fallback_version is None:
+            fallback_version = candidate
+        payload = candidate.payload_json or {}
+        if any(item.get("activities") for item in payload.get("recommendations", []) or []):
+            return candidate
+    if fallback_version is not None:
+        return fallback_version
     raise DomainError("RESULT_NOT_READY", "该学生尚无正式学习方案")
 
 

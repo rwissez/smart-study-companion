@@ -1,4 +1,4 @@
-﻿"""C 的方案规划器（04 §3—§5、§7）。
+"""C 的方案规划器（04 §3—§5、§7）。
 
 流程与设计一致：学情 → 教学需求 → 策略与优先级 → 必要前置 → 候选与评分 →
 负担与任务组 → 方案草稿（交给独立审核）。本模块不写数据库、不调用模型，
@@ -109,19 +109,37 @@ class PlannerResult:
 # --------------------------------------------------------------------------- #
 
 
+def _formal_ids(payload: dict[str, Any]) -> set[str] | None:
+    """正式对象白名单；老版本没有该字段时视为全部对象可用。"""
+
+    ids = payload.get("formal_object_ids")
+    return set(ids) if isinstance(ids, list) else None
+
+
 def _points(payload: dict[str, Any]) -> dict[str, dict[str, Any]]:
-    return {point.get("kp_id"): point for point in payload.get("points", [])}
+    formal = _formal_ids(payload)
+    return {
+        point.get("kp_id"): point
+        for point in payload.get("points", [])
+        if formal is None or point.get("kp_id") in formal
+    }
 
 
 def _kp_for_indicator(payload: dict[str, Any], indicator_id: str) -> dict[str, Any] | None:
+    formal = _formal_ids(payload)
     for point in payload.get("points", []):
+        if formal is not None and point.get("kp_id") not in formal:
+            continue
         if indicator_id in (point.get("indicator_ids") or []):
             return point
     return None
 
 
 def _material_kp_ids(payload: dict[str, Any], material_id: str) -> list[str]:
+    formal = _formal_ids(payload)
     for annotation in payload.get("annotations", []):
+        if formal is not None and annotation.get("annotation_id") not in formal:
+            continue
         if annotation.get("source_id") == material_id:
             return list(annotation.get("target_ids") or [])
     return []

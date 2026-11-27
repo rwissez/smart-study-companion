@@ -462,6 +462,47 @@ def _version_row(db: Session, key: "repo.FormalKey") -> models.Version | None:
     return db.get(models.Version, head.version_id)
 
 
+def _textbook_candidates(db: Session, dataset_id: str, catalog) -> list[Any]:
+    """从本数据集导入的教材 PDF 抽取规则候选；没有 PDF 就返回空列表。"""
+
+    from study_companion.knowledge.candidates import (
+        dedupe_candidates,
+        extract_definition_candidates,
+    )
+    from study_companion.knowledge.pdf_reader import read_pdf
+    from study_companion.knowledge.scope_plan import plan_scope, split_chapters
+    from study_companion.library import blobs
+
+    files = db.scalars(
+        select(models.FileObject)
+        .join(models.ImportFileRow, models.ImportFileRow.file_id == models.FileObject.file_id)
+        .join(models.ImportRecord, models.ImportRecord.import_id == models.ImportFileRow.import_id)
+        .where(
+            models.ImportRecord.dataset_id == dataset_id,
+            models.FileObject.media_type == "application/pdf",
+        )
+        .distinct()
+    ).all()
+    if not files:
+        return []
+    topics = list({indicator.topic_id for indicator in catalog.indicators if indicator.topic_id})
+    indicators = [indicator.description for indicator in catalog.indicators if indicator.description]
+    collected: list[Any] = []
+    for file_row in files:
+        try:
+            data = blobs.read_bytes(file_row.storage_key)
+            document = read_pdf(file_row.file_id, data)
+            chapters = split_chapters(document)
+            scope = plan_scope(chapters, topics=topics, indicators=indicators)
+            collected.extend(extract_definition_candidates(scope))
+        except DomainError:
+            continue
+    if not collected:
+        return []
+    deduped, _ = dedupe_candidates(collected)
+    return deduped
+
+
 def current_knowledge_payload(db: Session, dataset_id: str, family_id: str | None) -> dict[str, Any]:
     """读取当前正式知识版本正文；没有构建过就返回空字典（C 会明确标注缺少依据）。"""
 
@@ -850,9 +891,11 @@ def handle_import_process(ctx: JobContext) -> dict[str, Any]:
         dataset_id=dataset_id,
         knowledge_version=knowledge_version_id,
         model_configured=ModelService().configured,
+        textbook_candidates=_textbook_candidates(db, dataset_id, catalog),
     )
     knowledge_payload = knowledge_result.candidate_snapshot.model_dump(mode="json")
     knowledge_payload["review_info"] = knowledge_result.review_info.model_dump(mode="json")
+    knowledge_payload["formal_object_ids"] = list(knowledge_result.publishable_object_ids)
     knowledge_key = repo.FormalKey(
         family_id=family_id, dataset_id=dataset_id, kind="knowledge"
     )
@@ -879,6 +922,28 @@ def handle_import_process(ctx: JobContext) -> dict[str, Any]:
             expected_version_id=knowledge_head.version_id if knowledge_head else None,
             expected_generation=knowledge_head.generation if knowledge_head else 0,
         )
+    else:
+        # 未通过的候选对象进入教师审核队列，逐对象可定位；不在发布后才补。
+        from study_companion.knowledge.review_service import ensure_review_item
+
+        snapshot = knowledge_result.candidate_snapshot
+        review_objects = (
+            ("point", snapshot.points, "kp_id"),
+            ("relation", snapshot.relations, "relation_id"),
+            ("annotation", snapshot.annotations, "annotation_id"),
+        )
+        for object_type, items, id_field in review_objects:
+            for item in items:
+                if item.review_info.status == "validated":
+                    continue
+                ensure_review_item(
+                    db,
+                    dataset_id=dataset_id,
+                    knowledge_version=knowledge_version_id,
+                    object_type=object_type,
+                    object_id=getattr(item, id_field),
+                    reason="候选对象未通过全部程序校验，需教师确认",
+                )
     upsert_step(db, ctx.job, "knowledge", label="构建课程知识体系", status="succeeded")
     db.commit()
 

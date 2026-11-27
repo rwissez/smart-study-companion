@@ -567,16 +567,19 @@ def _write_plan_rows(
                 )
             )
             if student_uid:
-                db.add(
-                    models.ActivityStateRow(
-                        activity_id=activity.activity_id,
-                        origin_plan_version=plan_version,
-                        student_uid=student_uid,
-                        state="not_started",
-                        generation=1,
-                        updated_at=repo.now_iso(),
+                # 继承来的活动沿用它已有的状态行：不覆盖已完成/进行中状态，也不重复插入。
+                existing_state = db.get(models.ActivityStateRow, activity.activity_id)
+                if existing_state is None:
+                    db.add(
+                        models.ActivityStateRow(
+                            activity_id=activity.activity_id,
+                            origin_plan_version=plan_version,
+                            student_uid=student_uid,
+                            state="not_started",
+                            generation=1,
+                            updated_at=repo.now_iso(),
+                        )
                     )
-                )
     db.flush()
 
 

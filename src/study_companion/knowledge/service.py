@@ -1,4 +1,4 @@
-﻿"""A 正式知识体系构建（02 §4—§12）。
+"""A 正式知识体系构建（02 §4—§12）。
 
 分工：
 * **程序**负责结构、来源、去重、覆盖与闭环校验；
@@ -109,6 +109,7 @@ def build_knowledge(
     dataset_id: str,
     knowledge_version: str,
     model_configured: bool = False,
+    textbook_candidates: list[Any] | None = None,
 ) -> KnowledgeBuildResult:
     """构建候选知识体系并给出可发布子集。
 
@@ -170,6 +171,61 @@ def build_knowledge(
                     }
                 ),
             )
+        )
+    if textbook_candidates:
+        existing_names = {point.name for point in points}
+        for candidate in textbook_candidates:
+            if candidate.name in existing_names:
+                continue
+            existing_names.add(candidate.name)
+            checks = [
+                ReviewCheck(
+                    code="SOURCE_RESOLVABLE",
+                    passed=True,
+                    reason=f"教材页码可定位：第 {candidate.page} 页",
+                ),
+                ReviewCheck(
+                    code="POINT_SCOPE",
+                    passed=bool(candidate.definition.strip()),
+                    reason="定义句来自教材正文" if candidate.definition.strip() else "定义句为空",
+                ),
+                ReviewCheck(
+                    code="NEEDS_TEACHER_CONFIRM",
+                    passed=False,
+                    reason="规则抽取的定义句需教师确认后才能进入正式知识体系",
+                ),
+            ]
+            points.append(
+                KnowledgePointDraft(
+                    kp_id=f"kp-{candidate.candidate_id}",
+                    name=candidate.name,
+                    kind="concept",
+                    definition=candidate.definition,
+                    scope_role="core",
+                    topic_ids=[],
+                    indicator_ids=[],
+                    snippet=candidate.snippet,
+                    source_locators=[
+                        SourceLocator(
+                            source_file=candidate.chapter_id,
+                            source_kind="textbook",
+                            page=candidate.page,
+                            quote=candidate.snippet,
+                            verification_status="verified",
+                        )
+                    ],
+                    review_info=ReviewInfo(
+                        status="needs_review",
+                        method="rule",
+                        checks=checks,
+                        reviewed_at="",
+                        rule_version=config.rule_version,
+                    ),
+                    content_hash=candidate.content_hash,
+                )
+            )
+        limitations.append(
+            f"教材规则候选 {len(textbook_candidates)} 条，需教师逐条确认后才可用于正式方案"
         )
     if not points:
         issues.append(
@@ -382,7 +438,21 @@ def build_knowledge(
         candidate_snapshot=snapshot,
         review_info=review,
         issues=issues,
-        publishable_object_ids=[point.kp_id for point in points],
+        publishable_object_ids=[
+            item.kp_id
+            for item in points
+            if item.review_info is not None and item.review_info.status == "validated"
+        ]
+        + [
+            item.relation_id
+            for item in clean_relations
+            if item.review_info is not None and item.review_info.status == "validated"
+        ]
+        + [
+            item.annotation_id
+            for item in annotations
+            if item.review_info is not None and item.review_info.status == "validated"
+        ],
     )
 
 
