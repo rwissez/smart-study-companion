@@ -48,6 +48,8 @@ def create_demo_session(
     token, scope, expires_at = create_session(
         db, payload.role, payload.dataset_id, payload.student_id, payload.class_ids
     )
+    # 依赖清理阶段的提交发生在响应发出之后；身份入口拿到令牌会立刻用，必须当场落库。
+    db.commit()
     response.status_code = status.HTTP_201_CREATED
     return success(
         {
