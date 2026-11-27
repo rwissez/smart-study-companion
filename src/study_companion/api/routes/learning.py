@@ -50,6 +50,15 @@ class HintRequest(BaseModel):
 
     level: int = Field(ge=1, le=3)
     allow_assisted: bool = False
+    #: 独立模式下先确认再释放：把上一步返回的披露 id 带回来。
+    disclosure_id: str | None = Field(default=None, max_length=64)
+
+
+class AssistedConfirmRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    disclosure_id: str = Field(min_length=1, max_length=64)
+    allow: bool
 
 
 # --------------------------------------------------------------------------- #
@@ -603,16 +612,20 @@ def request_hint(
     activity = _plan_activity(db, row.plan_version, row.activity_id)
     plan = _plan_payload(db, row.plan_version)
     hint_levels: list[str] = []
+    exposure_mode: str | None = None
     for rec in plan.recommendations:
         for item in rec.activities:
             if item.activity_id == row.activity_id:
                 hint_levels = list(item.hint_levels)
+                exposure_mode = item.exposure_mode
     if payload.level > len(hint_levels):
         raise DomainError("NOT_FOUND", "该题没有这一级提示")
     hint_text = hint_levels[payload.level - 1]
 
     token = (idempotency_key or "").strip() or None
-    digest = request_digest({"attempt": attempt_id, "level": payload.level})
+    digest = request_digest(
+        {"attempt": attempt_id, "level": payload.level, "disclosure": payload.disclosure_id}
+    )
     if token:
         cached = find_receipt(
             db, session_id=scope.session_id, endpoint=ENDPOINT_HINT, key=token, digest=digest
@@ -624,6 +637,64 @@ def request_hint(
     current_max = int(answer.get("hint_max_level") or 0)
     if payload.level > current_max + 1:
         raise DomainError("UNPROCESSABLE", "提示需要逐级释放")
+
+    from study_companion.library import help as help_rules
+
+    protection = help_rules.protection_digest(
+        material_id=row.material_id, answer=None, level=payload.level
+    )
+    disclosure = None
+    if payload.disclosure_id:
+        disclosure = db.get(models.HelpDisclosureRow, payload.disclosure_id)
+        if disclosure is None or disclosure.attempt_id != row.attempt_id:
+            raise DomainError("NOT_FOUND", "帮助披露记录不存在")
+    else:
+        disclosure = help_rules.open_intent(
+            db,
+            attempt_id=row.attempt_id,
+            channel="hint",
+            message_key=f"hint:{payload.level}",
+            protection=protection,
+            submission_no=row.submission_no,
+        )
+
+    # 独立模式：先让学生确认"我要用帮助"，确认后才释放内容。
+    if (
+        help_rules.requires_confirmation(exposure_mode)
+        and disclosure.state != "confirmed"
+        and not payload.allow_assisted
+    ):
+        db.flush()
+        return success(
+            {
+                "requires_confirmation": True,
+                "disclosure_id": disclosure.disclosure_id,
+                "level": payload.level,
+                "hint": None,
+                "message": "这道题要求先独立完成。使用提示会把本次作答记为受助，需要你确认。",
+            }
+        )
+
+    if payload.allow_assisted and disclosure.state != "confirmed":
+        ledger.append(
+            db,
+            family_id=dataset.family_id,
+            dataset_id=dataset.id,
+            run_id=repo.active_run_id(db, dataset.id, version.node_key),
+            student_uid=student_uid,
+            node_id=version.node_key,
+            plan_version=row.plan_version,
+            group_id=activity.group_id,
+            activity_id=row.activity_id,
+            material_id=row.material_id,
+            attempt_id=row.attempt_id,
+            event_type="assisted_mode_confirmed",
+            source="student",
+            payload={"confirmation_id": disclosure.disclosure_id, "channel": "hint"},
+            occurred_at=ledger.now_iso(),
+            dedupe={"level": payload.level},
+        )
+
     if payload.level > current_max:
         answer["hint_max_level"] = payload.level
         row.answer_json = answer
@@ -646,11 +717,18 @@ def request_hint(
         occurred_at=ledger.now_iso(),
         dedupe={"level": payload.level},
     )
-    if payload.allow_assisted or payload.level > current_max:
-        # 实际释放了帮助（不论是否由学生显式声明受助），独立性判定据此记账。
-        row.assistance_status = "assisted"
+    help_rules.mark_confirmed(
+        db, disclosure, event_id=event.event_id, content_digest=protection
+    )
+    row.assistance_status = "assisted"
     db.flush()
-    receipt = {"event_id": event.event_id, "level": payload.level, "hint": hint_text}
+    receipt = {
+        "event_id": event.event_id,
+        "level": payload.level,
+        "hint": hint_text,
+        "requires_confirmation": False,
+        "disclosure_id": disclosure.disclosure_id,
+    }
     if token:
         store_receipt(
             db,
@@ -662,6 +740,100 @@ def request_hint(
             result_ref=event.event_id,
         )
     return success(receipt)
+
+
+@router.post("/attempts/{attempt_id}/assisted-confirm")
+def confirm_assisted(
+    attempt_id: str,
+    payload: AssistedConfirmRequest,
+    db: DbSession,
+    scope: Scope,
+) -> dict:
+    """学生决定是否接受帮助：接受则释放已挂起的提示，拒绝则记 not_sent。"""
+
+    row = db.get(models.AttemptRow, attempt_id)
+    if row is None:
+        raise DomainError("NOT_FOUND", "作答尝试不存在")
+    version = db.get(models.Version, row.plan_version)
+    if version is None:
+        raise DomainError("NOT_FOUND", "学习方案版本不存在")
+    student_uid, dataset = _student_ctx(db, scope, version.dataset_id, version.target_key)
+    if row.student_uid != student_uid:
+        raise DomainError("FORBIDDEN", "不能处理他人的帮助确认")
+    disclosure = db.get(models.HelpDisclosureRow, payload.disclosure_id)
+    if disclosure is None or disclosure.attempt_id != attempt_id:
+        raise DomainError("NOT_FOUND", "帮助披露记录不存在")
+    if disclosure.state == "confirmed":
+        raise DomainError("CONFLICT", "已确认过该帮助")
+
+    from study_companion.library import help as help_rules
+
+    if not payload.allow:
+        help_rules.mark_not_sent(db, disclosure)
+        return success({"released": False, "disclosure_id": disclosure.disclosure_id})
+
+    activity = _plan_activity(db, row.plan_version, row.activity_id)
+    plan = _plan_payload(db, row.plan_version)
+    level = int(disclosure.message_key.split(":")[-1])
+    hint_text = None
+    for rec in plan.recommendations:
+        for item in rec.activities:
+            if item.activity_id == row.activity_id and len(item.hint_levels) >= level:
+                hint_text = item.hint_levels[level - 1]
+    if hint_text is None:
+        raise DomainError("NOT_FOUND", "该题没有这一级提示")
+
+    ledger.append(
+        db,
+        family_id=dataset.family_id,
+        dataset_id=dataset.id,
+        run_id=repo.active_run_id(db, dataset.id, version.node_key),
+        student_uid=student_uid,
+        node_id=version.node_key,
+        plan_version=row.plan_version,
+        group_id=activity.group_id,
+        activity_id=row.activity_id,
+        material_id=row.material_id,
+        attempt_id=row.attempt_id,
+        event_type="assisted_mode_confirmed",
+        source="student",
+        payload={"confirmation_id": disclosure.disclosure_id, "channel": "hint"},
+        occurred_at=ledger.now_iso(),
+        dedupe={"level": level},
+    )
+    event = ledger.append(
+        db,
+        family_id=dataset.family_id,
+        dataset_id=dataset.id,
+        run_id=repo.active_run_id(db, dataset.id, version.node_key),
+        student_uid=student_uid,
+        node_id=version.node_key,
+        plan_version=row.plan_version,
+        group_id=activity.group_id,
+        activity_id=row.activity_id,
+        material_id=row.material_id,
+        attempt_id=row.attempt_id,
+        event_type="hint_requested",
+        source="student",
+        payload={"level": level},
+        occurred_at=ledger.now_iso(),
+        dedupe={"level": level},
+    )
+    help_rules.mark_confirmed(db, disclosure, event_id=event.event_id)
+    answer = dict(row.answer_json or {})
+    answer["hint_max_level"] = max(int(answer.get("hint_max_level") or 0), level)
+    row.answer_json = answer
+    row.assistance_status = "assisted"
+    db.flush()
+    return success(
+        {
+            "released": True,
+            "disclosure_id": disclosure.disclosure_id,
+            "level": level,
+            "hint": hint_text,
+            "event_id": event.event_id,
+        }
+    )
 
 
 @router.get("/attempts/{attempt_id}")
