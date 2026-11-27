@@ -862,6 +862,109 @@ def _load(db: Session, version_id: str | None) -> dict[str, Any]:
     return dict(row.payload_json or {}) if row is not None else {}
 
 
+def _publication_record(db: Session, version_id: str) -> dict[str, Any]:
+    """读取该版本的正式发布记录；没有记录就是未发布，不能凭载荷自述。"""
+
+    row = db.scalar(
+        select(models.Publication).where(models.Publication.version_id == version_id)
+    )
+    if row is None:
+        return {
+            "status": "unpublished",
+            "publication_id": None,
+            "published_at": None,
+            "path": None,
+            "basis": None,
+            "review_id": None,
+        }
+    return {
+        "status": "published",
+        "publication_id": row.publication_id,
+        "published_at": row.published_at,
+        "path": row.path,
+        "basis": row.basis,
+        "review_id": row.review_id or None,
+    }
+
+
+def _safe_evidence_ref(item: Any) -> dict[str, Any] | None:
+    """证据引用的安全投影：只保留定位字段，不携带正文或答案。"""
+
+    if not isinstance(item, dict):
+        return None
+    ref_id = str(item.get("id") or "").strip()
+    kind = str(item.get("kind") or "").strip()
+    if not ref_id or not kind:
+        return None
+    allowed = (
+        "run_id",
+        "catalog_version",
+        "dataset_id",
+        "knowledge_version",
+        "analysis_version",
+        "plan_version",
+        "material_id",
+        "attempt_id",
+        "curriculum_type",
+    )
+    projected = {"kind": kind, "id": ref_id}
+    for field in allowed:
+        value = item.get(field)
+        if value:
+            projected[field] = value
+    return projected
+
+
+def _module_method(methods: set[str]) -> str:
+    """把模块内出现的方法合并成可读标签；模型参与优先，教师确认单独保留。"""
+
+    known = {
+        item for item in methods if item in {"rule", "model", "hybrid", "human"}
+    }
+    if not known:
+        return "unknown"
+    if "model" in known or "hybrid" in known:
+        return "hybrid"
+    if known == {"human"}:
+        return "human"
+    if "human" in known:
+        return "rule+human"
+    return "rule"
+
+
+def _source_locator_ref(
+    locator: dict[str, Any],
+    *,
+    material_id: str,
+    catalog_version: str,
+    source_label: str | None = None,
+) -> dict[str, Any]:
+    """材料出处投影；只搬运目录里已登记的定位字段，不补页码。"""
+
+    ref: dict[str, Any] = {
+        "kind": "material_source",
+        "id": material_id,
+        "material_id": material_id,
+        "catalog_version": catalog_version,
+        "source_file": str(locator.get("source_file") or ""),
+        "verification_status": str(locator.get("verification_status") or "unverified"),
+    }
+    for field in (
+        "source_kind",
+        "file_id",
+        "chapter",
+        "section",
+        "pdf_page",
+        "page_end",
+        "printed_page",
+    ):
+        value = locator.get(field)
+        if value not in (None, ""):
+            ref[field] = value
+    if source_label:
+        ref["source_label"] = source_label
+    return ref
+
 
 def _latest_published(
     db: Session, dataset_id: str, kind: str, node_key: str, target_key: str
@@ -946,6 +1049,32 @@ def build_files(db: Session, export: models.Export) -> dict[str, bytes]:
     catalog_indicators = [item.model_dump(mode="json") for item in catalog.indicators] if catalog else []
     catalog_materials = [item.model_dump(mode="json") for item in catalog.materials] if catalog else []
     for indicator in catalog_indicators:
+        requirement_refs: list[dict[str, Any]] = [
+            {
+                "kind": "curriculum",
+                "id": indicator.get("indicator_id"),
+                "catalog_version": selection["catalog_version"],
+                "curriculum_ref": indicator.get("curriculum_ref") or "",
+                "curriculum_page": indicator.get("curriculum_page") or "",
+                "textbook_pages": indicator.get("textbook_pages") or "",
+                "source": "requirements_table",
+                "verification_status": "unverified",
+            }
+        ]
+        for index, locator in enumerate(indicator.get("textbook_refs") or [], start=1):
+            if not isinstance(locator, dict):
+                continue
+            requirement_refs.append(
+                {
+                    "kind": "textbook",
+                    "id": f"{indicator.get('indicator_id')}:textbook:{index:02d}",
+                    "catalog_version": selection["catalog_version"],
+                    "locator": dict(locator),
+                    "verification_status": str(
+                        locator.get("verification_status") or "unverified"
+                    ),
+                }
+            )
         curriculum.append(
             {
                 "key": f"req:{selection['catalog_version']}:{indicator['indicator_id']}",
@@ -955,18 +1084,33 @@ def build_files(db: Session, export: models.Export) -> dict[str, bytes]:
                 "title": indicator.get("description", ""),
                 "requirement": indicator.get("description", ""),
                 "node_ids": node_ids,
-                "source_refs": [
-                    {
-                        "kind": "curriculum",
-                        "id": indicator.get("indicator_id"),
-                        "catalog_version": selection["catalog_version"],
-                    }
-                ],
+                "source_refs": requirement_refs,
             }
         )
 
     knowledge: list[dict[str, Any]] = []
     knowledge_payload = _load(db, versions.get("knowledge"))
+    knowledge_point_ids = {
+        str(point.get("kp_id")) for point in knowledge_payload.get("points", [])
+    }
+    kp_annotations: dict[str, list[dict[str, Any]]] = {}
+    for annotation in knowledge_payload.get("annotations", []):
+        if annotation.get("source_type") != "material":
+            continue
+        source_id = str(annotation.get("source_id") or "")
+        if not source_id:
+            continue
+        for target in annotation.get("target_ids") or []:
+            kp_annotations.setdefault(source_id, []).append(
+                {
+                    "kp_id": str(target),
+                    "role": annotation.get("knowledge_role") or "primary",
+                    "basis": annotation.get("basis") or "standard",
+                    "annotation_id": annotation.get("annotation_id"),
+                    "knowledge_version": versions.get("knowledge"),
+                    "source": "annotation",
+                }
+            )
     for point in knowledge_payload.get("points", []):
         knowledge.append(
             {
@@ -1005,19 +1149,117 @@ def build_files(db: Session, export: models.Export) -> dict[str, bytes]:
         )
 
     materials: list[dict[str, Any]] = []
+    materials_without_source = 0
+    materials_without_kp = 0
+    materials_difficulty_unknown = 0
     for material in catalog_materials:
+        material_id = str(material["material_id"])
+        locator = material.get("source_locator") or {}
+        source_refs: list[dict[str, Any]] = []
+        if isinstance(locator, dict) and locator.get("source_file"):
+            source_refs.append(
+                _source_locator_ref(
+                    locator,
+                    material_id=material_id,
+                    catalog_version=selection["catalog_version"],
+                    source_label=material.get("source_label"),
+                )
+            )
+            structured = any(
+                locator.get(field)
+                for field in ("file_id", "chapter", "section", "pdf_page", "printed_page")
+            )
+            if structured:
+                locator_level = "structured"
+            elif str(locator.get("source_file")) not in {"题目与材料", "材料表"}:
+                locator_level = "label_only"
+            else:
+                locator_level = "table_only"
+            source_refs[0]["locator_level"] = locator_level
+        if source_refs:
+            verified = (
+                source_refs[0].get("verification_status") == "verified"
+                and source_refs[0].get("locator_level") == "structured"
+            )
+            source_status = "verified" if verified else "unverified"
+            if source_refs[0].get("locator_level") == "table_only":
+                source_note = (
+                    "来源只登记到输入表名，未定位到教材文件、章节或页码，标记 unverified"
+                )
+            elif source_refs[0].get("locator_level") == "label_only":
+                source_note = (
+                    "来源只有文字标签，未登记可解析的文件、章节或页码，标记 unverified"
+                )
+            else:
+                source_note = "来源为目录登记的结构化定位，未在导出时复核原件"
+        else:
+            source_status = "unverified"
+            source_note = "目录材料未登记出处定位，来源未知"
+            materials_without_source += 1
+
+        kp_refs: list[dict[str, Any]] = [
+            dict(ref)
+            for ref in kp_annotations.get(material_id, [])
+            if ref["kp_id"] in knowledge_point_ids
+        ]
+        if not kp_refs:
+            # 目录的材料-指标归属是正式映射，可回推到知识点；只在知识点确实存在时使用。
+            for indicator_id in material.get("indicator_ids") or []:
+                kp_id = f"kp-{indicator_id}"
+                if kp_id in knowledge_point_ids:
+                    kp_refs.append(
+                        {
+                            "kp_id": kp_id,
+                            "role": "primary",
+                            "basis": "standard",
+                            "annotation_id": None,
+                            "knowledge_version": versions.get("knowledge"),
+                            "source": "indicator_mapping",
+                        }
+                    )
+        kp_status = "mapped" if kp_refs else "unknown"
+        if not kp_refs:
+            materials_without_kp += 1
+
+        difficulty = material.get("difficulty") or {}
+        if difficulty.get("level") and difficulty.get("status"):
+            difficulty_level = difficulty.get("level")
+            difficulty_status = difficulty.get("status")
+            difficulty_method = difficulty.get("method")
+            difficulty_reason = difficulty.get("reason") or ""
+            difficulty_rule_version = difficulty.get("rule_version")
+        else:
+            difficulty_level = "unknown"
+            difficulty_status = "unknown"
+            difficulty_method = None
+            difficulty_reason = "目录材料 difficulty 为空，导出不推断难度"
+            difficulty_rule_version = None
+            materials_difficulty_unknown += 1
+
         materials.append(
             {
-                "key": f"mat:{selection['catalog_version']}:{material['material_id']}",
+                "key": f"mat:{selection['catalog_version']}:{material_id}",
                 "catalog_version": selection["catalog_version"],
-                "material_id": material["material_id"],
+                "material_id": material_id,
                 "kind": material.get("material_type"),
                 "title": (material.get("content") or "")[:80],
+                "topic_ids": list(material.get("topic_ids") or []),
+                "indicator_ids": list(material.get("indicator_ids") or []),
                 "node_ids": node_ids,
-                "kp_refs": [],
-                "source_refs": [],
-                "difficulty_level": (material.get("difficulty") or {}).get("level"),
-                "difficulty_status": (material.get("difficulty") or {}).get("status"),
+                "kp_refs": kp_refs,
+                "kp_status": kp_status,
+                "kp_note": ""
+                if kp_refs
+                else "没有可核验的知识标注或指标映射，知识点关联标记 unknown",
+                "source_refs": source_refs,
+                "source_status": source_status,
+                "source_note": source_note,
+                "source_label": material.get("source_label"),
+                "difficulty_level": difficulty_level,
+                "difficulty_status": difficulty_status,
+                "difficulty_method": difficulty_method,
+                "difficulty_reason": difficulty_reason,
+                "difficulty_rule_version": difficulty_rule_version,
             }
         )
 
@@ -1043,11 +1285,49 @@ def build_files(db: Session, export: models.Export) -> dict[str, bytes]:
     student_records: list[dict[str, Any]] = []
     class_records: list[dict[str, Any]] = []
     metric_rows: list[list[str]] = []
+    publication_counts: dict[str, dict[str, int]] = {
+        "student_analysis": {"published": 0, "unpublished": 0},
+        "class_analysis": {"published": 0, "unpublished": 0},
+        "plan": {"published": 0, "unpublished": 0},
+        "lesson": {"published": 0, "unpublished": 0},
+    }
+    summary_missing = 0
+    summary_missing_current = 0
+
+    def _analysis_result(payload: dict[str, Any], publication: dict[str, Any]) -> dict[str, Any]:
+        """按发布记录校正载荷自述状态，并显式说明空摘要的含义。"""
+
+        result = dict(payload)
+        result["publication_status"] = publication["status"]
+        raw_summary = result.get("summary")
+        if raw_summary is None or not str(raw_summary).strip():
+            result["summary"] = None
+            result["summary_status"] = "not_provided"
+            result["summary_note"] = (
+                "正式学情结果未提供摘要字段，summary=null 表示无正式摘要，"
+                "不代表没有结论；结论以 metrics、findings 与 evidence_refs 为准"
+            )
+        else:
+            result["summary_status"] = "provided"
+            result["summary_note"] = ""
+        return result
+
     for version_id, meta in sorted(student_entries.items()):
         student_id = str(meta.get("student_id") or "")
         node = str(meta.get("node_id") or "")
         current = bool(meta.get("current"))
         payload = _load(db, version_id)
+        publication = _publication_record(db, version_id)
+        publication_counts["student_analysis"][publication["status"]] += 1
+        result = _analysis_result(payload, publication)
+        limitations = list(payload.get("limitations", []))
+        if result["summary_status"] == "not_provided":
+            summary_missing += 1
+            if current:
+                summary_missing_current += 1
+            limitations.append(result["summary_note"])
+        if publication["status"] != "published":
+            limitations.append("该学情版本没有正式发布记录，包内按未发布状态保留")
         student_records.append(
             {
                 "key": f"student:{version_id}:{student_id}",
@@ -1055,11 +1335,15 @@ def build_files(db: Session, export: models.Export) -> dict[str, bytes]:
                 "node_id": node,
                 "analysis_version": version_id,
                 "current": current,
+                "publication": publication,
+                "publication_status": publication["status"],
+                "summary_status": result["summary_status"],
+                "summary_note": result["summary_note"],
                 "knowledge_version": knowledge_version,
                 "catalog_version": selection["catalog_version"],
                 "event_cutoff": selection["event_cutoff"],
-                "result": payload,
-                "limitations": payload.get("limitations", []),
+                "result": result,
+                "limitations": limitations,
             }
         )
         for metric in payload.get("metrics", []):
@@ -1084,16 +1368,41 @@ def build_files(db: Session, export: models.Export) -> dict[str, bytes]:
     for class_id, node_map in versions["class"].items():
         for node, version_id in node_map.items():
             payload = _load(db, version_id)
-            members = [
-                {
-                    "student_key": item,
-                    "student_analysis_key": versions["student"].get(item, {}).get(node, ""),
-                    "member_state": "available"
-                    if versions["student"].get(item, {}).get(node)
-                    else "no_observation",
-                }
-                for item in payload.get("member_analysis_versions", [])
-            ]
+            publication = _publication_record(db, version_id)
+            publication_counts["class_analysis"][publication["status"]] += 1
+            result = _analysis_result(payload, publication)
+            limitations = list(payload.get("limitations", []))
+            if result["summary_status"] == "not_provided":
+                summary_missing += 1
+                summary_missing_current += 1
+                limitations.append(result["summary_note"])
+            if publication["status"] != "published":
+                limitations.append("该班级学情版本没有正式发布记录，包内按未发布状态保留")
+            members = []
+            for item in payload.get("member_analysis_versions", []) or []:
+                if isinstance(item, dict):
+                    member_id = str(item.get("student_id") or item.get("student_key") or "")
+                    analysis_version = str(
+                        item.get("analysis_version")
+                        or versions["student"].get(member_id, {}).get(node, "")
+                    )
+                    member_state = str(
+                        item.get("member_state")
+                        or ("available" if analysis_version else "no_observation")
+                    )
+                else:
+                    member_id = str(item)
+                    analysis_version = versions["student"].get(member_id, {}).get(node, "")
+                    member_state = "available" if analysis_version else "no_observation"
+                members.append(
+                    {
+                        "student_key": member_id,
+                        "student_analysis_key": f"student:{analysis_version}:{member_id}"
+                        if analysis_version
+                        else "",
+                        "member_state": member_state,
+                    }
+                )
             class_records.append(
                 {
                     "key": f"class:{version_id}:{class_id}",
@@ -1101,9 +1410,13 @@ def build_files(db: Session, export: models.Export) -> dict[str, bytes]:
                     "node_id": node,
                     "analysis_version": version_id,
                     "current": True,
-                    "result": payload,
+                    "publication": publication,
+                    "publication_status": publication["status"],
+                    "summary_status": result["summary_status"],
+                    "summary_note": result["summary_note"],
+                    "result": result,
                     "members": members,
-                    "limitations": payload.get("limitations", []),
+                    "limitations": limitations,
                 }
             )
             for metric in payload.get("metrics", []):
@@ -1128,10 +1441,21 @@ def build_files(db: Session, export: models.Export) -> dict[str, bytes]:
 
     plan_records: list[dict[str, Any]] = []
     content_activity: dict[str, dict[str, str]] = {}
+    groups_missing_teacher_reason = 0
+    groups_missing_primary_strategy = 0
+    groups_total = 0
+    groups_current = 0
+    groups_missing_teacher_reason_current = 0
+    groups_missing_primary_strategy_current = 0
+    plan_methods: set[str] = set()
     for version_id, meta in sorted(plan_entries.items()):
         student_id = str(meta.get("student_id") or "")
         payload = _load(db, version_id)
         plan = RecommendationBundle.model_validate(payload)
+        publication = _publication_record(db, version_id)
+        publication_counts["plan"][publication["status"]] += 1
+        for recommendation in plan.recommendations:
+            plan_methods.add(str(recommendation.generation_method))
         node_id = plan.node_id or str(meta.get("node_id") or "")
         current = bool(meta.get("current"))
         origin_version = plan.analysis_version or ""
@@ -1139,6 +1463,42 @@ def build_files(db: Session, export: models.Export) -> dict[str, bytes]:
             versions["student"].get(student_id, {}).get(node_id)
             or versions["student"].get(student_id, {}).get(node_ids[0], "")
         )
+        groups = [group.model_dump(mode="json") for group in plan.task_groups]
+        recommendation_items = [
+            {
+                "recommendation_id": recommendation.recommendation_id,
+                "group_id": recommendation.group_id,
+                "indicator_id": recommendation.indicator_id,
+                "goal": recommendation.goal,
+                "reason": recommendation.reason,
+                "student_intro": recommendation.student_intro,
+                "strategy_types": list(recommendation.strategy_types),
+                "kp_ids": list(recommendation.kp_ids),
+                "review_status": recommendation.review_status,
+                "generation_method": recommendation.generation_method,
+                "evidence_refs": [
+                    projected
+                    for projected in (
+                        _safe_evidence_ref(ref.model_dump(mode="json"))
+                        for ref in recommendation.evidence_refs
+                    )
+                    if projected is not None
+                ],
+            }
+            for recommendation in plan.recommendations
+        ]
+        for group in plan.task_groups:
+            groups_total += 1
+            if current:
+                groups_current += 1
+            if not str(group.teacher_reason or "").strip():
+                groups_missing_teacher_reason += 1
+                if current:
+                    groups_missing_teacher_reason_current += 1
+            if group.primary_strategy is None:
+                groups_missing_primary_strategy += 1
+                if current:
+                    groups_missing_primary_strategy_current += 1
         activities: list[dict[str, Any]] = []
         for recommendation in plan.recommendations:
             for activity in recommendation.activities:
@@ -1184,9 +1544,12 @@ def build_files(db: Session, export: models.Export) -> dict[str, bytes]:
                 "knowledge_version": plan.knowledge_version,
                 "catalog_version": plan.catalog_version,
                 "review_status": (plan.review_info.status if plan.review_info else "validated"),
+                "publication": publication,
+                "publication_status": publication["status"],
                 "publication_basis": plan.publication_basis or "automatic_review",
                 "applicability": applicability,
-                "groups": [group.model_dump(mode="json") for group in plan.task_groups],
+                "groups": groups,
+                "recommendations": recommendation_items,
                 "activities": activities,
                 "limitations": plan.limitations,
             }
@@ -1381,12 +1744,100 @@ def build_files(db: Session, export: models.Export) -> dict[str, bytes]:
     has_online_history = bool(attempt_rows or grade_rows)
 
     micro_lessons: list[dict[str, Any]] = []
+    lessons_without_source = 0
+    lessons_with_unresolved_citation = 0
+    lesson_methods: set[str] = set()
     for version_id in sorted(content_ids):
         version = db.get(models.Version, version_id)
         if version is None:
             continue
         payload = dict(version.payload_json or {})
+        body = dict(payload.get("body") or {})
         link = content_activity.get(version_id, {})
+        publication = _publication_record(db, version_id)
+        publication_counts["lesson"][publication["status"]] += 1
+        evidence_refs = [
+            ref
+            for ref in (_safe_evidence_ref(item) for item in body.get("evidence_refs") or [])
+            if ref is not None
+        ]
+        source_refs = [
+            dict(item)
+            for item in body.get("source_refs") or []
+            if isinstance(item, dict) and item.get("kind")
+        ]
+        citation_checks: list[dict[str, Any]] = []
+        for component in body.get("components") or []:
+            if not isinstance(component, dict) or component.get("type") != "citation":
+                continue
+            labels: list[dict[str, Any]] = []
+            for label in component.get("labels") or []:
+                if not isinstance(label, dict):
+                    continue
+                source_index = label.get("source_index")
+                evidence_index = label.get("evidence_index")
+                resolved_ref: dict[str, Any] | None = None
+                resolved_kind: str | None = None
+                if (
+                    isinstance(source_index, int)
+                    and 0 <= source_index < len(source_refs)
+                ):
+                    resolved_ref = source_refs[source_index]
+                    resolved_kind = "source"
+                elif (
+                    isinstance(evidence_index, int)
+                    and 0 <= evidence_index < len(evidence_refs)
+                ):
+                    resolved_ref = evidence_refs[evidence_index]
+                    resolved_kind = "evidence"
+                labels.append(
+                    {
+                        "label": label.get("label", ""),
+                        "source_index": source_index,
+                        "evidence_index": evidence_index,
+                        "resolved": resolved_ref is not None,
+                        "resolved_kind": resolved_kind,
+                        "resolved_ref": resolved_ref,
+                    }
+                )
+            citation_checks.append(
+                {
+                    "component_id": component.get("id", ""),
+                    "labels": labels,
+                }
+            )
+        unresolved = [
+            label
+            for check in citation_checks
+            for label in check["labels"]
+            if not label["resolved"]
+        ]
+        if source_refs:
+            verified_sources = all(
+                str(item.get("verification_status") or "unverified") == "verified"
+                for item in source_refs
+            )
+            source_status = "verified" if verified_sources else "unverified"
+        elif evidence_refs:
+            source_status = "evidence_only"
+        else:
+            source_status = "unverified"
+        limitations = [str(item) for item in payload.get("limitations", []) or []]
+        if not source_refs:
+            lessons_without_source += 1
+            limitations.append(
+                "本微课堂未引用可核验教材原文；引用组件只解析到知识点/证据索引，"
+                "source_status 标记 unverified"
+            )
+        if unresolved:
+            lessons_with_unresolved_citation += 1
+            limitations.append("引用组件存在无法解析的索引，已标记 unverified，不补造来源")
+        creation_method = str(
+            payload.get("creation_method")
+            or (payload.get("review_info") or {}).get("method")
+            or "unknown"
+        )
+        lesson_methods.add(creation_method)
         micro_lessons.append(
             {
                 "key": f"content:{version_id}",
@@ -1396,8 +1847,16 @@ def build_files(db: Session, export: models.Export) -> dict[str, bytes]:
                 "plan_version": payload.get("origin_plan_version")
                 or link.get("plan_version", ""),
                 "body": payload.get("body"),
+                "creation_method": creation_method,
                 "review_status": (payload.get("review_info") or {}).get("status"),
-                "evidence_refs": [],
+                "publication": publication,
+                "publication_status": publication["status"],
+                "evidence_refs": evidence_refs,
+                "source_refs": source_refs,
+                "source_status": source_status,
+                "citation_verified": source_status == "verified",
+                "citation_checks": citation_checks,
+                "limitations": limitations,
             }
         )
 
@@ -1479,7 +1938,197 @@ def build_files(db: Session, export: models.Export) -> dict[str, bytes]:
             }
         )
 
+    knowledge_methods: set[str] = set()
+    knowledge_prompts: set[str] = set()
+    knowledge_model_tagged = 0
+    for point in knowledge_payload.get("points", []):
+        review = point.get("review_info") or {}
+        if review.get("method"):
+            knowledge_methods.add(str(review["method"]))
+            if str(review["method"]) == "model":
+                knowledge_model_tagged += 1
+        if review.get("prompt_version"):
+            knowledge_prompts.add(str(review["prompt_version"]))
+    for collection in ("relations", "annotations"):
+        for item in knowledge_payload.get(collection, []):
+            review = item.get("review_info") or {}
+            if review.get("method"):
+                knowledge_methods.add(str(review["method"]))
+            if review.get("prompt_version"):
+                knowledge_prompts.add(str(review["prompt_version"]))
+
+    analysis_methods: set[str] = set()
+    analysis_limitations: list[str] = []
+    for record in student_records + class_records:
+        result = record.get("result") or {}
+        analysis_limitations.extend(str(item) for item in result.get("limitations", []) or [])
+        for finding in list(result.get("findings", [])) + list(
+            result.get("common_findings", [])
+        ):
+            if finding.get("generation_method"):
+                analysis_methods.add(str(finding["generation_method"]))
+    analysis_model_attempted = any(
+        "MODEL_TIMEOUT" in item or "模型" in item for item in analysis_limitations
+    )
+
+    plan_prompts: set[str] = set()
+    for version_id in plan_entries:
+        payload = _load(db, version_id)
+        review = payload.get("review_info") or {}
+        if review.get("method"):
+            plan_methods.add(str(review["method"]))
+        if review.get("prompt_version"):
+            plan_prompts.add(str(review["prompt_version"]))
+
+    plan_method = _module_method(plan_methods)
+    if plan_method == "rule":
+        plan_note = "方案建议由规则生成并审核"
+    elif "model" in plan_methods or "hybrid" in plan_methods:
+        plan_note = "方案版本载荷记录了模型参与；以载荷为准，本次导出不调用模型"
+    else:
+        plan_note = "部分方案版本由教师修订或确认（generation_method=human）；以载荷为准"
+    plan_generation = {
+        "method": plan_method,
+        "methods": sorted(plan_methods),
+        "prompt_versions": sorted(plan_prompts),
+        "provenance": "正式方案版本载荷 recommendation.generation_method / review_info",
+        "note": plan_note,
+    }
+    knowledge_generation = {
+        "method": _module_method(knowledge_methods),
+        "methods": sorted(knowledge_methods),
+        "prompt_versions": sorted(knowledge_prompts),
+        "model_tagged_point_count": knowledge_model_tagged,
+        "provenance": "正式知识版本载荷 review_info",
+        "note": (
+            "知识版本中有 "
+            f"{knowledge_model_tagged} 个知识点记录 review_info.method=model；"
+            "该标记来自版本创建或复核时，不代表本次导出调用模型"
+            if knowledge_model_tagged
+            else "知识版本的复核记录为规则方法"
+        ),
+    }
+    analysis_generation = {
+        "method": _module_method(analysis_methods),
+        "methods": sorted(analysis_methods),
+        "model_attempted": analysis_model_attempted,
+        "provenance": "正式学情版本载荷 findings.generation_method / limitations",
+        "note": (
+            "模型语义诊断曾尝试但未成功（存在 MODEL_TIMEOUT 等限制），"
+            "本包只含规则统计与评分，未生成模型解释"
+            if analysis_model_attempted
+            else "学情统计、评分与诊断由规则生成"
+        ),
+    }
+    lesson_generation = {
+        "method": _module_method(lesson_methods),
+        "methods": sorted(lesson_methods),
+        "provenance": "正式微课堂版本载荷 creation_method / review_info",
+        "note": "微课堂正文由规则模板生成"
+        if _module_method(lesson_methods) == "rule"
+        else "微课堂版本载荷记录了模型参与；以载荷为准",
+    }
+    generation_sources = {
+        "export": {
+            "method": "rule",
+            "note": "导出只读取冻结的正式版本并序列化，不调用模型",
+        },
+        "knowledge": knowledge_generation,
+        "student_analysis": analysis_generation,
+        "plan": plan_generation,
+        "micro_lesson": lesson_generation,
+    }
+    used_methods = {"rule"} if generation_sources["export"]["method"] == "rule" else set()
+    for module in ("knowledge", "student_analysis", "plan", "micro_lesson"):
+        method = generation_sources[module]["method"]
+        if method in {"model", "hybrid"}:
+            used_methods.add("model")
+        if "rule" in method:
+            used_methods.add("rule")
+        if "human" in method:
+            used_methods.add("human")
+    generation_method = [
+        method
+        for method in ("rule", "model", "hybrid", "human")
+        if method in used_methods
+    ] or ["unknown"]
+
+    source_manifest = dict(dataset.manifest_json or {})
+    family = (
+        db.get(models.DatasetFamily, dataset.family_id) if dataset.family_id else None
+    )
+    synthetic = bool(source_manifest.get("synthetic", False))
+    declared_origin = str(
+        source_manifest.get("data_origin") or (family.data_origin if family else "") or ""
+    ).strip()
+    if synthetic:
+        data_origin_kind = "synthetic"
+    elif declared_origin in {"official", "synthetic", "sample", "mixed"}:
+        data_origin_kind = declared_origin
+    else:
+        data_origin_kind = "unknown"
+    origin_notes = {
+        "official": "赛方提供的正式数据；使用范围以参赛授权与数据说明为准",
+        "synthetic": "团队构造的合成测试数据，只用于验证系统流程，不能用于证明真实教学成效",
+        "sample": "赛方样例数据，只用于演示流程，不代表真实教学结果",
+        "mixed": "本包混合了多种来源的数据，需按 source_packages 分开核对",
+        "unknown": "数据集未登记可识别的来源类型，导出不做推断",
+    }
+    source_files = [
+        {"role": row.source_key, "file_id": row.file_id}
+        for row in db.scalars(
+            select(models.DatasetSource)
+            .where(models.DatasetSource.dataset_id == dataset.id)
+            .order_by(models.DatasetSource.source_key)
+        ).all()
+    ]
+    data_origin = {
+        "kind": data_origin_kind,
+        "synthetic": synthetic,
+        "dataset_id": dataset.id,
+        "dataset_name": dataset.display_name or "",
+        "dataset_family_id": dataset.family_id,
+        "dataset_created_at": dataset.created_at,
+        "snapshot_hash": dataset.snapshot_hash,
+        "parent_dataset_id": source_manifest.get("parent_dataset_id"),
+        "catalog_version": selection["catalog_version"],
+        "rule_version": selection["rule_version"],
+        "table_row_counts": dict(source_manifest.get("table_row_counts") or {}),
+        "source_packages": [
+            {
+                "dataset_id": dataset.id,
+                "parent_dataset_id": source_manifest.get("parent_dataset_id"),
+                "declared_origin": declared_origin or None,
+                "synthetic": synthetic,
+            }
+        ],
+        "source_files": source_files,
+        "declared_by": "dataset_family.data_origin"
+        if family is not None and family.data_origin
+        else "source_manifest.data_origin",
+        "note": origin_notes[data_origin_kind],
+        "limitations": [
+            "来源类型取自导入登记，未与外部数据包原件逐项核对",
+        ],
+    }
+
+    material_id_set = {str(material["material_id"]) for material in materials}
+    activity_material_missing = 0
+    activity_kp_missing = 0
+    for plan in plan_records:
+        for activity in plan.get("activities") or []:
+            material_id = str(activity.get("material_id") or "")
+            if material_id and material_id not in material_id_set:
+                activity_material_missing += 1
+            for kp_id in activity.get("knowledge_ids") or []:
+                if str(kp_id) not in knowledge_point_ids:
+                    activity_kp_missing += 1
+
     manifest_limitations: list[str] = []
+    if data_origin["synthetic"]:
+        manifest_limitations.append(
+            "数据集为团队构造的合成测试数据，只用于验证系统流程，不能用于证明真实教学成效"
+        )
     if case_mode == "auto":
         manifest_limitations.append(
             "典型案例学生未由教师显式指定：系统按正式学情结果自动选取有可用方案的学生，正式提交前需教师确认"
@@ -1501,6 +2150,91 @@ def build_files(db: Session, export: models.Export) -> dict[str, bytes]:
         manifest_limitations.append(
             "部分学生的正式方案为已审核的\u201c无适配材料/补证或介入\u201d结果，recommendations.json 保留空活动与限制说明"
         )
+    if summary_missing:
+        manifest_limitations.append(
+            f"学情摘要为空：{summary_missing} 份学生/班级正式结果的 summary 为 null"
+            f"（其中当前版本 {summary_missing_current} 份）。"
+            "B 未提供摘要字段，导出保留 null 并用 summary_status=not_provided 标明，"
+            "结论以 metrics、findings 与 evidence_refs 为准"
+        )
+    if materials_difficulty_unknown:
+        manifest_limitations.append(
+            f"材料难度未知：{materials_difficulty_unknown} 条材料的目录 difficulty 为 null。"
+            "导出把 difficulty_level/difficulty_status 标为 unknown，"
+            "不按历史得分或题干猜测难度"
+        )
+    if groups_missing_teacher_reason or groups_missing_primary_strategy:
+        manifest_limitations.append(
+            "任务组解释字段为空："
+            f"{groups_missing_teacher_reason}/{groups_total} 组缺 teacher_reason，"
+            f"{groups_missing_primary_strategy}/{groups_total} 组缺 primary_strategy"
+            f"（当前方案 {groups_missing_teacher_reason_current}/{groups_current} 组缺 reason，"
+            f"{groups_missing_primary_strategy_current}/{groups_current} 组缺 strategy）。"
+            "导出层如实保留正式方案载荷里的空值，不补写理由或策略；"
+            "教师理由与策略列表见 recommendations.json 的 recommendations[].reason/strategy_types"
+        )
+    if lessons_without_source:
+        manifest_limitations.append(
+            f"微课堂教材来源：{lessons_without_source}/{len(micro_lessons)} 份的正文 source_refs 为空。"
+            "这些微课堂按 evidence_only/unverified 输出，引用组件只指向证据索引，"
+            "不显示成已引用教材原文"
+        )
+    if lessons_with_unresolved_citation:
+        manifest_limitations.append(
+            f"微课堂引用索引：{lessons_with_unresolved_citation}/{len(micro_lessons)} 份存在无法解析的引用标签，"
+            "已标记 unverified，不补造来源"
+        )
+    if activity_material_missing:
+        manifest_limitations.append(
+            f"活动材料引用：{activity_material_missing} 项活动的 material_id 不在 materials_index.json，"
+            "未静默改写，需回到正式题库核对"
+        )
+    if activity_kp_missing:
+        manifest_limitations.append(
+            f"活动知识点引用：{activity_kp_missing} 个 knowledge_ids 不在 knowledge_graph.json，"
+            "未补造知识点"
+        )
+    if knowledge_version is None:
+        manifest_limitations.append("本包没有正式知识版本，材料知识点关联只能是 unknown")
+    unpublished_analysis = (
+        publication_counts["student_analysis"]["unpublished"]
+        + publication_counts["class_analysis"]["unpublished"]
+    )
+    if unpublished_analysis:
+        manifest_limitations.append(
+            f"包内有 {unpublished_analysis} 份学情版本没有正式发布记录，"
+            "result.publication_status 按真实状态保留为 unpublished"
+        )
+    data_origin_limitations = list(data_origin["limitations"])
+    content_issues: list[str] = []
+    if activity_material_missing:
+        content_issues.append(
+            f"{activity_material_missing} 项活动引用了材料目录外的题目"
+        )
+    if activity_kp_missing:
+        content_issues.append(
+            f"{activity_kp_missing} 个活动知识点引用不在知识图谱内"
+        )
+    if materials_without_source:
+        content_issues.append(f"{materials_without_source} 条材料缺少出处引用")
+    if materials_without_kp:
+        content_issues.append(f"{materials_without_kp} 条材料缺少可解析知识点引用")
+    if materials_difficulty_unknown:
+        content_issues.append(f"{materials_difficulty_unknown} 条材料难度未知")
+    if summary_missing:
+        content_issues.append(f"{summary_missing} 份学情结果没有正式摘要")
+    if groups_missing_teacher_reason or groups_missing_primary_strategy:
+        content_issues.append("任务组缺少教师理由或主要策略")
+    if lessons_without_source:
+        content_issues.append(f"{lessons_without_source} 份微课堂没有教材来源引用")
+    if lessons_with_unresolved_citation:
+        content_issues.append(
+            f"{lessons_with_unresolved_citation} 份微课堂引用索引无法解析"
+        )
+    if unpublished_analysis:
+        content_issues.append(f"{unpublished_analysis} 份学情版本没有发布记录")
+    content_status = "passed" if not content_issues else "passed_with_limitations"
+
     closure_knowledge = sorted(closure.get("knowledge") or [])
     if knowledge_version and knowledge_version not in closure_knowledge:
         closure_knowledge.append(knowledge_version)
@@ -1513,8 +2247,9 @@ def build_files(db: Session, export: models.Export) -> dict[str, bytes]:
         "catalog_version": selection["catalog_version"],
         "rule_version": selection["rule_version"],
         "created_at": _stamp(),
-        "generation_method": ["rule"],
-        "data_origin": dataset.state or "official",
+        "generation_method": generation_method,
+        "generation_sources": generation_sources,
+        "data_origin": data_origin,
         "snapshot_id": export.snapshot_id,
         "selection_hash": export.selection_hash,
         "event_cutoff": selection["event_cutoff"],
@@ -1532,19 +2267,47 @@ def build_files(db: Session, export: models.Export) -> dict[str, bytes]:
         "dependency_edges": list(closure.get("dependency_edges") or []),
         "applicability_ids": sorted(closure.get("applicability_ids") or []),
         "compatibility_refs": sorted(closure.get("compatibility_refs") or []),
+        "publication": publication_counts,
         "evidence_index": {"file": "evidence_records.json", "record_count": len(evidence)},
+        "content_checks": {
+            "analysis_records": len(student_records) + len(class_records),
+            "analysis_summary_missing": summary_missing,
+            "analysis_summary_missing_current": summary_missing_current,
+            "analysis_unpublished": unpublished_analysis,
+            "materials": len(materials),
+            "materials_with_source_refs": len(materials) - materials_without_source,
+            "materials_without_source_refs": materials_without_source,
+            "materials_with_kp_refs": len(materials) - materials_without_kp,
+            "materials_without_kp_refs": materials_without_kp,
+            "materials_difficulty_unknown": materials_difficulty_unknown,
+            "groups": groups_total,
+            "groups_current": groups_current,
+            "groups_missing_teacher_reason": groups_missing_teacher_reason,
+            "groups_missing_teacher_reason_current": groups_missing_teacher_reason_current,
+            "groups_missing_primary_strategy": groups_missing_primary_strategy,
+            "groups_missing_primary_strategy_current": groups_missing_primary_strategy_current,
+            "activities": sum(len(plan.get("activities") or []) for plan in plan_records),
+            "activities_material_not_in_index": activity_material_missing,
+            "activity_kp_refs_not_in_graph": activity_kp_missing,
+            "lessons": len(micro_lessons),
+            "lessons_without_source_refs": lessons_without_source,
+            "lessons_with_unresolved_citation": lessons_with_unresolved_citation,
+        },
         "coverage": {
             "students": len(versions["student"]),
             "classes": len(versions["class"]),
             "cases": len(case_ids),
-            "limitations": [
-                "数据集为合成测试数据，不能用于证明真实教学成效"
-                if (dataset.manifest_json or {}).get("synthetic", False)
-                else "数据来源与使用范围以参赛说明为准"
-            ],
+            "limitations": data_origin_limitations,
         },
         "files": [],
-        "validation": {"preflight": "passed", "payload": "pending"},
+        "validation": {
+            "preflight": "passed",
+            "payload": "pending",
+            "content": content_status,
+            "content_issues": content_issues,
+            "check_report_id": None,
+            "checked_at": None,
+        },
         "limitations": manifest_limitations,
     }
 
@@ -1624,6 +2387,160 @@ def _field_dictionary(payloads: dict[str, bytes]) -> dict[str, Any]:
                     "example": json.dumps(value, ensure_ascii=False)[:120],
                 }
             )
+    items.extend(
+        [
+            {
+                "key": "student_analysis.json:result.publication_status",
+                "file": "student_analysis.json",
+                "field_path": "result.publication_status",
+                "type": "str",
+                "required": True,
+                "nullable": False,
+                "meaning": "取自正式发布记录 publications 的真实状态，不是载荷自述；published 表示该版本已有发布记录",
+                "example": "published",
+            },
+            {
+                "key": "student_analysis.json:result.summary",
+                "file": "student_analysis.json",
+                "field_path": "result.summary",
+                "type": "str",
+                "required": False,
+                "nullable": True,
+                "meaning": "B 结果没有正式摘要字段时为 null；null 表示无摘要，不代表无结论。用 summary_status 与 metrics/findings 核对",
+                "example": "null",
+            },
+            {
+                "key": "student_analysis.json:summary_status",
+                "file": "student_analysis.json",
+                "field_path": "summary_status",
+                "type": "str",
+                "required": True,
+                "nullable": False,
+                "meaning": "not_provided 表示正式结果未提供摘要；provided 表示载荷自带摘要",
+                "example": "not_provided",
+            },
+            {
+                "key": "materials_index.json:source_refs",
+                "file": "materials_index.json",
+                "field_path": "source_refs",
+                "type": "list",
+                "required": True,
+                "nullable": False,
+                "meaning": "材料出处投影；空数组表示目录未登记出处，用 source_status=unverified 标明，不补造页码",
+                "example": '[{"kind": "material_source", "source_file": "..."}]',
+            },
+            {
+                "key": "materials_index.json:kp_refs",
+                "file": "materials_index.json",
+                "field_path": "kp_refs",
+                "type": "list",
+                "required": True,
+                "nullable": False,
+                "meaning": "材料到知识点的可解析关联；source=annotation 为正式知识标注，source=indicator_mapping 为目录指标归属，无证据时 kp_status=unknown",
+                "example": '[{"kp_id": "kp-T01I1", "role": "primary"}]',
+            },
+            {
+                "key": "materials_index.json:difficulty_level",
+                "file": "materials_index.json",
+                "field_path": "difficulty_level",
+                "type": "str",
+                "required": True,
+                "nullable": False,
+                "meaning": "目录 material.difficulty 的等级；没有评估时固定为 unknown，不按得分或题干猜测",
+                "example": "unknown",
+            },
+            {
+                "key": "micro_lessons.json:evidence_refs",
+                "file": "micro_lessons.json",
+                "field_path": "evidence_refs",
+                "type": "list",
+                "required": True,
+                "nullable": False,
+                "meaning": "微课堂正文 evidence_refs 的安全投影（仅保留定位字段），引用组件的 evidence_index 按此数组解析",
+                "example": '[{"kind": "knowledge_point", "id": "kp-T01I1"}]',
+            },
+            {
+                "key": "micro_lessons.json:source_refs",
+                "file": "micro_lessons.json",
+                "field_path": "source_refs",
+                "type": "list",
+                "required": True,
+                "nullable": False,
+                "meaning": "微课堂正文 source_refs 的原样投影；空数组表示未引用教材原文，source_status=unverified/evidence_only",
+                "example": "[]",
+            },
+            {
+                "key": "micro_lessons.json:citation_checks",
+                "file": "micro_lessons.json",
+                "field_path": "citation_checks",
+                "type": "list",
+                "required": True,
+                "nullable": False,
+                "meaning": "逐条检查引用组件的 source_index/evidence_index 能否在 source_refs/evidence_refs 内解析；resolved=false 表示索引无效",
+                "example": '[{"component_id": "source", "labels": [{"resolved": true}]}]',
+            },
+            {
+                "key": "recommendations.json:recommendations.reason",
+                "file": "recommendations.json",
+                "field_path": "recommendations[].reason",
+                "type": "str",
+                "required": True,
+                "nullable": False,
+                "meaning": "正式方案建议自带的教师可读理由；任务组 teacher_reason 为空时，用它核对为什么这样安排，导出不把它改写成任务组字段",
+                "example": "存在具体错误证据，安排纠错；依据 ...",
+            },
+            {
+                "key": "recommendations.json:groups.teacher_reason",
+                "file": "recommendations.json",
+                "field_path": "groups[].teacher_reason",
+                "type": "str",
+                "required": False,
+                "nullable": False,
+                "meaning": "正式方案任务组的教师理由；导出不补写，空值表示版本里没有该字段内容",
+                "example": "",
+            },
+            {
+                "key": "recommendations.json:groups.primary_strategy",
+                "file": "recommendations.json",
+                "field_path": "groups[].primary_strategy",
+                "type": "str",
+                "required": False,
+                "nullable": True,
+                "meaning": "正式方案任务组的主要策略；null 表示版本未填，不从 strategy_types 推断",
+                "example": "null",
+            },
+            {
+                "key": "manifest.json:generation_sources",
+                "file": "manifest.json",
+                "field_path": "generation_sources",
+                "type": "dict",
+                "required": True,
+                "nullable": False,
+                "meaning": "按模块记录版本载荷里的生成/复核来源；知识或微课堂的 model 标记可能来自历史版本创建，不代表本次导出调用模型",
+                "example": '{"export": {"method": "rule"}, "knowledge": {"method": "rule"}}',
+            },
+            {
+                "key": "manifest.json:data_origin",
+                "file": "manifest.json",
+                "field_path": "data_origin",
+                "type": "dict",
+                "required": True,
+                "nullable": False,
+                "meaning": "数据来源类型、数据集名称、是否合成与导入登记的表行数；不使用 ready 等状态词代替来源",
+                "example": '{"kind": "official", "synthetic": false}',
+            },
+            {
+                "key": "manifest.json:validation",
+                "file": "manifest.json",
+                "field_path": "validation",
+                "type": "dict",
+                "required": True,
+                "nullable": False,
+                "meaning": "打包与回读校验结论；payload=passed 时同时给出 check_report_id 与 checked_at，pending 表示尚未完成",
+                "example": '{"preflight": "passed", "payload": "passed"}',
+            },
+        ]
+    )
     items.append(
         {
             "key": "metrics.csv:value",
@@ -1640,15 +2557,73 @@ def _field_dictionary(payloads: dict[str, bytes]) -> dict[str, Any]:
 
 
 def _readme(manifest: dict[str, Any], dataset: models.Dataset) -> str:
+    origin = dict(manifest.get("data_origin") or {})
+    sources = dict(manifest.get("generation_sources") or {})
+    validation = dict(manifest.get("validation") or {})
+    method_names = {
+        "rule": "规则",
+        "model": "模型",
+        "hybrid": "规则+模型",
+        "human": "教师修订/确认",
+        "rule+human": "规则+教师确认",
+        "unknown": "未知",
+    }
+    module_names = {
+        "export": "导出打包",
+        "knowledge": "A 知识体系",
+        "student_analysis": "B 学情分析",
+        "plan": "C 学习方案",
+        "micro_lesson": "C 微课堂",
+    }
+    rows = []
+    for module in ("export", "knowledge", "student_analysis", "plan", "micro_lesson"):
+        item = dict(sources.get(module) or {})
+        method = str(item.get("method") or "unknown")
+        rows.append(
+            f"| {module_names[module]} | {method_names.get(method, method)}（{method}） "
+            f"| {item.get('note') or ''} |"
+        )
+    limitations = [str(item) for item in manifest.get("limitations") or []]
+    limitations_text = (
+        "\n".join(f"- {item}" for item in limitations) if limitations else "- 无额外限制"
+    )
+    row_counts = origin.get("table_row_counts") or {}
+    row_counts_text = "、".join(
+        f"{name} {count}" for name, count in sorted(row_counts.items())
+    ) or "未登记"
+    validation_status = str(validation.get("payload") or "pending")
+    report_id = validation.get("check_report_id") or "未生成"
+    checked_at = validation.get("checked_at") or "未生成"
     return f"""# 湛知正式成果包
 
 - 数据集：{dataset.id}（系列 {dataset.family_id}）
+- 数据集名称：{origin.get('dataset_name') or '未登记'}
 - 运行：{manifest['run_id']}
 - 目录版本：{manifest['catalog_version']}
 - 节点：{'、'.join(manifest['node_ids'])}
 - 生成时间：{manifest['created_at']}
-- 生成方式：规则（未调用模型）
-- 数据来源：{manifest['data_origin']}
+- 快照：{manifest['snapshot_id']}
+
+## 生成方式（按模块记录）
+
+| 模块 | 实际来源 | 说明 |
+| --- | --- | --- |
+{chr(10).join(rows)}
+
+模块来源取自正式版本载荷里的 `generation_method`、`creation_method` 与 `review_info`；
+知识或微课堂中的 `model` 标记可能来自版本创建或独立复核，不代表本次导出调用模型。
+导出层只读冻结版本，不调用模型，也不把历史模型标记改写成规则。
+
+## 数据来源
+
+- 类型：{origin.get('kind') or 'unknown'}
+- 是否合成：{'是' if origin.get('synthetic') else '否'}
+- 数据集：{origin.get('dataset_id')}（系列 {origin.get('dataset_family_id')}）
+- 登记行数：{row_counts_text}
+- 说明：{origin.get('note') or '未登记来源说明'}
+
+数据来源类型取自导入登记（{origin.get('declared_by') or '未登记'}），
+未与外部数据包原件逐项核对；不使用 `ready` 等状态词代替来源。
 
 ## 三项任务对应文件
 
@@ -1661,16 +2636,37 @@ def _readme(manifest: dict[str, Any], dataset: models.Dataset) -> str:
 ## 核对方式
 
 - 每个文件在 `manifest.json` 的 `files` 中都有 `sha256` 与 `bytes`，可直接校验；
+- `manifest.json` 的 `publication` 记录每类版本的发布状态，`content_checks` 记录来源、
+  摘要、难度与任务组字段的缺失数量；
 - `evidence_records.json` 提供可解析的证据引用，指向冻结时的正式记录；
 - `field_dictionary.json` 逐文件列出字段含义与空值语义。
+
+## 回读校验
+
+- preflight：{validation.get('preflight') or 'pending'}
+- payload：{validation_status}
+- 内容检查：{validation.get('content') or 'pending'}
+- 检查报告：{report_id}
+- 检查时间：{checked_at}
+
+payload 表示回读校验（文件存在、哈希、JSON/CSV 可解析）；内容检查单独记录
+来源、摘要、难度与任务组字段的缺失项，不把文件校验通过当成业务内容合格。
+只有 payload 为 passed 时，manifest 才写入报告 ID 与时间；未执行或失败保持 pending/failed。
+内容检查问题：{'；'.join(validation.get('content_issues') or []) or '无'}
 
 ## 适用边界
 
 - 本包冻结自提交时的正式版本，之后的新作答与新版方案不会改变本包；
 - 学情结论保留证据充分性与限制，未把"无记录"当作 0 分；
-- `manifest.json` 中的 `validation.payload` 是打包时写入的自检占位，**最终回读校验结论**
-  记录在系统导出记录的 `check_report` 中（两者都通过才会出现在这里）；
-- 若源数据为合成测试数据，本包只能证明系统结果、证据与建议的合理性，不能证明真实教学成效。
+- 学生/班级 `result.publication_status` 取自正式发布记录；`summary=null` 表示正式结果
+  没有提供摘要字段，不代表没有结论；
+- 材料来源与知识点关联只投影目录和知识标注里已有的证据；缺失时标 unverified/unknown，
+  不补造教材页码；
+- 微课堂引用组件按 `source_refs`/`evidence_refs` 的索引解析；没有教材来源时标
+  evidence_only/unverified，不显示成已引用教材；
+- 任务组 `teacher_reason`/`primary_strategy` 为空时如实保留，导出层不补写；
+- 以下限制来自本包内容检查：
+{limitations_text}
 """
 
 
@@ -1679,30 +2675,71 @@ def _readme(manifest: dict[str, Any], dataset: models.Dataset) -> str:
 # --------------------------------------------------------------------------- #
 
 
+def _write_archive(path: str | Path, files: dict[str, bytes]) -> None:
+    with zipfile.ZipFile(path, "w", compression=zipfile.ZIP_DEFLATED) as archive:
+        for name in sorted(files):
+            info = zipfile.ZipInfo(name)
+            info.date_time = (2026, 1, 1, 0, 0, 0)
+            info.compress_type = zipfile.ZIP_DEFLATED
+            archive.writestr(info, files[name])
+
+
 def build_archive(db: Session, export: models.Export, output_root: Path) -> dict[str, Any]:
     files = build_files(db, export)
+    selection = dict(export.selection_json or {})
+    dataset = db.get(models.Dataset, selection["dataset_id"])
+    if dataset is None:
+        raise DomainError("EXPORT_INCOMPLETE", "冻结范围引用的数据集已不可读")
     target_dir = output_root / "exports"
     target_dir.mkdir(parents=True, exist_ok=True)
     final_path = target_dir / f"{export.export_id}.zip"
     handle, temp_name = tempfile.mkstemp(dir=target_dir, prefix=".tmp-", suffix=".zip")
     os.close(handle)
+    report_id = f"check-{export.export_id}"
     try:
-        with zipfile.ZipFile(temp_name, "w", compression=zipfile.ZIP_DEFLATED) as archive:
-            for path in sorted(files):
-                info = zipfile.ZipInfo(path)
-                info.date_time = (2026, 1, 1, 0, 0, 0)
-                info.compress_type = zipfile.ZIP_DEFLATED
-                archive.writestr(info, files[path])
+        # 第一遍按 pending 写包并回读；通过后才把真实校验结论写回包内 manifest。
+        _write_archive(temp_name, files)
+        first = verify_archive(Path(temp_name), files)
+        if not first["passed"]:
+            raise DomainError(
+                "EXPORT_ARTIFACT_INVALID",
+                "导出包回读校验失败：" + "；".join(first["issues"][:3]),
+            )
+        checked_at = _stamp()
+        manifest = json.loads(files["manifest.json"].decode("utf-8"))
+        existing_validation = dict(manifest.get("validation") or {})
+        manifest["validation"] = {
+            **existing_validation,
+            "preflight": "passed",
+            "payload": "passed",
+            "check_report_id": report_id,
+            "checked_at": checked_at,
+            "checks": [
+                "file_presence",
+                "sha256",
+                "json_parse",
+                "csv_encoding",
+            ],
+            "issues": [],
+        }
+        files["manifest.json"] = _json_bytes(manifest)
+        files["README.md"] = _readme(manifest, dataset).encode("utf-8")
+        # 第二遍带上最终 manifest/README 再回读；manifest 的文件清单不包含这两个文件，
+        # 所以业务文件哈希不变，断言仍可覆盖整包。
+        _write_archive(temp_name, files)
         report = verify_archive(Path(temp_name), files)
         if not report["passed"]:
-            raise DomainError("EXPORT_ARTIFACT_INVALID", "导出包回读校验失败：" + "；".join(report["issues"][:3]))
+            raise DomainError(
+                "EXPORT_ARTIFACT_INVALID",
+                "导出包回读校验失败：" + "；".join(report["issues"][:3]),
+            )
+        report["report_id"] = report_id
+        report["checked_at"] = checked_at
+        report["manifest_sha256"] = _sha(files["manifest.json"])
         os.replace(temp_name, final_path)
     finally:
         Path(temp_name).unlink(missing_ok=True)
     archive_hash = _sha(final_path.read_bytes())
-    manifest = json.loads(files["manifest.json"].decode("utf-8"))
-    manifest["validation"] = {"preflight": "passed", "payload": "passed"}
-    selection = dict(export.selection_json or {})
     case_mode = selection.get("case_selection", "explicit")
     report["case_selection"] = {
         "mode": case_mode,
@@ -1711,6 +2748,12 @@ def build_archive(db: Session, export: models.Export, output_root: Path) -> dict
     if selection.get("warnings"):
         report["warnings"] = list(selection["warnings"])
     report["dependency_edges"] = len(manifest.get("dependency_edges") or [])
+    report["content_checks"] = manifest.get("content_checks") or {}
+    report["content_status"] = (manifest.get("validation") or {}).get("content")
+    report["content_issues"] = (manifest.get("validation") or {}).get(
+        "content_issues"
+    ) or []
+    report["publication"] = manifest.get("publication") or {}
     return {
         "storage_key": f"exports/{export.export_id}.zip",
         "archive_hash": archive_hash,
