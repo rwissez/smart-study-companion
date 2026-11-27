@@ -88,6 +88,11 @@ CONCRETE_ERROR_MARKERS: tuple[str, ...] = (
     "得数错",
     "错误表现",
     "错例",
+    "正确应为",
+    "多减",
+    "少减",
+    "多加了",
+    "少加了",
 )
 #: 只能说明“整体表现不好”，不能说明具体错步的词。
 PERFORMANCE_MARKERS: tuple[str, ...] = (

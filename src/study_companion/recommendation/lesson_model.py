@@ -47,7 +47,7 @@ from study_companion.recommendation.lesson import (
     validate_lesson,
 )
 
-PROMPT_VERSION = "1.3"
+PROMPT_VERSION = "1.4"
 MAX_NOTE_CHARS = 300
 MAX_CITATION_LABELS = 6
 DEFAULT_LESSON_OBJECT_KEY = "lesson"
