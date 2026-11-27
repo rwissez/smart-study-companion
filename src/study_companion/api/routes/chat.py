@@ -450,6 +450,9 @@ def _task_registry(db, scope, payload, target, task: TaskSpec, settings):
     context = _server_context(db, scope, payload.run_id, target, payload.node_id, task)
     # prepare_plan_revision 只写候选行；放进当前请求事务，随本轮对话一起提交。
     context.extras[DB_SESSION_KEY] = db
+    context.extras["owner_ref"] = scope.session_id
+    if payload.conversation_id:
+        context.extras["conversation_id"] = payload.conversation_id
     registry = build_b_registry(context, scope.role, task)
     if task.task_type in {"knowledge_lookup", "prerequisite_query", "relation_review"}:
         if not context.catalog_version:
