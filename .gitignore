@@ -43,3 +43,7 @@ Thumbs.db
 /湛知_DSH最终开发交接包.zip
 /_local/
 /_evidence/
+
+# 赛方授权数据与本机模型信息：只在本地使用，绝不进入 Git
+/赛题数据/
+/模型信息.txt
