@@ -2599,14 +2599,20 @@ def build_files(db: Session, export: models.Export) -> dict[str, bytes]:
 
     analysis_methods: set[str] = set()
     analysis_limitations: list[str] = []
+    analysis_hybrid = 0
+    analysis_rule = 0
     for record in student_records + class_records:
         result = record.get("result") or {}
         analysis_limitations.extend(str(item) for item in result.get("limitations", []) or [])
         for finding in list(result.get("findings", [])) + list(
             result.get("common_findings", [])
         ):
-            if finding.get("generation_method"):
-                analysis_methods.add(str(finding["generation_method"]))
+            method = str(finding.get("generation_method") or "rule")
+            analysis_methods.add(method)
+            if method == "hybrid":
+                analysis_hybrid += 1
+            else:
+                analysis_rule += 1
     analysis_model_attempted = any(
         "MODEL_TIMEOUT" in item or "模型" in item for item in analysis_limitations
     )
@@ -2654,10 +2660,15 @@ def build_files(db: Session, export: models.Export) -> dict[str, bytes]:
         "model_attempted": analysis_model_attempted,
         "provenance": "正式学情版本载荷 findings.generation_method / limitations",
         "note": (
-            "模型语义诊断曾尝试但未成功（存在 MODEL_TIMEOUT 等限制），"
-            "本包只含规则统计与评分，未生成模型解释"
-            if analysis_model_attempted
-            else "学情统计、评分与诊断由规则生成"
+            f"本包有 {analysis_hybrid} 条语义诊断由模型生成并通过证据回查，"
+            f"其余 {analysis_rule} 条为规则结果或待复核；模型尝试失败记录保留在 limitations"
+            if analysis_hybrid
+            else (
+                "模型语义诊断曾尝试但未成功（存在 MODEL_TIMEOUT 等限制），"
+                "本包只含规则统计与评分，未生成模型解释"
+                if analysis_model_attempted
+                else "学情统计、评分与诊断由规则生成"
+            )
         ),
     }
     lesson_generation = {
