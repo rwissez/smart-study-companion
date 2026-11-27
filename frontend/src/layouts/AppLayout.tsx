@@ -14,13 +14,11 @@ import {
   IconCurriculum,
   IconData,
   IconLogout,
-  IconReview,
   IconUser,
 } from "../components/icons";
 
 const TEACHER_NAV = [
   { to: "/teacher/classes", label: "班级总览", icon: IconClasses },
-  { to: "/teacher/plan-reviews", label: "方案审核", icon: IconReview },
   { to: "/teacher/curriculum", label: "课程体系", icon: IconCurriculum },
   { to: "/teacher/data", label: "数据管理", icon: IconData },
   { to: "/teacher/chat", label: "AI 对话", icon: IconChat },
@@ -177,6 +175,8 @@ export function AppLayout({ role }: { role: "teacher" | "student" }) {
                             navigate(
                               `/teacher/interventions/${encodeURIComponent(caseId)}?studentId=${encodeURIComponent(alert.student_id)}`,
                             );
+                          } else if (alert.kind.includes("plan") && alert.student_id) {
+                            navigate(`/teacher/students/${encodeURIComponent(alert.student_id)}?tab=plan&review=1`);
                           } else if (alert.student_id) {
                             navigate(`/teacher/students/${encodeURIComponent(alert.student_id)}`);
                           } else {

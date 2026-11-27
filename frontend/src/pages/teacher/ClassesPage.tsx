@@ -105,7 +105,7 @@ export function ClassesPage() {
   });
 
   const roster = useQuery({
-    queryKey: queryKeys.roster(scopeKey, activeClassId),
+    queryKey: queryKeys.roster(scopeKey, activeClassId, page),
     queryFn: () => listStudents(datasetId as string, { classId: activeClassId, page, pageSize: 20 }),
     enabled: Boolean(datasetId && activeClassId),
   });

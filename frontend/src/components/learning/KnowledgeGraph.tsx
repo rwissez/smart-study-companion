@@ -14,10 +14,10 @@ interface Positioned {
   y: number;
 }
 
-const NODE_W = 148;
-const NODE_H = 40;
-const COL_GAP = 220;
-const ROW_GAP = 88;
+const NODE_W = 168;
+const NODE_H = 44;
+const COL_GAP = 240;
+const ROW_GAP = 92;
 
 /** 图只画正式关系的方向；课程归属（annotation）不画成逻辑边。布局是确定性网格。 */
 export function KnowledgeGraph({ snapshot, catalog, selectedId, onSelect }: Props) {
@@ -81,10 +81,16 @@ export function KnowledgeGraph({ snapshot, catalog, selectedId, onSelect }: Prop
       </div>
 
       <div className="graphBox" style={{ overflow: "auto" }}>
-        {positioned.length === 0 ? (
+        {snapshot.points.length === 0 ? (
           <p className="small muted" style={{ padding: 16 }}>这个知识版本没有知识点。</p>
         ) : (
-          <svg
+          <>
+            {snapshot.relations.length === 0 ? (
+              <p className="small muted" style={{ padding: "8px 12px", borderBottom: "1px solid var(--color-border)" }}>
+                暂无正式关系：当前知识版本没有登记 prerequisite / related 关系边，不绘制占位线。
+              </p>
+            ) : null}
+            <svg
             className="graphSvg"
             viewBox={`0 0 ${width} ${height}`}
             style={{ width: width * zoom, height: height * zoom, minWidth: "100%" }}
@@ -129,6 +135,7 @@ export function KnowledgeGraph({ snapshot, catalog, selectedId, onSelect }: Prop
               const selected = point.kp_id === selectedId;
               return (
                 <g key={point.kp_id} role="button" tabIndex={0} aria-label={`知识点 ${point.name}`} style={{ cursor: "pointer" }} onClick={() => onSelect(point.kp_id)} onKeyDown={(event) => { if (event.key === "Enter" || event.key === " ") { event.preventDefault(); onSelect(point.kp_id); } }}>
+                  <title>{point.name}</title>
                   <rect
                     x={x}
                     y={y}
@@ -139,16 +146,17 @@ export function KnowledgeGraph({ snapshot, catalog, selectedId, onSelect }: Prop
                     stroke={selected ? "var(--color-selected-border)" : "var(--color-border)"}
                     strokeWidth={selected ? 1.75 : 1}
                   />
-                  <text x={x + 10} y={y + 18} fontSize={12} fill="var(--color-text-primary)">
-                    {point.name.length > 13 ? `${point.name.slice(0, 13)}…` : point.name}
+                  <text x={x + 10} y={y + 18} fontSize={11} fill="var(--color-text-primary)">
+                    {point.name.length > 12 ? `${point.name.slice(0, 12)}…` : point.name}
                   </text>
-                  <text x={x + 10} y={y + 32} fontSize={10} fill="var(--color-text-secondary)">
+                  <text x={x + 10} y={y + 34} fontSize={10} fill="var(--color-text-secondary)">
                     {point.scope_role === "core" ? "核心概念" : "拓展概念"}
                   </text>
                 </g>
               );
             })}
           </svg>
+          </>
         )}
         <div className="graphLegend">
           <span className="legendLine"><svg width="28" height="8" aria-hidden="true"><line x1="0" y1="4" x2="28" y2="4" stroke="var(--color-text-secondary)" strokeWidth="1.75" /></svg>前置（实线箭头）</span>

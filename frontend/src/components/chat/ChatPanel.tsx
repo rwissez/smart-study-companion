@@ -73,7 +73,7 @@ export function ChatPanel({ role, context, onConfigure, initialConversationId }:
   const [draft, setDraft] = useState("");
   const [busy, setBusy] = useState(false);
   const [composing, setComposing] = useState(false);
-  const [error, setError] = useState<{ text: string; requestId: string | null } | null>(null);
+  const [error, setError] = useState<{ text: string; requestId: string | null; details: Array<{ field?: string; reason?: string }> } | null>(null);
   const [proposal, setProposal] = useState<ProposalResponse | null>(null);
   const [proposalBusy, setProposalBusy] = useState(false);
   const [proposalError, setProposalError] = useState<string | null>(null);
@@ -197,7 +197,6 @@ export function ChatPanel({ role, context, onConfigure, initialConversationId }:
       const response = await sendChat({
         messages: [{ role: "user", content: text }],
         conversation_id: selectedId,
-        run_id: context?.runId ?? null,
         node_id: context?.nodeId ?? null,
         student_id: context?.studentId ?? null,
       });
@@ -210,7 +209,11 @@ export function ChatPanel({ role, context, onConfigure, initialConversationId }:
       }
       await queryClient.invalidateQueries({ queryKey: queryKeys.conversations(scopeKey) });
     } catch (reason) {
-      setError({ text: toErrorMessage(reason), requestId: errorRequestId(reason) });
+      setError({
+        text: toErrorMessage(reason),
+        requestId: errorRequestId(reason),
+        details: (reason as { details?: Array<{ field?: string; reason?: string }> }).details ?? [],
+      });
       setDraft(text);
     } finally {
       setBusy(false);
@@ -443,10 +446,13 @@ export function ChatPanel({ role, context, onConfigure, initialConversationId }:
             </button>
           </div>
           {error ? (
-            <p className="fieldError" role="alert">
+            <div className="fieldError" role="alert">
               {error.text}
               {error.requestId ? `（请求编号 ${error.requestId}）` : ""}
-            </p>
+              {error.details.length ? (
+                <ul>{error.details.map((detail, index) => <li key={index} className="small">{detail.field ? `${detail.field}：` : ""}{detail.reason}</li>)}</ul>
+              ) : null}
+            </div>
           ) : null}
         </div>
       </div>

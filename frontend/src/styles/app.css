@@ -358,7 +358,7 @@ ul, ol { padding-left: 20px; }
 .derivationList { list-style: none; padding: 0; margin: var(--space-2) 0; display: flex; flex-direction: column; gap: var(--space-3); }
 .derivationStep { display: grid; grid-template-columns: minmax(0, 1fr); gap: 2px; padding-left: var(--space-4); border-left: 2px solid var(--color-border); }
 .derivationExpr { overflow-wrap: anywhere; }
-.contrastGrid { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: var(--space-4); margin: var(--space-3) 0; }
+.contrastGrid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--space-4); margin: var(--space-3) 0; }
 .contrastCell { border: 1px solid var(--color-border); border-radius: var(--radius-md); padding: var(--space-3); min-width: 0; }
 .contrastCell p { overflow-wrap: anywhere; }
 .numberLineWrap { border: 1px solid var(--color-border); border-radius: var(--radius-md); padding: var(--space-2); overflow-x: auto; }

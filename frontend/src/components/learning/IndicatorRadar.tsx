@@ -18,12 +18,13 @@ interface Point {
   limitations: string[];
 }
 
-const CENTER = 170;
-const RADIUS = 108;
+const CENTER = 210;
+const CENTER_Y = 175;
+const RADIUS = 105;
 
 function polar(index: number, count: number, r: number): { x: number; y: number } {
   const angle = (Math.PI * 2 * index) / count - Math.PI / 2;
-  return { x: CENTER + r * Math.cos(angle), y: CENTER + r * Math.sin(angle) };
+  return { x: CENTER + r * Math.cos(angle), y: CENTER_Y + r * Math.sin(angle) };
 }
 
 /**
@@ -131,7 +132,7 @@ export function IndicatorRadar({ metrics, names, order, height = 320, emptyText 
     <div className="radarWrap">
       <svg
         className="radarSvg"
-        viewBox="0 0 340 300"
+        viewBox="0 0 420 360"
         style={{ maxHeight: height }}
         role="img"
         aria-label={`得分率雷达图，共 ${points.length} 个指标，可用 ${available.length} 个；刻度 0 到 100`}
@@ -140,17 +141,12 @@ export function IndicatorRadar({ metrics, names, order, height = 320, emptyText 
           <circle
             key={ratio}
             cx={CENTER}
-            cy={150}
+            cy={CENTER_Y}
             r={RADIUS * ratio}
             fill="none"
             stroke="var(--color-border)"
             strokeWidth={1}
           />
-        ))}
-        {ringRadii.map((ratio) => (
-          <text key={`t${ratio}`} x={CENTER + 4} y={150 - RADIUS * ratio + 12} fontSize={11} fill="var(--color-text-secondary)">
-            {Math.round(ratio * 100)}
-          </text>
         ))}
         {points.map((point, index) => {
           const end = polar(index, points.length, RADIUS);
@@ -158,7 +154,7 @@ export function IndicatorRadar({ metrics, names, order, height = 320, emptyText 
             <line
               key={`axis-${point.id}`}
               x1={CENTER}
-              y1={150}
+              y1={CENTER_Y}
               x2={end.x}
               y2={end.y}
               stroke="var(--color-border)"
@@ -171,16 +167,17 @@ export function IndicatorRadar({ metrics, names, order, height = 320, emptyText 
         ) : null}
         {points.map((point, index) => {
           const position = polar(index, points.length, RADIUS);
-          const labelPosition = polar(index, points.length, RADIUS + 22);
+          const labelPosition = polar(index, points.length, RADIUS + 26);
           const anchor = Math.abs(labelPosition.x - CENTER) < 12 ? "middle" : labelPosition.x > CENTER ? "start" : "end";
-          const valuePosition = polar(index, points.length, RADIUS + 38);
+          const shortLabel = point.label.length > 7 ? `${point.label.slice(0, 7)}…` : point.label;
           return (
             <g key={`label-${point.id}`}>
-              <text x={labelPosition.x} y={labelPosition.y} textAnchor={anchor} fontSize={12} fill="var(--color-text-primary)">
-                {point.label}
-              </text>
-              <text x={valuePosition.x} y={valuePosition.y} textAnchor={anchor} fontSize={11} fill="var(--color-text-secondary)">
-                {formatPercent(point.value)}
+              <text x={labelPosition.x} y={labelPosition.y} textAnchor={anchor} fontSize={11} fill="var(--color-text-primary)">
+                <title>{`${point.label}：${formatPercent(point.value)}`}</title>
+                <tspan>{shortLabel}</tspan>
+                <tspan x={labelPosition.x} dy={14} fontSize={10} fill="var(--color-text-secondary)">
+                  {formatPercent(point.value)}
+                </tspan>
               </text>
               {point.value !== null ? (
                 <circle
@@ -203,7 +200,7 @@ export function IndicatorRadar({ metrics, names, order, height = 320, emptyText 
         })}
       </svg>
       <p className="radarCaption">
-        刻度 0—100，得分率 = 有效得分 / 有效满分；空心点表示无有效记录，虚线不跨越缺失维度。
+        刻度环依次为 25 / 50 / 75 / 100；得分率 = 有效得分 / 有效满分；空心点表示无有效记录，不跨越缺失维度。
         {!allKnown ? " 当前存在缺失指标，仅显示可用点。" : ""}
       </p>
       {dataTable}

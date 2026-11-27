@@ -25,6 +25,7 @@ export function CurriculumPage() {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [search, setSearch] = useState("");
   const [reviewItem, setReviewItem] = useState<KnowledgeReviewItem | null>(null);
+  const [reviewPage, setReviewPage] = useState(1);
   const [reviewNotice, setReviewNotice] = useState<string | null>(null);
   const [sourceUrl, setSourceUrl] = useState<string | null>(null);
   const [sourceBusy, setSourceBusy] = useState(false);
@@ -63,8 +64,8 @@ export function CurriculumPage() {
   });
 
   const reviews = useQuery({
-    queryKey: queryKeys.knowledgeReviews(scopeKey),
-    queryFn: () => listKnowledgeReviews(datasetId as string),
+    queryKey: queryKeys.knowledgeReviews(scopeKey, reviewPage),
+    queryFn: () => listKnowledgeReviews(datasetId as string, reviewPage, 20),
     enabled: Boolean(datasetId && tab === "reviews"),
   });
 
@@ -392,6 +393,27 @@ export function CurriculumPage() {
               <div className="row" style={{ marginTop: 8 }}>
                 <span className="small muted">通过会发布新的知识版本；拒绝只记录决定；编辑生成新候选。</span>
               </div>
+              <div className="row" style={{ justifyContent: "flex-end", marginTop: 8 }}>
+                <span className="small muted">
+                  共 {reviews.data.total} 条 · 第 {reviews.data.page} / {Math.max(1, Math.ceil(reviews.data.total / reviews.data.page_size))} 页
+                </span>
+                <button
+                  type="button"
+                  className="btn btnSm"
+                  disabled={reviews.data.page <= 1}
+                  onClick={() => setReviewPage((value) => Math.max(1, value - 1))}
+                >
+                  上一页
+                </button>
+                <button
+                  type="button"
+                  className="btn btnSm"
+                  disabled={reviews.data.page * reviews.data.page_size >= reviews.data.total}
+                  onClick={() => setReviewPage((value) => value + 1)}
+                >
+                  下一页
+                </button>
+              </div>
             </div>
           ) : null}
         </section>
@@ -404,7 +426,7 @@ export function CurriculumPage() {
         onClose={() => setReviewItem(null)}
         onDone={(message) => {
           setReviewNotice(message);
-          void queryClient.invalidateQueries({ queryKey: queryKeys.knowledgeReviews(scopeKey) });
+          void queryClient.invalidateQueries({ queryKey: queryKeys.knowledgeReviews(scopeKey, reviewPage) });
           void queryClient.invalidateQueries({ queryKey: queryKeys.knowledge(scopeKey, null) });
           void queryClient.invalidateQueries({ queryKey: queryKeys.knowledgeQuality(scopeKey) });
           void reviews.refetch();

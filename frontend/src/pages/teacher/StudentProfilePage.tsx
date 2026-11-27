@@ -8,6 +8,7 @@ import {
   getPlan,
   getProgress,
   getStudentProfile,
+  listPlanReviews,
 } from "../../api/service";
 import type { AnswerRecordListItem, EvidenceRef, PlanView, StudentResultView } from "../../api/types";
 import { useSession } from "../../app/session";
@@ -20,6 +21,7 @@ import { MetricList } from "../../components/learning/MetricList";
 import { ProgressView } from "../../components/learning/ProgressView";
 import { TaskGroupView } from "../../components/learning/TaskGroupView";
 import { PlanEditor } from "../../components/learning/PlanEditor";
+import { PlanReviewDialog } from "../../components/learning/PlanReviewDialog";
 import { formatDate, formatScore, gradingStatusLabel } from "../../lib/format";
 import { IconArrowLeft } from "../../components/icons";
 
@@ -42,6 +44,7 @@ export function StudentProfilePage() {
   const [evidence, setEvidence] = useState<EvidenceRef | null>(null);
   const [recordsPage, setRecordsPage] = useState(1);
   const [editorOpen, setEditorOpen] = useState(false);
+  const [reviewOpen, setReviewOpen] = useState(searchParams.get("review") === "1");
 
   const savedView = useMemo(() => {
     try {
@@ -77,6 +80,13 @@ export function StudentProfilePage() {
     queryFn: () => getProgress(datasetId as string, studentId, { page: 1, pageSize: 50 }),
     enabled: Boolean(datasetId && studentId && tab === "progress"),
   });
+
+  const pendingReviews = useQuery({
+    queryKey: queryKeys.planReviews(scopeKey, 1),
+    queryFn: () => listPlanReviews(datasetId as string, { page: 1, pageSize: 100 }),
+    enabled: Boolean(datasetId && studentId),
+  });
+  const pendingReviewCount = (pendingReviews.data?.items ?? []).filter((item) => item.student_id === studentId).length;
 
   const result = profile.data?.result;
   const records = useQuery({
@@ -243,8 +253,17 @@ export function StudentProfilePage() {
                   >
                     编辑学习方案
                   </button>
+                  <button
+                    type="button"
+                    className="btn"
+                    onClick={() => setReviewOpen(true)}
+                    disabled={pendingReviewCount === 0}
+                    title={pendingReviewCount ? "查看待审核候选" : "当前没有待审核候选"}
+                  >
+                    待审核候选（{pendingReviewCount}）
+                  </button>
                   <span className="small muted">
-                    {plan.data ? "改目标、说明与活动，检查并发布后生成新的正式版本。" : "尚未读取到正式方案，不能编辑。"}
+                    候选来自教师对话的生成操作；通过后才替换正式方案。
                   </span>
                 </div>
               </div>
@@ -310,6 +329,12 @@ export function StudentProfilePage() {
               ) : null}
               {plan.data ? (
                 <div className="stackLg">
+                  <div className="row">
+                    <button type="button" className="btn btnSm" onClick={() => setReviewOpen(true)} disabled={pendingReviewCount === 0}>
+                      待审核候选（{pendingReviewCount}）
+                    </button>
+                    <button type="button" className="btn btnSm" onClick={() => setEditorOpen(true)}>编辑学习方案</button>
+                  </div>
                   <PlanSummary plan={plan.data} names={names} />
                   <TaskGroupView
                     groups={plan.data.plan.task_groups}
@@ -345,6 +370,22 @@ export function StudentProfilePage() {
         nodeId={result?.node_id ?? nodeId ?? plan.data?.plan.node_id ?? ""}
         onClose={() => setEditorOpen(false)}
         onPublished={() => {
+          void plan.refetch();
+          void profile.refetch();
+        }}
+      />
+      <PlanReviewDialog
+        open={reviewOpen}
+        studentId={studentId}
+        nodeId={result?.node_id ?? nodeId ?? plan.data?.plan.node_id ?? ""}
+        onClose={() => {
+          setReviewOpen(false);
+          const next = new URLSearchParams(searchParams);
+          next.delete("review");
+          setSearchParams(next, { replace: true });
+        }}
+        onPublished={() => {
+          void pendingReviews.refetch();
           void plan.refetch();
           void profile.refetch();
         }}

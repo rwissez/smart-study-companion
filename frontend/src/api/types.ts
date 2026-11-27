@@ -1092,9 +1092,12 @@ export interface ConfirmationResult {
 export interface PlanReviewItem {
   review_id: string;
   student_id: string;
+  node_id?: string | null;
   plan_version: string;
   review_info: Record<string, unknown>;
   summary: string;
+  changes?: { goal?: string; activity_count?: number; estimated_minutes?: number } | null;
+  precheck?: { hard_block?: boolean; reason?: string } | null;
   estimated_minutes: number | null;
   warnings: RevisionWarning[];
   expires_at: string;

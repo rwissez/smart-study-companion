@@ -274,10 +274,10 @@ export async function getKnowledge(
   );
 }
 
-export async function listKnowledgeReviews(datasetId: string): Promise<Page<KnowledgeReviewItem>> {
+export async function listKnowledgeReviews(datasetId: string, page = 1, pageSize = 20): Promise<Page<KnowledgeReviewItem>> {
   if (isDemo) return demo.listKnowledgeReviews();
   return request<Page<KnowledgeReviewItem>>(
-    `/datasets/${segment(datasetId)}/knowledge/reviews?page=1&page_size=50`,
+    `/datasets/${segment(datasetId)}/knowledge/reviews?page=${page}&page_size=${pageSize}`,
   );
 }
 

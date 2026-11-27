@@ -59,6 +59,7 @@ describe("LessonRenderer", () => {
     expect(screen.getByText("等式变形")).toBeInTheDocument();
     expect(screen.getByText("错误做法")).toBeInTheDocument();
     expect(screen.getByText("正确做法")).toBeInTheDocument();
+    expect(screen.getByText("原题 / 情境")).toBeInTheDocument();
     expect(screen.getAllByText("含端点").length).toBeGreaterThan(0);
     expect(screen.getAllByText("不含端点").length).toBeGreaterThan(0);
     expect(screen.getByText(/交集结果/)).toBeInTheDocument();
@@ -73,6 +74,15 @@ describe("LessonRenderer", () => {
     expect(screen.getByText("微课堂内容暂不可读")).toBeInTheDocument();
     expect(screen.getAllByText(/安全回退文本/).length).toBeGreaterThan(0);
     expect(container.querySelector("script")).toBeNull();
+  });
+
+  it("公式按纯文本展示，不把表达式当 HTML", () => {
+    const withMarkup = lesson([
+      { type: "formula", id: "f2", expr: "<img src=x onerror=alert(1)>", caption: "危险表达式" },
+    ]);
+    const { container } = render(<LessonRenderer lesson={withMarkup} />);
+    expect(screen.getByText("<img src=x onerror=alert(1)>")).toBeInTheDocument();
+    expect(container.querySelector("img")).toBeNull();
   });
 
   it("数轴交集结构不符合审核规则时拒绝渲染", () => {

@@ -127,7 +127,7 @@ export function DataPage() {
   });
 
   const rosterQuery = useQuery({
-    queryKey: queryKeys.roster(scopeKey, null),
+    queryKey: queryKeys.roster(scopeKey, null, 1),
     queryFn: () => listStudents(datasetId as string, { page: 1, pageSize: 200 }),
     enabled: Boolean(datasetId) && tab === "exports",
   });

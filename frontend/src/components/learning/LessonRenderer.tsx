@@ -303,8 +303,11 @@ function DerivationBlock({ component }: { component: LessonDerivationComponent }
 function ContrastBlock({ component }: { component: LessonContrastComponent }) {
   return (
     <section>
-      {component.before ? <p className="prose">{component.before}</p> : null}
       <div className="contrastGrid">
+        <div className="contrastCell">
+          <h4 className="paneTitle">原题 / 情境</h4>
+          <p className="prose" style={{ whiteSpace: "pre-wrap" }}>{component.before}</p>
+        </div>
         <div className="contrastCell">
           <h4 className="paneTitle">错误做法</h4>
           <p className="prose" style={{ whiteSpace: "pre-wrap" }}>{component.incorrect}</p>
@@ -432,6 +435,7 @@ function NumberLineBlock({ component }: { component: LessonNumberLineComponent }
 }
 
 function CitationBlock({ component, lesson }: { component: { labels: Array<{ label: string; source_index?: number | null; evidence_index?: number | null }> }; lesson: MicroLessonView }) {
+  const [openIndex, setOpenIndex] = useState<number | null>(null);
   const sources = Array.isArray(lesson.safe_sources) ? lesson.safe_sources : [];
   return (
     <section>
@@ -444,9 +448,22 @@ function CitationBlock({ component, lesson }: { component: { labels: Array<{ lab
             : null;
           return (
             <li key={index} className="small">
-              {label.label}
-              {sourceLabel ? ` · ${sourceLabel}` : ""}
-              {label.evidence_index !== undefined && label.evidence_index !== null ? " · 关联证据" : ""}
+              <button
+                type="button"
+                className="btn btnSm btnGhost"
+                onClick={() => setOpenIndex(openIndex === index ? null : index)}
+              >
+                {label.label}
+                {sourceLabel ? ` · ${sourceLabel}` : ""}
+                {label.evidence_index !== undefined && label.evidence_index !== null ? " · 关联证据" : ""}
+              </button>
+              {openIndex === index ? (
+                <div className="xs muted" style={{ marginTop: 4 }}>
+                  {sourceLabel
+                    ? `来源：${sourceLabel}（服务端已授权；不提供外部链接）`
+                    : "来源：该引用没有可读的授权来源；如需证据请在对应作答或课程页查看。"}
+                </div>
+              ) : null}
             </li>
           );
         })}

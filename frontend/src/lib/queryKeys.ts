@@ -16,7 +16,8 @@ const base = (scope: ScopeKey) => [scope.mode, scope.epoch, scope.datasetId] as 
 export const queryKeys = {
   health: (scope: ScopeKey) => [scope.mode, scope.epoch, "health"] as const,
   datasets: (scope: ScopeKey) => [...base(scope), "dataset", "list"] as const,
-  roster: (scope: ScopeKey, classId: string | null) => [...base(scope), "roster", "list", classId ?? "all"] as const,
+  roster: (scope: ScopeKey, classId: string | null, page: number) =>
+    [...base(scope), "roster", "list", classId ?? "all", "page", page] as const,
   classes: (scope: ScopeKey) => [...base(scope), "class", "list"] as const,
   runs: (scope: ScopeKey) => [...base(scope), "run", "list"] as const,
   classProfile: (scope: ScopeKey, classId: string, nodeId: string | null, analysisVersion: string | null) =>
@@ -38,7 +39,7 @@ export const queryKeys = {
     [...base(scope), "catalog", "version", catalogVersion ?? "current"] as const,
   knowledge: (scope: ScopeKey, knowledgeVersion: string | null) =>
     [...base(scope), "knowledge", "version", knowledgeVersion ?? "current"] as const,
-  knowledgeReviews: (scope: ScopeKey) => [...base(scope), "knowledge", "reviews"] as const,
+  knowledgeReviews: (scope: ScopeKey, page: number) => [...base(scope), "knowledge", "reviews", "page", page] as const,
   knowledgeQuality: (scope: ScopeKey) => [...base(scope), "knowledge", "quality"] as const,
   quality: (scope: ScopeKey) => [...base(scope), "quality", "dataset"] as const,
   analysisQuality: (scope: ScopeKey, runId: string, nodeId: string, classId: string | null) =>

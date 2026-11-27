@@ -1,5 +1,6 @@
 import type { EvidenceRef, Finding } from "../../api/types";
 import { evidenceStatusLabel, performanceLabel } from "../../lib/format";
+import { evidenceRefLabel } from "../../lib/labels";
 
 interface Props {
   findings: Finding[];
@@ -60,7 +61,7 @@ export function FindingsList({ findings, names, onEvidence, emptyText = "本次�
             <div className="row" style={{ marginTop: 8 }}>
               {finding.evidence_refs.slice(0, 3).map((ref) => (
                 <button key={`${ref.kind}:${ref.id}`} type="button" className="btn btnSm btnGhost" onClick={() => onEvidence(ref)}>
-                  查看依据 · {ref.kind === "record" ? "作答记录" : "指标"}
+                  查看依据 · {evidenceRefLabel(ref.kind, ref.id)}
                 </button>
               ))}
             </div>

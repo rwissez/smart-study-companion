@@ -249,4 +249,26 @@ export function issueCodeLabel(code: string): string {
   return "质量检查项";
 }
 
+const METRIC_LABELS: Record<string, string> = {
+  valid_score_ratio: "得分率",
+  full_score_ratio: "满分题比例",
+  observed_response_ratio: "有作答比例",
+  item_coverage: "题库覆盖率",
+  student_observation_rate: "学生观测覆盖率",
+};
+
+/** 依据引用只带 metric_id 时，从 id 尾部解析指标名，避免统一显示成“指标”。 */
+export function evidenceRefLabel(kind: string, id: string): string {
+  if (kind === "record") return "作答记录";
+  if (kind === "curriculum") return "课程知识";
+  if (kind === "material") return "学习材料";
+  if (kind === "derived" || kind === "finding") return "诊断依据";
+  if (kind === "learning_event") return "学习事件";
+  if (kind === "metric") {
+    const matched = Object.keys(METRIC_LABELS).find((key) => id.endsWith(key));
+    return matched ? METRIC_LABELS[matched] : "指标";
+  }
+  return "依据";
+}
+
 
