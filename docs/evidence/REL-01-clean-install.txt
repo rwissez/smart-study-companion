@@ -1,9 +1,9 @@
-clean dir: C:\Users\LEGION\AppData\Local\Temp\zhanzhi-clean-pastujrn\repo
-head: 50722be
+clean dir: C:\Users\LEGION\AppData\Local\Temp\zhanzhi-clean-6ubg7ock\repo
+head: da0e3ac
 uv sync --locked --python 3.12
 uv run alembic upgrade head
 health: ok schema=1.1
-import: confirmed dataset=ds-df003be5506b4835b32f
+import: confirmed dataset=ds-7afd880de4c341ef9dd1
 job: succeeded steps=['succeeded', 'succeeded', 'succeeded', 'succeeded']
 profile: 200 metrics=8
 datasets: 200
@@ -13,5 +13,5 @@ frontend npm run build
   computing gzip size...
   dist/index.html                   0.52 kB │ gzip:   0.33 kB
   dist/assets/index-B7v4fO-9.css   29.22 kB │ gzip:   5.06 kB
-  dist/assets/index-CP6Xo45R.js   402.78 kB │ gzip: 121.71 kB
-  ✓ built in 1.17s
+  dist/assets/index-UegDM4R-.js   402.77 kB │ gzip: 121.71 kB
+  ✓ built in 1.04s
