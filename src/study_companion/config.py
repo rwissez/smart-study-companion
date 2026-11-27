@@ -25,6 +25,7 @@ class Settings(BaseSettings):
     )
 
     app_env: str = "development"
+    #: 本地模拟身份入口；与前端数据来源（VITE_DATA_SOURCE）是两个独立维度。
     demo_mode: bool = True
     database_url: str = "sqlite:///./data/app.sqlite3"
     data_root: Path = Path("./data")
@@ -35,6 +36,18 @@ class Settings(BaseSettings):
     model_name: str = ""
     model_api_key: str = Field(default="", repr=False)
     model_timeout_seconds: int = 45
+
+    #: 后台任务执行器。测试可通过环境变量关闭，改为手动 drain。
+    jobs_worker_enabled: bool = True
+    jobs_idle_seconds: float = 0.8
+
+    #: 上传与导入限制（超过即 413）。
+    max_upload_bytes: int = 32 * 1024 * 1024
+    max_upload_files: int = 12
+    max_import_rows: int = 200_000
+
+    #: 外部模型外发策略：默认未获授权时不发送赛事原文。
+    allow_external_model_input: bool = False
 
     @field_validator("data_root", "output_root", mode="after")
     @classmethod
@@ -53,6 +66,14 @@ class Settings(BaseSettings):
         raw = self.database_url[len(prefix) :]
         path = Path(raw)
         return path if path.is_absolute() else (REPO_ROOT / path).resolve()
+
+    @property
+    def blobs_root(self) -> Path:
+        return self.data_root / "blobs"
+
+    @property
+    def snapshots_root(self) -> Path:
+        return self.data_root / "snapshots"
 
 
 @lru_cache(maxsize=1)

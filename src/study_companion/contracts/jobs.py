@@ -12,6 +12,8 @@ from study_companion.contracts.common import EvidenceRef
 
 class JobScope(Contract):
     dataset_id: str | None = None
+    dataset_family_id: str | None = None
+    family_id: str | None = None
     student_id: str | None = None
     class_id: str | None = None
     run_id: str | None = None

@@ -17,7 +17,14 @@ def test_bootstrap_teacher_gets_only_selection_capabilities(client: TestClient) 
     assert scope["role"] == "teacher"
     assert scope["dataset_id"] is None
     assert scope["bootstrap"] is True
-    assert set(scope["capabilities"]) == {"list_datasets", "import_dataset", "select_dataset"}
+    # 01 §10.3 扩展 capabilities：bootstrap 教师可配置本机模型，但仍不能读学情。
+    assert set(scope["capabilities"]) == {
+        "list_datasets",
+        "import_dataset",
+        "select_dataset",
+        "model_settings",
+    }
+    assert "view_student_analysis" not in scope["capabilities"]
 
 
 def test_bound_teacher_gets_full_teacher_capabilities(client: TestClient, seeded: dict) -> None:
@@ -40,7 +47,16 @@ def test_student_session_requires_dataset_and_self(client: TestClient, seeded: d
     scope = data["scope"]
     assert scope["role"] == "student"
     assert scope["student_id"] == "S01"
-    assert scope["capabilities"] == ["view_own_analysis", "view_own_plan", "chat_own"]
+    # 01 §10.3：学生可提交作答与查看本人事件，但永远不含班级/质量/导出能力。
+    assert scope["capabilities"] == [
+        "view_own_analysis",
+        "view_own_plan",
+        "chat_own",
+        "submit_attempt",
+        "view_own_events",
+    ]
+    for forbidden in ("view_class_analysis", "view_quality", "export_run", "manage_jobs"):
+        assert forbidden not in scope["capabilities"]
 
 
 def test_unknown_student_is_indistinguishable_from_unknown_dataset(

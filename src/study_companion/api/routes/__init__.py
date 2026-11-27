@@ -1,5 +1,6 @@
-"""Route modules, each owning one resource."""
+"""Route modules, each owning one resource.
 
-from study_companion.api.routes import catalog, chat, demo_sessions, health
+这里只声明包，不在导入期再导入子模块，避免与 ``main`` 形成循环依赖。
+"""
 
-__all__ = ["catalog", "chat", "demo_sessions", "health"]
+__all__: list[str] = []

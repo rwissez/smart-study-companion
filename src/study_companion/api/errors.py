@@ -1,11 +1,12 @@
-"""DomainError -> HTTP mapping and the global exception handlers.
+"""DomainError -> HTTP 映射与全局异常处理。
 
-Error bodies never carry a stack trace or a local absolute path (docs/team/08).
+错误体永不携带堆栈、绝对路径、密钥或他人数据（01 §10.1）。
 """
 
 from __future__ import annotations
 
 import logging
+from typing import Any
 
 from fastapi import FastAPI, Request
 from fastapi.exceptions import RequestValidationError
@@ -19,19 +20,35 @@ logger = logging.getLogger(__name__)
 
 STATUS_BY_CODE: dict[str, int] = {
     "VALIDATION_ERROR": 400,
+    "UNAUTHORIZED": 401,
+    "FORBIDDEN": 403,
+    "CONTEXT_MISMATCH": 403,
     "NOT_FOUND": 404,
     "KB_NOT_FOUND": 404,
     "KB_NOT_PUBLISHED": 422,
-    "FORBIDDEN": 403,
-    "CONTEXT_MISMATCH": 403,
     "CONFLICT": 409,
     "REVISION_CONFLICT": 409,
     "RESULT_NOT_READY": 409,
+    "DEPENDENCY_STALE": 409,
+    "IDEMPOTENCY_CONFLICT": 409,
+    "JOB_RETRY_NOT_AVAILABLE": 409,
+    "PLAN_SUSPENDED": 409,
     "UNPROCESSABLE": 422,
     "TASK_UNCLEAR": 422,
     "TASK_NOT_AVAILABLE": 422,
+    "MATERIAL_INVALID": 422,
+    "LESSON_SCHEMA_INVALID": 422,
+    "MATH_INVALID": 422,
+    "ANSWER_PROTECTION": 422,
+    "EXPORT_INCOMPLETE": 422,
+    "EXPORT_SCOPE_INVALID": 422,
+    "UPLOAD_TOO_LARGE": 413,
     "MODEL_NOT_CONFIGURED": 503,
+    "MODEL_TIMEOUT": 503,
+    "MODEL_CAPABILITY_UNAVAILABLE": 503,
+    "MODEL_BAD_RESPONSE": 503,
     "SERVICE_UNAVAILABLE": 503,
+    "EXPORT_ARTIFACT_INVALID": 503,
 }
 
 CODE_BY_STATUS: dict[int, str] = {
@@ -41,6 +58,7 @@ CODE_BY_STATUS: dict[int, str] = {
     404: "NOT_FOUND",
     405: "METHOD_NOT_ALLOWED",
     409: "CONFLICT",
+    413: "UPLOAD_TOO_LARGE",
     422: "UNPROCESSABLE",
     503: "SERVICE_UNAVAILABLE",
 }
@@ -48,6 +66,10 @@ CODE_BY_STATUS: dict[int, str] = {
 
 def status_for(code: str) -> int:
     return STATUS_BY_CODE.get(code, 500)
+
+
+def error_data(exc: DomainError) -> dict[str, Any]:
+    return {"code": exc.code, "message": exc.message, "details": exc.details}
 
 
 def install_error_handlers(app: FastAPI) -> None:
