@@ -28,7 +28,7 @@
 | `uv sync --locked --python 3.12` | 成功，42 resolved / 41 checked，锁文件已更新（新增 openpyxl、python-multipart） |
 | `uv run alembic heads` | `0006_delivery_backfill`（单头） |
 | 空库 / `0002_learning_observations` / `0003_idempotency` 三条升级 | 均成功；`integrity_check=ok`、`foreign_key_check` 空、62 张表 |
-| `uv run pytest -q` | **470 passed, 1 warning**（新增：B 进展 18、B 质量 13、C 规划 14、试验与质量 5、帮助披露 2、Agent 确认 3、导出闭包 7、知识审核 10、介入 11、教师直发 2、教材 37 等） |
+| `uv run pytest -q` | **472 passed, 1 warning**（新增：B 进展 18、B 质量 13、C 规划 14、试验与质量 5、帮助披露 2、Agent 确认 3、导出闭包 7、知识审核 10、介入 11、教师直发 2、教材 37 等） |
 | `_local/http_e2e.py`（真实 HTTP） | 见 E2E-http.txt：导入→A→B→C→学生作答/提示/评分→事件→导出下载全部成功 |
 | `_local/backup_smoke.py` + `tests/test_backup.py` | 备份→校验→恢复通过；篡改后校验失败 |
 | 前端 typecheck / build / vitest / verify-pages | 退出码全 0；6 文件 20 用例通过；49 张截图；控制台 0 错误 |
