@@ -562,7 +562,17 @@ def _textbook_candidates(
     ).all()
     if not files:
         return [], {}
-    topics = list({indicator.topic_id for indicator in catalog.indicators if indicator.topic_id})
+    topics: list[str] = []
+    for topic in catalog.topics:
+        topics.append(topic.topic_id)
+        title = getattr(topic, "title", "") or ""
+        if title:
+            topics.extend(
+                part.strip()
+                for part in title.replace("与", " ").replace("和", " ").split()
+                if len(part.strip()) >= 3
+            )
+    topics = sorted(set(item for item in topics if item))
     indicators = [indicator.description for indicator in catalog.indicators if indicator.description]
     collected: list[Any] = []
     totals = {
@@ -573,6 +583,17 @@ def _textbook_candidates(
         "recovered_pages": 0,
         "unusable_relevant_pages": 0,
     }
+    from study_companion.knowledge.textbook_model import extract_points_with_model
+    from study_companion.model_service import ModelService
+
+    service = ModelService()
+    protected_texts = [
+        material.reference_answer
+        for material in catalog.materials
+        if material.material_type == "question" and material.reference_answer
+    ][:40]
+    model_used = False
+    model_notes: list[str] = []
     for file_row in files:
         try:
             data = blobs.read_bytes(file_row.storage_key)
@@ -582,11 +603,32 @@ def _textbook_candidates(
             stats = page_stats(document, scope)
             for key, value in stats.items():
                 totals[key] = totals.get(key, 0) + int(value)
-            collected.extend(extract_definition_candidates(scope))
+            rule_batch = extract_definition_candidates(scope)
+            model_points: list[Any] = []
+            if service.configured:
+                model_points, model_stats, model_notes = extract_points_with_model(
+                    service=service,
+                    document=document,
+                    scope=scope,
+                    catalog=catalog,
+                    protected_texts=protected_texts,
+                    rule_candidates=rule_batch,
+                )
+                for key, value in (model_stats or {}).items():
+                    totals[f"model_{key}"] = int(value)
+            if model_points:
+                model_used = True
+                collected.extend(model_points)
+            else:
+                collected.extend(rule_batch)
         except DomainError:
             continue
     if not collected:
+        totals["model_notes"] = model_notes  # type: ignore[assignment]
         return [], totals
+    if model_used:
+        totals["model_notes"] = model_notes  # type: ignore[assignment]
+        return collected, totals
     deduped, _ = dedupe_candidates(collected)
     return deduped, totals
 

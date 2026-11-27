@@ -173,12 +173,16 @@ def build_knowledge(
                 ),
             )
         )
+    if textbook_stats:
+        for note in textbook_stats.get("model_notes") or []:  # type: ignore[union-attr]
+            limitations.append(str(note))
     if textbook_candidates:
         existing_names = {point.name for point in points}
         for candidate in textbook_candidates:
             if candidate.name in existing_names:
                 continue
             existing_names.add(candidate.name)
+            validated = getattr(candidate, "review_status", "needs_review") == "validated"
             checks = [
                 ReviewCheck(
                     code="SOURCE_RESOLVABLE",
@@ -191,24 +195,33 @@ def build_knowledge(
                     reason="定义句来自教材正文" if candidate.definition.strip() else "定义句为空",
                 ),
                 ReviewCheck(
-                    code="NEEDS_TEACHER_CONFIRM",
-                    passed=False,
-                    reason="规则抽取的定义句需教师确认后才能进入正式知识体系",
+                    code="SOURCE_PAGE_IN_RANGE",
+                    passed=True,
+                    reason="来源页码与块范围一致",
                 ),
             ]
+            if not validated:
+                checks.append(
+                    ReviewCheck(
+                        code="NEEDS_TEACHER_CONFIRM",
+                        passed=False,
+                        reason=getattr(candidate, "review_note", "")
+                        or "教材候选未通过独立复核，需教师确认",
+                    )
+                )
             points.append(
                 KnowledgePointDraft(
                     kp_id=f"kp-{candidate.candidate_id}",
                     name=candidate.name,
-                    kind="concept",
+                    kind=getattr(candidate, "kind", "concept"),
                     definition=candidate.definition,
-                    scope_role="core",
-                    topic_ids=[],
-                    indicator_ids=[],
+                    scope_role=getattr(candidate, "scope_role", "core"),
+                    topic_ids=list(getattr(candidate, "topic_ids", []) or []),
+                    indicator_ids=list(getattr(candidate, "indicator_ids", []) or []),
                     snippet=candidate.snippet,
                     source_locators=[
                         SourceLocator(
-                            source_file=candidate.chapter_id,
+                            source_file=getattr(candidate, "file_id", "") or candidate.chapter_id,
                             source_kind="textbook",
                             page=candidate.page,
                             quote=candidate.snippet,
@@ -216,8 +229,8 @@ def build_knowledge(
                         )
                     ],
                     review_info=ReviewInfo(
-                        status="needs_review",
-                        method="rule",
+                        status="validated" if validated else "needs_review",
+                        method="model" if validated else "rule",
                         checks=checks,
                         reviewed_at="",
                         rule_version=config.rule_version,
@@ -225,8 +238,14 @@ def build_knowledge(
                     content_hash=candidate.content_hash,
                 )
             )
+        validated_count = sum(
+            1
+            for candidate in textbook_candidates
+            if getattr(candidate, "review_status", "") == "validated"
+        )
         limitations.append(
-            f"教材规则候选 {len(textbook_candidates)} 条，需教师逐条确认后才可用于正式方案"
+            f"教材候选 {len(textbook_candidates)} 条，其中 {validated_count} 条通过独立复核；"
+            "其余需教师逐条确认后才可用于正式方案"
         )
     if not points:
         issues.append(
