@@ -114,6 +114,35 @@ def _draft(*, with_citation: bool = False) -> LessonModelOut:
     )
 
 
+def _generic_draft() -> LessonModelOut:
+    return LessonModelOut.model_validate(
+        {
+            "title": "去括号的符号：先看括号前",
+            "goal": "能按括号前的符号逐项处理",
+            "estimated_minutes": 4,
+            "components": [
+                {
+                    "id": "t",
+                    "type": "text",
+                    "heading": "先看括号前",
+                    "paragraphs": [
+                        "这次没有你在这一点的具体错误记录，下面按通用讲解，先看括号前符号怎么分配。"
+                    ],
+                },
+                {
+                    "id": "c",
+                    "type": "contrast",
+                    "before": "-(3x+5)",
+                    "incorrect": "-3x+5",
+                    "correct": "-3x-5",
+                    "note": "负号要乘到每一项",
+                },
+            ],
+            "fallback_text": "这次没有具体错误记录，按通用讲解处理括号前的负号。",
+        }
+    )
+
+
 def _refs(*extra: EvidenceRef) -> list[EvidenceRef]:
     return [
         EvidenceRef(kind="knowledge_point", id="kp-1", knowledge_version="kn-1"),
@@ -154,6 +183,23 @@ def test_generic_lesson_when_no_error_evidence() -> None:
     assert "通用知识讲解" in context["requirement"]
 
 
+def test_planner_boilerplate_is_not_treated_as_student_error() -> None:
+    """规划器套话含“错误/纠错”，但没有具体错步，不能抬成个性化。"""
+
+    context = build_student_error_context(
+        teaching_points=[
+            "存在具体错误证据，安排纠错；依据 F-STU-D01-N01-K1（证据状态 sufficient）；选用材料 Q001。",
+            "围绕「表示数量关系并代入求值」安排本轮学习",
+        ],
+        evidence_refs=_refs(
+            EvidenceRef(kind="finding", id="F-STU-D01-N01-K1", run_id="run-1", analysis_version="B-1")
+        ),
+    )
+    assert context["personalized"] is False
+    assert context["basis"] == "student_diagnosis"
+    assert "没有具体错步" in context["requirement"]
+
+
 def test_specific_error_enters_write_content_payload() -> None:
     service = RecordingService(write=_draft(), review=_pass_review())
     draft, limitations = generate_with_model(
@@ -178,7 +224,7 @@ def test_specific_error_enters_write_content_payload() -> None:
 
 
 def test_no_error_evidence_marks_generic_lesson() -> None:
-    service = RecordingService(write=_draft(), review=_pass_review())
+    service = RecordingService(write=_generic_draft(), review=_pass_review())
     draft, limitations = generate_with_model(
         service=service,  # type: ignore[arg-type]
         title="去括号的符号",
@@ -193,6 +239,41 @@ def test_no_error_evidence_marks_generic_lesson() -> None:
     assert context["personalized"] is False
     assert "通用知识讲解" in context["requirement"]
     assert any("通用知识讲解" in item for item in limitations)
+
+
+def test_generic_model_draft_claiming_personal_error_is_rejected() -> None:
+    service = RecordingService(write=_draft(), review=_pass_review())
+    draft, limitations = generate_with_model(
+        service=service,  # type: ignore[arg-type]
+        title="去括号的符号",
+        goal="会变号",
+        kp_id="kp-1",
+        evidence_refs=_refs(),
+        teaching_points=["负号分配到括号内每一项的知识点定义"],
+        protected_texts=[],
+    )
+    assert draft is None
+    assert limitations and "没有具体错误证据" in limitations[0]
+
+
+def test_model_gets_material_ids_and_diagnosis_scope() -> None:
+    service = RecordingService(write=_generic_draft(), review=_pass_review())
+    draft, _ = generate_with_model(
+        service=service,  # type: ignore[arg-type]
+        title="去括号的符号",
+        goal="会变号",
+        kp_id="kp-1",
+        evidence_refs=_refs(),
+        teaching_points=["学生具体表现：得分率0.20（1/5）（错因类型：transfer_difficulty）"],
+        protected_texts=[],
+        material_ids=["Q001", "Q007"],
+        student_id="D01",
+    )
+    assert isinstance(draft, LessonDraft)
+    assert service.write_payload["material_ids"] == ["Q001", "Q007"]
+    context = service.write_payload["student_error_context"]
+    assert context["basis"] == "student_diagnosis"
+    assert context["student_token"] == "D01"
 
 
 # --------------------------------------------------------------------------- #

@@ -102,7 +102,7 @@ def test_review_rejection_falls_back_to_rule() -> None:
         goal="会变号",
         kp_id="kp-1",
         evidence_refs=_refs(),
-        teaching_points=["负号分配到每一项"],
+        teaching_points=["负号分配到每一项", "上次去括号时漏乘了括号里的第二项"],
         protected_texts=[],
     )
     assert draft is None

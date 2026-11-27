@@ -2,8 +2,10 @@
 
 三个质量底线：
 
-* **个性化依据**：输入带 ``student_error_context``——该生这次的具体错误、错因和
-  教师说明。有错误证据时必须围绕这一步讲；没有证据时明确标为通用知识讲解。
+* **个性化依据**：输入带 ``student_error_context``——该生这次的具体错误、错因、
+  教师说明和本轮材料编号。区分 ``student_error``（具体错步）、
+  ``student_diagnosis``（只有表现/错因类型）和 ``generic_knowledge``（通用讲解）；
+  后两种不得写成个人错因。
 * **可核验引用**：``citation`` 标签由程序从输入 ``EvidenceRef`` 生成，只写知识点
   编号/版本、诊断编号/分析版本或材料页标识；不接受模型自拟页码，不生成外部链接。
 * **fail-closed 复核**：复核调用失败、结果不完整或任一项不是 ``pass``，一律退回
@@ -11,8 +13,9 @@
 
 ``pipeline.attach_lessons`` 传入的 ``teaching_points`` 顺序为
 ``[知识依据定义, 学生引导语, 预期结果, 方案理由, 教师说明]``。第 0 项是知识点
-定义，其余项才可能携带具体错误证据；据此派生个性化上下文。未来调用方也可直接
-传结构化的 ``student_error_context``。
+定义，其余项才可能携带具体错误证据；规划器会把 B 的表现和错因类型写进方案理由，
+供这里区分诊断层级。未来调用方也可直接传结构化的 ``student_error_context``、
+``material_ids`` 和 ``student_id``。
 """
 
 from __future__ import annotations
@@ -30,8 +33,16 @@ from study_companion.contracts import (
     LessonDraft,
 )
 from study_companion.model_service import ModelService, ModelTaskRequest
+from study_companion.recommendation.lesson import (
+    DIAGNOSIS_REQUIREMENT,
+    GENERIC_REQUIREMENT,
+    PERSONALIZED_REQUIREMENT,
+    build_student_error_context,
+    is_diagnosis_only_lesson,
+    is_generic_lesson,
+)
 
-PROMPT_VERSION = "1.1"
+PROMPT_VERSION = "1.2"
 MAX_NOTE_CHARS = 300
 MAX_CITATION_LABELS = 6
 
@@ -43,31 +54,6 @@ REQUIRED_REVIEW_CHECKS: tuple[str, ...] = (
     "lesson_sources",
     "lesson_schema",
     "lesson_answer_guard",
-)
-
-#: 教学要点里出现这些词，视为带具体错误证据，而不是知识点定义复述。
-ERROR_MARKERS: tuple[str, ...] = (
-    "错误",
-    "错因",
-    "做错",
-    "写错",
-    "出错",
-    "错题",
-    "纠错",
-    "漏乘",
-    "漏了",
-    "扣分",
-    "失分",
-    "混淆",
-)
-
-GENERIC_REQUIREMENT = (
-    "输入没有该生的具体错误证据，本次是通用知识讲解；正文第一段必须明确写出"
-    "「这次没有你在这一点的具体错误记录，先按通用讲解」，不得声称针对个人错因。"
-)
-PERSONALIZED_REQUIREMENT = (
-    "正文第一段必须具体复述该生这次的错误表现和错因，并说明本课针对哪一步；"
-    "不得只复述知识点定义，也不得把不确定的错因说得比输入更严重。"
 )
 
 #: 受限中间表达式的允许字符（04 §6.3 MathString）：数字、x/y/a/b、括号与运算符。
@@ -100,63 +86,23 @@ def _clean(text: str | None, limit: int = MAX_NOTE_CHARS) -> str:
     return (text or "").strip()[:limit]
 
 
-def _looks_like_error_note(text: str) -> bool:
-    return any(marker in text for marker in ERROR_MARKERS)
-
-
-def build_student_error_context(
-    *,
-    teaching_points: Sequence[str],
-    student_error: str | None = None,
-    error_cause: str | None = None,
-    teacher_reason: str | None = None,
-    evidence_refs: Sequence[EvidenceRef] = (),
-    knowledge_definition: str | None = None,
-) -> dict[str, Any]:
-    """构造个性化依据。没有具体错误证据时返回通用讲解标记，不冒充个性化。"""
-
-    notes = [_clean(item) for item in teaching_points if _clean(item)]
-    definition = _clean(knowledge_definition)
-    if definition:
-        candidates = [note for note in notes if note != definition]
-    elif notes and not _looks_like_error_note(notes[0]):
-        definition = notes[0]
-        candidates = notes[1:]
-    else:
-        candidates = list(notes)
-    observed = [note for note in candidates if _looks_like_error_note(note)][:4]
-    teacher_note = _clean(teacher_reason) or next(
-        (note for note in candidates if "依据" in note or "教师" in note), ""
-    )
-    has_error_evidence = any(
-        ref.kind in {"finding", "attempt", "grade", "rubric_point"} for ref in evidence_refs
-    )
-    personalized = bool(
-        _clean(student_error) or _clean(error_cause) or observed or has_error_evidence
-    )
-    return {
-        "personalized": personalized,
-        "basis": "student_error" if personalized else "generic_knowledge",
-        "knowledge_definition": definition,
-        "student_error": _clean(student_error),
-        "error_cause": _clean(error_cause),
-        "teacher_reason": teacher_note,
-        "observed_error_notes": observed,
-        "requirement": PERSONALIZED_REQUIREMENT if personalized else GENERIC_REQUIREMENT,
-    }
-
-
 def _normalize_error_context(
     context: dict[str, Any] | None,
     *,
     teaching_points,
     evidence_refs,
     knowledge_definition: str = "",
+    material_ids: Sequence[str] = (),
+    student_id: str | None = None,
 ) -> dict[str, Any]:
+    """把显式上下文与教学要点合并；显式的通用/仅诊断标记优先，不被套话抬成个性化。"""
+
     merged = build_student_error_context(
         teaching_points=teaching_points,
         evidence_refs=evidence_refs,
         knowledge_definition=knowledge_definition,
+        material_ids=material_ids,
+        student_id=student_id,
     )
     if not context:
         return merged
@@ -167,10 +113,47 @@ def _normalize_error_context(
     notes = context.get("observed_error_notes")
     if isinstance(notes, list) and notes:
         merged["observed_error_notes"] = [_clean(str(item)) for item in notes if _clean(str(item))][:4]
-    if context.get("personalized") is True:
+    performance = context.get("observed_performance_notes")
+    if isinstance(performance, list) and performance:
+        merged["observed_performance_notes"] = [
+            _clean(str(item)) for item in performance if _clean(str(item))
+        ][:4]
+    extra_materials = context.get("material_ids")
+    if isinstance(extra_materials, list):
+        merged["material_ids"] = list(
+            dict.fromkeys([*merged.get("material_ids", []), *(str(item) for item in extra_materials)])
+        )
+    explicit_personalized = context.get("personalized")
+    explicit_basis = str(context.get("basis") or "")
+    if explicit_personalized is True:
         merged["personalized"] = True
         merged["basis"] = "student_error"
         merged["requirement"] = PERSONALIZED_REQUIREMENT
+    elif explicit_personalized is False or explicit_basis in {"generic_knowledge", "student_diagnosis"}:
+        basis = explicit_basis or ("student_diagnosis" if merged["basis"] != "generic_knowledge" else "generic_knowledge")
+        merged["personalized"] = False
+        merged["basis"] = basis
+        merged["requirement"] = (
+            DIAGNOSIS_REQUIREMENT if basis == "student_diagnosis" else GENERIC_REQUIREMENT
+        )
+    elif merged.get("student_error") or merged.get("observed_error_notes"):
+        merged["personalized"] = True
+        merged["basis"] = "student_error"
+        merged["requirement"] = PERSONALIZED_REQUIREMENT
+    elif merged.get("error_cause") or merged.get("observed_performance_notes"):
+        merged["personalized"] = False
+        merged["basis"] = "student_diagnosis"
+        merged["requirement"] = DIAGNOSIS_REQUIREMENT
+    if merged.get("basis") == "student_error" and not (
+        merged.get("student_error") or merged.get("observed_error_notes")
+    ):
+        if merged.get("error_cause") or merged.get("observed_performance_notes"):
+            merged["basis"] = "student_diagnosis"
+            merged["requirement"] = DIAGNOSIS_REQUIREMENT
+        else:
+            merged["basis"] = "generic_knowledge"
+            merged["requirement"] = GENERIC_REQUIREMENT
+        merged["personalized"] = False
     return merged
 
 
@@ -345,14 +328,30 @@ def generate_with_model(
     teaching_points: list[str],
     protected_texts: list[str],
     student_error_context: dict[str, Any] | None = None,
+    student_error: str | None = None,
+    error_cause: str | None = None,
+    material_ids: Sequence[str] = (),
+    student_id: str | None = None,
 ) -> tuple[LessonDraft | None, list[str]]:
-    """返回 (草稿, 限制说明)。失败时草稿为 None，由调用方退回规则模板。"""
+    """返回 (草稿, 限制说明)。失败时草稿为 None，由调用方退回规则模板。
 
+    ``student_error_context`` 是模型的主要个性化依据；没有具体错误时按
+    ``student_diagnosis`` 或 ``generic_knowledge`` 明确记录，不接受模型把通用
+    讲解写成个人错因。
+    """
+
+    merged_context = dict(student_error_context or {})
+    if _clean(student_error):
+        merged_context["student_error"] = _clean(student_error)
+    if _clean(error_cause):
+        merged_context["error_cause"] = _clean(error_cause)
     error_context = _normalize_error_context(
-        student_error_context,
+        merged_context or None,
         teaching_points=teaching_points,
         evidence_refs=evidence_refs,
         knowledge_definition=goal,
+        material_ids=material_ids,
+        student_id=student_id,
     )
     labels = build_citation_labels(evidence_refs, lesson_title=title)
 
@@ -366,6 +365,7 @@ def generate_with_model(
             "knowledge_point_id": kp_id,
             "student_error_context": error_context,
             "evidence_labels": [label.model_dump(mode="json") for label in labels],
+            "material_ids": list(error_context.get("material_ids") or [])[:8],
             "teaching_points": [_clean(item) for item in teaching_points if item][:6],
             "protected_material_contents": [_clean(item) for item in protected_texts][:12],
             "citation_policy": (
@@ -401,6 +401,18 @@ def generate_with_model(
             "模型草稿数学表达式硬校验未通过（" + "；".join(math_errors)[:200] + "），本轮使用规则模板"
         ]
 
+    basis = error_context.get("basis")
+    if basis == "generic_knowledge" and not is_generic_lesson(draft):
+        return None, [
+            "模型草稿没有具体错误证据却写成个人错因，已退回规则模板"
+        ]
+    if basis == "student_diagnosis" and not (
+        is_diagnosis_only_lesson(draft) or is_generic_lesson(draft)
+    ):
+        return None, [
+            "模型草稿只有诊断表现却写成具体错步，已退回规则模板"
+        ]
+
     review_request = ModelTaskRequest(
         task_key="c.review_lesson.v1",
         prompt_version=PROMPT_VERSION,
@@ -410,6 +422,7 @@ def generate_with_model(
             "knowledge_point_id": kp_id,
             "student_error_context": error_context,
             "evidence_labels": [label.model_dump(mode="json") for label in labels],
+            "material_ids": list(error_context.get("material_ids") or [])[:8],
             "required_checks": list(REQUIRED_REVIEW_CHECKS),
             "protected_material_contents": [_clean(item) for item in protected_texts][:12],
         },
@@ -444,6 +457,10 @@ def generate_with_model(
         draft, evidence_refs=evidence_refs, lesson_title=title
     )
     limitations = list(citation_limitations)
-    if not error_context.get("personalized"):
+    if basis == "generic_knowledge":
         limitations.append("没有该生的具体错误证据，本次微课堂为通用知识讲解")
+    elif basis == "student_diagnosis":
+        limitations.append(
+            "只有该生的薄弱表现或错因类型，没有具体错步；本次按诊断范围讲解，未编造具体错误"
+        )
     return cited, limitations

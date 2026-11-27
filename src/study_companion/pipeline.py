@@ -1303,6 +1303,7 @@ def handle_import_process(ctx: JobContext) -> dict[str, Any]:
                 job_id=ctx.job.id,
                 student_uid=student.student_uid,
                 catalog=catalog,
+                student_result=student_result,
             )
             if with_lessons:
                 published["plan_version"] = with_lessons["plan_version"]
@@ -1366,6 +1367,7 @@ def attach_lessons(
     student_uid: str | None,
     catalog: Any | None = None,
     replace_existing: bool = False,
+    student_result: Any | None = None,
 ) -> dict[str, Any] | None:
     """为方案中的任务组补充个性化微课堂，作为父方案的子修订发布。
 
@@ -1467,6 +1469,28 @@ def attach_lessons(
                 rec.reason or "",
                 getattr(group, "teacher_reason", "") or "",
             ]
+            student_error = None
+            error_cause = None
+            if student_result is not None:
+                for finding in getattr(student_result, "findings", []) or []:
+                    if getattr(finding, "kp_id", None) not in {None, kp_id}:
+                        continue
+                    if getattr(finding, "indicator_id", None) not in set(point.get("indicator_ids") or []):
+                        continue
+                    if getattr(finding, "description", ""):
+                        teaching_points.append(finding.description)
+                    if getattr(finding, "error_types", None):
+                        error_cause = "、".join(finding.error_types)
+                    for detail in getattr(finding, "diagnostic_details", []) or []:
+                        summary = getattr(detail, "summary", None)
+                        if summary:
+                            teaching_points.append(summary)
+                            student_error = summary
+            material_ids = [
+                activity.material_id
+                for activity in activities
+                if getattr(activity, "material_id", None)
+            ]
             protected_texts: list[str] = []
             if catalog is not None:
                 protected_texts = [
@@ -1488,6 +1512,10 @@ def attach_lessons(
                     evidence_refs=[EvidenceRef(**item) for item in evidence],
                     teaching_points=teaching_points,
                     protected_texts=protected_texts,
+                    student_error=student_error,
+                    error_cause=error_cause,
+                    material_ids=material_ids,
+                    student_id=student_id,
                 )
             draft = model_draft or lesson_service.build_rule_lesson(
                 title=title,
@@ -1496,6 +1524,10 @@ def attach_lessons(
                 evidence_refs=[EvidenceRef(**item) for item in evidence],
                 teaching_points=teaching_points,
                 fallback_text=point.get("definition", ""),
+                student_error=student_error,
+                error_cause=error_cause,
+                material_ids=material_ids,
+                student_id=student_id,
             )
             issues = lesson_service.validate_lesson(draft, protected_texts=protected_texts)
             review = lesson_service.review_info_for(
@@ -2041,6 +2073,24 @@ def handle_lesson_regenerate(ctx: JobContext) -> dict[str, Any]:
         raise DomainError("RESULT_NOT_READY", "该数据集缺少课程目录")
     catalog = load_catalog(db, catalog_version, dataset_id)
     student = db.get(models.Student, (dataset_id, student_id))
+    student_result = None
+    analysis_key = repo.FormalKey(
+        family_id=dataset.family_id,
+        dataset_id=dataset_id,
+        kind="student_analysis",
+        node_key=node_id,
+        target_key=student_id,
+    )
+    analysis_head = repo.read_head(db, analysis_key)
+    if analysis_head is not None and analysis_head.version_id:
+        analysis_row = db.get(models.Version, analysis_head.version_id)
+        if analysis_row is not None and analysis_row.payload_json:
+            try:
+                from study_companion.contracts import StudentResult
+
+                student_result = StudentResult.model_validate(analysis_row.payload_json)
+            except Exception:
+                student_result = None
     upsert_step(db, ctx.job, "lessons", label="重新生成微课堂", status="running")
     db.commit()
     result = attach_lessons(
@@ -2055,6 +2105,7 @@ def handle_lesson_regenerate(ctx: JobContext) -> dict[str, Any]:
         student_uid=student.student_uid if student else None,
         catalog=catalog,
         replace_existing=True,
+        student_result=student_result,
     )
     if result is None:
         raise DomainError("RESULT_NOT_READY", "没有可生成微课堂的知识依据")

@@ -479,7 +479,13 @@ def _student_intro(need: TeachingNeed, kp_name: str, count: int, strategy: str) 
     return openings.get(strategy, openings["consolidation"])
 
 
-def _teacher_reason(need: TeachingNeed, strategy: str, materials: list[str]) -> str:
+def _teacher_reason(
+    need: TeachingNeed,
+    strategy: str,
+    materials: list[str],
+    *,
+    findings: list[Any] | None = None,
+) -> str:
     strategy_text = {
         "collect_evidence": "证据不足，先补诊断性证据",
         "prerequisite_support": "必要前置薄弱，先补前置",
@@ -488,11 +494,22 @@ def _teacher_reason(need: TeachingNeed, strategy: str, materials: list[str]) -> 
         "transfer": "已掌握，安排迁移应用",
         "teacher_intervention": "需要教师介入",
     }[strategy]
-    findings = "、".join(need.finding_ids) or "无具体诊断编号"
-    return (
-        f"{strategy_text}；依据 {findings}（证据状态 {need.evidence_status}）；"
+    findings_text = "、".join(need.finding_ids) or "无具体诊断编号"
+    reason = (
+        f"{strategy_text}；依据 {findings_text}（证据状态 {need.evidence_status}）；"
         f"选用材料 {'、'.join(materials) if materials else '无'}。"
     )
+    # 把 B 已核验的表现与错因类型带进教师理由，供微课堂区分“具体错误”和
+    # “只有整体表现”；不把分数改写成学生没出现过的具体错步。
+    details: list[str] = []
+    for finding in findings or []:
+        description = (getattr(finding, "description", "") or "").strip().replace("；", "，")[:160]
+        causes = "、".join(getattr(finding, "error_types", []) or []) or "未记录"
+        if description:
+            details.append(f"{description}（错因类型：{causes}）")
+    if details:
+        reason += "；学生具体表现：" + "；".join(details)[:220]
+    return reason
 
 
 def build_plan(inputs: PlannerInputs) -> PlannerResult:
@@ -503,6 +520,7 @@ def build_plan(inputs: PlannerInputs) -> PlannerResult:
     needs = rank_needs(aggregate_needs(inputs), inputs)
     payload = inputs.knowledge_payload
     points = _points(payload)
+    findings_by_id = {item.finding_id: item for item in inputs.student_result.findings}
 
     intervention = [item for item in needs if item.primary_strategy == "teacher_intervention"]
     roots = [item for item in needs if item.primary_strategy != "teacher_intervention"]
@@ -641,7 +659,12 @@ def build_plan(inputs: PlannerInputs) -> PlannerResult:
                     knowledge_ids=[need.kp_id] if need.kp_id else [],
                 )
             )
-        reason = _teacher_reason(need, strategy, [item.material.material_id for item in selected])
+        reason = _teacher_reason(
+            need,
+            strategy,
+            [item.material.material_id for item in selected],
+            findings=[findings_by_id[item] for item in need.finding_ids if item in findings_by_id],
+        )
         recommendations.append(
             Recommendation(
                 recommendation_id=f"rec-{need.target_key}",
