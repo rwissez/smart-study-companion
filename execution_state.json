@@ -3,7 +3,7 @@
   "project": "湛知（smart-study-companion）最终整合开发",
   "docs_commit": "1d6db6fc45e7f7d785f194a73b83b6bd5f67cefb",
   "base_sha": "49587a15430e4674a1a699e108c91e27b7a537b6",
-  "current_sha": "HEAD",
+  "current_sha": "ba048c9",
   "branch": "codex/final-integration",
   "remote": "https://github.com/rwissez/smart-study-companion.git",
   "environment": {
@@ -26,7 +26,9 @@
           "test_mode": "synthetic",
           "command": "uv sync --locked --python 3.12 ; uv run pytest -q",
           "detail": "42 resolved / 41 checked；基线 322 passed",
-          "evidence": ["docs/evidence/ENV-01-baseline.md"]
+          "evidence": [
+            "docs/evidence/ENV-01-baseline.md"
+          ]
         }
       ]
     },
@@ -34,106 +36,321 @@
       "id": "P1",
       "title": "公共基础：契约、迁移、权限、任务、导入",
       "status": "passed",
-      "deps": ["P0"],
+      "deps": [
+        "P0"
+      ],
       "gates": [
-        {"id": "API-01", "result": "partial", "detail": "契约 1.1 已落地；OpenAPI→TS 自动生成未接入"},
-        {"id": "API-02", "result": "passed", "test_mode": "synthetic", "evidence": ["tests/test_pipeline_e2e.py"]},
-        {"id": "API-03", "result": "partial", "detail": "preview/publish 与旧 publish 分流已实现；缺专用用例"},
-        {"id": "API-04", "result": "partial", "detail": "同键重放已测；并发版本冲突未测"},
-        {"id": "DB-01", "result": "passed", "test_mode": "synthetic", "detail": "三条升级路径单 head、完整性 ok"},
-        {"id": "DB-02", "result": "passed", "test_mode": "synthetic"},
-        {"id": "DB-04", "result": "partial", "detail": "CAS 发布已实现；并发注入未测"},
-        {"id": "SEC-01", "result": "passed", "test_mode": "synthetic", "evidence": ["tests/test_pipeline_e2e.py", "tests/test_exports.py"]},
-        {"id": "JOB-01", "result": "passed", "test_mode": "synthetic"},
-        {"id": "JOB-02", "result": "partial", "detail": "拒绝路径已测；一次成功重试未测"}
+        {
+          "id": "API-01",
+          "result": "partial",
+          "detail": "契约 1.1 已落地；OpenAPI→TS 自动生成未接入"
+        },
+        {
+          "id": "API-02",
+          "result": "passed",
+          "test_mode": "synthetic",
+          "evidence": [
+            "tests/test_pipeline_e2e.py"
+          ]
+        },
+        {
+          "id": "API-03",
+          "result": "partial",
+          "detail": "preview/publish 与旧 publish 分流已实现；缺专用用例"
+        },
+        {
+          "id": "API-04",
+          "result": "partial",
+          "detail": "同键重放已测；并发版本冲突未测"
+        },
+        {
+          "id": "DB-01",
+          "result": "passed",
+          "test_mode": "synthetic",
+          "detail": "三条升级路径单 head、完整性 ok"
+        },
+        {
+          "id": "DB-02",
+          "result": "passed",
+          "test_mode": "synthetic"
+        },
+        {
+          "id": "DB-04",
+          "result": "partial",
+          "detail": "CAS 发布已实现；并发注入未测"
+        },
+        {
+          "id": "SEC-01",
+          "result": "passed",
+          "test_mode": "synthetic",
+          "evidence": [
+            "tests/test_pipeline_e2e.py",
+            "tests/test_exports.py"
+          ]
+        },
+        {
+          "id": "JOB-01",
+          "result": "passed",
+          "test_mode": "synthetic"
+        },
+        {
+          "id": "JOB-02",
+          "result": "partial",
+          "detail": "拒绝路径已测；一次成功重试未测"
+        }
       ]
     },
     {
       "id": "P2",
       "title": "A 模块：课程知识体系",
       "status": "partial",
-      "deps": ["P1"],
+      "deps": [
+        "P1"
+      ],
       "gates": [
-        {"id": "A-01", "result": "not_run", "detail": "需要受控教材 PDF 与模型/OCR"},
-        {"id": "A-02", "result": "partial", "detail": "规则关系与环隔离已实现；模型复核未接"},
-        {"id": "A-03", "result": "partial", "detail": "版本不可变与精确读取已实现；影响集未实现"}
+        {
+          "id": "A-01",
+          "result": "not_run",
+          "detail": "需要受控教材 PDF 与模型/OCR"
+        },
+        {
+          "id": "A-02",
+          "result": "partial",
+          "detail": "规则关系与环隔离已实现；模型复核未接"
+        },
+        {
+          "id": "A-03",
+          "result": "partial",
+          "detail": "版本不可变与精确读取已实现；影响集未实现"
+        }
       ]
     },
     {
       "id": "P3",
       "title": "B 模块：学情分析、评分、比较、局部更新",
       "status": "passed_rule_path",
-      "deps": ["P1"],
+      "deps": [
+        "P1"
+      ],
       "gates": [
-        {"id": "B-01", "result": "passed", "test_mode": "synthetic", "evidence": ["tests/test_pipeline_e2e.py"]},
-        {"id": "B-02", "result": "partial", "detail": "规则评分已测；解答题模型评分未验"},
-        {"id": "B-03", "result": "partial", "detail": "班级画像与比较已测；进展阈值未标定"},
-        {"id": "B-04", "result": "partial", "evidence": ["tests/test_learning_loop.py"]},
-        {"id": "DB-03", "result": "partial"}
+        {
+          "id": "B-01",
+          "result": "passed",
+          "test_mode": "synthetic",
+          "evidence": [
+            "tests/test_pipeline_e2e.py"
+          ]
+        },
+        {
+          "id": "B-02",
+          "result": "partial",
+          "detail": "规则评分已测；解答题模型评分未验"
+        },
+        {
+          "id": "B-03",
+          "result": "partial",
+          "detail": "班级画像与比较已测；进展阈值未标定"
+        },
+        {
+          "id": "B-04",
+          "result": "partial",
+          "evidence": [
+            "tests/test_learning_loop.py"
+          ]
+        },
+        {
+          "id": "DB-03",
+          "result": "partial"
+        }
       ]
     },
     {
       "id": "P4",
       "title": "C 模块：六策略、审核、发布、微课堂",
       "status": "partial",
-      "deps": ["P2", "P3"],
+      "deps": [
+        "P2",
+        "P3"
+      ],
       "gates": [
-        {"id": "C-01", "result": "partial", "detail": "六策略标签与任务组已实现；04 §4.2 评分权重表未实现"},
-        {"id": "C-02", "result": "partial", "detail": "system_auto 与 teacher_direct 已实现；agent_revision 未接"},
-        {"id": "C-03", "result": "partial", "detail": "适用性复查已实现；完整策略刹车未实现"},
-        {"id": "C-04", "result": "partial", "detail": "微课堂六组件 schema、规则模板与完成事件已实现"},
-        {"id": "SEC-02", "result": "partial", "detail": "HTTP 材料裁剪已测；聊天/微课堂泄答未测"}
+        {
+          "id": "C-01",
+          "result": "partial",
+          "detail": "六策略标签与任务组已实现；04 §4.2 评分权重表未实现"
+        },
+        {
+          "id": "C-02",
+          "result": "partial",
+          "detail": "system_auto 与 teacher_direct 已实现；agent_revision 未接"
+        },
+        {
+          "id": "C-03",
+          "result": "partial",
+          "detail": "适用性复查已实现；完整策略刹车未实现"
+        },
+        {
+          "id": "C-04",
+          "result": "partial",
+          "detail": "微课堂六组件 schema、规则模板与完成事件已实现"
+        },
+        {
+          "id": "SEC-02",
+          "result": "partial",
+          "detail": "HTTP 材料裁剪已测；聊天/微课堂泄答未测"
+        }
       ]
     },
     {
       "id": "P5",
       "title": "Agent：受控工具、对话、降级",
       "status": "partial",
-      "deps": ["P4"],
+      "deps": [
+        "P4"
+      ],
       "gates": [
-        {"id": "AG-01", "result": "not_run", "detail": "需真实模型"},
-        {"id": "AG-02", "result": "not_run"},
-        {"id": "AG-03", "result": "partial", "detail": "结构校验与超时由 ModelService 统一实施；真实模型异常矩阵未跑"},
-        {"id": "AG-04", "result": "not_run"},
-        {"id": "JOB-03", "result": "partial", "evidence": ["tests/test_learning_loop.py"]}
+        {
+          "id": "AG-01",
+          "result": "not_run",
+          "detail": "需真实模型"
+        },
+        {
+          "id": "AG-02",
+          "result": "not_run"
+        },
+        {
+          "id": "AG-03",
+          "result": "partial",
+          "detail": "结构校验与超时由 ModelService 统一实施；真实模型异常矩阵未跑"
+        },
+        {
+          "id": "AG-04",
+          "result": "not_run"
+        },
+        {
+          "id": "JOB-03",
+          "result": "partial",
+          "evidence": [
+            "tests/test_learning_loop.py"
+          ]
+        }
       ]
     },
     {
       "id": "P6",
       "title": "Web：教师四页、学生三页、真实接口",
       "status": "in_progress",
-      "deps": ["P5"],
+      "deps": [
+        "P5"
+      ],
       "gates": [
-        {"id": "UI-01", "result": "partial", "detail": "1440 截图已产出；待补 1920/1366 与学生端"},
-        {"id": "UI-02", "result": "partial"},
-        {"id": "UI-03", "result": "partial"},
-        {"id": "UI-04", "result": "partial", "detail": "微课堂六组件渲染器待补"},
-        {"id": "UI-05", "result": "partial"}
+        {
+          "id": "UI-01",
+          "result": "partial",
+          "detail": "1440 截图已产出；待补 1920/1366 与学生端"
+        },
+        {
+          "id": "UI-02",
+          "result": "partial"
+        },
+        {
+          "id": "UI-03",
+          "result": "partial"
+        },
+        {
+          "id": "UI-04",
+          "result": "partial",
+          "detail": "微课堂六组件渲染器待补"
+        },
+        {
+          "id": "UI-05",
+          "result": "partial"
+        }
       ]
     },
     {
       "id": "P7",
       "title": "整合与交付",
       "status": "partial",
-      "deps": ["P6"],
+      "deps": [
+        "P6"
+      ],
       "gates": [
-        {"id": "ZIP-01", "result": "passed", "test_mode": "synthetic", "evidence": ["tests/test_exports.py"]},
-        {"id": "ZIP-02", "result": "partial"},
-        {"id": "ZIP-03", "result": "not_run", "detail": "需赛方授权数据"},
-        {"id": "RUN-01", "result": "partial", "detail": "HTTP 闭环通过；进程重启未实测"},
-        {"id": "RUN-02", "result": "passed", "test_mode": "synthetic", "evidence": ["tests/test_backup.py"]},
-        {"id": "RUN-03", "result": "partial"},
-        {"id": "E2E-01", "result": "partial", "evidence": ["docs/evidence/E2E-http.txt"]},
-        {"id": "E2E-02", "result": "not_run"},
-        {"id": "E2E-03", "result": "partial", "evidence": ["docs/evidence/E2E-http.txt", "tests/test_learning_loop.py"]},
-        {"id": "E2E-04", "result": "not_run"},
-        {"id": "PERF-01", "result": "not_run"},
-        {"id": "REL-01", "result": "partial"},
-        {"id": "REL-02", "result": "not_run"}
+        {
+          "id": "ZIP-01",
+          "result": "passed",
+          "test_mode": "synthetic",
+          "evidence": [
+            "tests/test_exports.py"
+          ]
+        },
+        {
+          "id": "ZIP-02",
+          "result": "partial"
+        },
+        {
+          "id": "ZIP-03",
+          "result": "not_run",
+          "detail": "需赛方授权数据"
+        },
+        {
+          "id": "RUN-01",
+          "result": "partial",
+          "detail": "HTTP 闭环通过；进程重启未实测"
+        },
+        {
+          "id": "RUN-02",
+          "result": "passed",
+          "test_mode": "synthetic",
+          "evidence": [
+            "tests/test_backup.py"
+          ]
+        },
+        {
+          "id": "RUN-03",
+          "result": "partial"
+        },
+        {
+          "id": "E2E-01",
+          "result": "partial",
+          "evidence": [
+            "docs/evidence/E2E-http.txt"
+          ]
+        },
+        {
+          "id": "E2E-02",
+          "result": "not_run"
+        },
+        {
+          "id": "E2E-03",
+          "result": "partial",
+          "evidence": [
+            "docs/evidence/E2E-http.txt",
+            "tests/test_learning_loop.py"
+          ]
+        },
+        {
+          "id": "E2E-04",
+          "result": "not_run"
+        },
+        {
+          "id": "PERF-01",
+          "result": "not_run"
+        },
+        {
+          "id": "REL-01",
+          "result": "partial"
+        },
+        {
+          "id": "REL-02",
+          "result": "not_run"
+        }
       ]
     }
   ],
-  "next_ready": ["P6", "P7"],
+  "next_ready": [
+    "P6",
+    "P7"
+  ],
   "blockers": [
     {
       "id": "B-REAL-MODEL",
@@ -148,5 +365,7 @@
       "detail": "工作区不含赛方原始数据包；同一代码路径已用合成六表验证。"
     }
   ],
-  "updated_at": "2026-11-27T14:10:00+08:00"
+  "updated_at": "2026-11-27T14:10:00+08:00",
+  "last_update": "2026-11-27",
+  "backend_tests": "462 passed (uv run pytest -q)"
 }
