@@ -982,10 +982,11 @@ def validate_lesson(draft: LessonDraft, *, protected_texts: list[str] | None = N
 
 
 def review_info_for(draft: LessonDraft, issues: list[ValidationIssue], *, method: str = "rule") -> ReviewInfo:
+    """规则侧复核记录：与模型复核使用同一套微课堂八项 check_id（04 §5.2）。"""
+
     checks = [
-        ReviewCheck(code="lesson_schema", passed=not any(i.code == "LESSON_SCHEMA_INVALID" for i in issues), reason="组件结构闭合且 id 唯一"),
         ReviewCheck(code="lesson_math", passed=not any(i.code == "MATH_INVALID" for i in issues), reason="公式表达式非空且长度合规"),
-        ReviewCheck(code="lesson_sources", passed=True, reason="引用指向已发布知识依据"),
+        ReviewCheck(code="lesson_steps", passed=True, reason="推导步数与字段由组件 schema 约束，变换等价另由独立复核覆盖"),
         ReviewCheck(
             code="lesson_personalization",
             passed=True,
@@ -997,7 +998,10 @@ def review_info_for(draft: LessonDraft, issues: list[ValidationIssue], *, method
                 else "正文围绕学生错误或诊断依据生成"
             ),
         ),
+        ReviewCheck(code="lesson_sources", passed=True, reason="引用指向已发布知识依据"),
+        ReviewCheck(code="lesson_schema", passed=not any(i.code == "LESSON_SCHEMA_INVALID" for i in issues), reason="组件结构闭合且 id 唯一"),
         ReviewCheck(code="lesson_answer_guard", passed=not any(i.code == "ANSWER_PROTECTION" for i in issues), reason="正文未包含受保护题目原文"),
+        ReviewCheck(code="lesson_order", passed=True, reason="组件按讲解、示例、引用顺序排列，微课堂排在后续独立检查之前"),
         ReviewCheck(code="lesson_diagnostic_isolation", passed=True, reason="微课堂不承担独立诊断，完成仅记接触"),
     ]
     status = "validated" if all(check.passed for check in checks) else "needs_review"
