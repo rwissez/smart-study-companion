@@ -386,3 +386,45 @@ def knowledge_key(family_id: str, dataset_id: str, catalog_version: str) -> Form
 
 def catalog_key(family_id: str, dataset_id: str) -> FormalKey:
     return FormalKey(family_id=family_id, dataset_id=dataset_id, kind="catalog")
+
+
+def record_artifact_use(
+    db: Session,
+    *,
+    version_id: str,
+    family_id: str,
+    inputs: list[tuple[str, str, dict[str, Any], str]],
+) -> int:
+    """登记版本实际引用了哪些输入（06 §4.3）。
+
+    ``inputs`` 是 ``(kind, key, exact_ref, usage)`` 四元组；同一版本同一输入同一用途只写一次。
+    """
+
+    written = 0
+    for kind, key, ref, usage in inputs:
+        ref_hash = digest(ref)
+        existing = db.scalar(
+            select(models.ArtifactUse).where(
+                models.ArtifactUse.version_id == version_id,
+                models.ArtifactUse.input_kind == kind,
+                models.ArtifactUse.input_key == key,
+                models.ArtifactUse.usage == usage,
+            )
+        )
+        if existing is not None:
+            continue
+        db.add(
+            models.ArtifactUse(
+                version_id=version_id,
+                family_id=family_id,
+                input_kind=kind,
+                input_key=key,
+                exact_ref_json=ref,
+                ref_hash=ref_hash,
+                usage=usage,
+            )
+        )
+        written += 1
+    if written:
+        db.flush()
+    return written

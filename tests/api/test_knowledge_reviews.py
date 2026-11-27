@@ -1,4 +1,4 @@
-"""A 知识审核写入：approve/reject/edit、CAS 发布、冲突与审计（02 §9、01 §9.2）。
+﻿"""A 知识审核写入：approve/reject/edit、CAS 发布、冲突与审计（02 §9、01 §9.2）。
 
 全部为合成数据：直接写入候选 ``versions`` 行与 ``reviews`` 待审项，不依赖 A 构建
 任务，也不修改 ``pipeline.py``。
@@ -265,6 +265,14 @@ def test_approve_publishes_new_version_and_moves_formal_head(
         head = db.get(models.FormalHead, (FAMILY_ID, DATASET_ID, "knowledge", "", "", ""))
         assert head is not None
         assert head.version_id == new_version
+        compatibility = db.scalars(
+            select(models.VersionCompatibility).where(
+                models.VersionCompatibility.to_version == new_version
+            )
+        ).all()
+        assert compatibility, "审核通过应留下兼容性证明"
+        assert compatibility[0].from_version == CANDIDATE_VERSION
+        assert "教师审核通过" in compatibility[0].reason
         assert head.generation == 1
         publication = db.scalar(
             select(models.Publication).where(models.Publication.version_id == new_version)

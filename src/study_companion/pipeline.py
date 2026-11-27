@@ -1,4 +1,4 @@
-﻿"""业务流水线：导入完成后的 A → B → C 调度与正式成果落库。
+"""业务流水线：导入完成后的 A → B → C 调度与正式成果落库。
 
 本模块是唯一"把纯函数结果变成正式版本"的地方：
 
@@ -241,6 +241,19 @@ def persist_analysis_bundle(
             knowledge_dep = db.get(models.Version, bundle.knowledge_version)
             if knowledge_dep is not None:
                 repo.register_edge(db, version, knowledge_dep, role="knowledge")
+        repo.record_artifact_use(
+            db,
+            version_id=version.version_id,
+            family_id=family_id,
+            inputs=[
+                ("catalog", bundle.catalog_version, {"version_id": bundle.catalog_version}, "input"),
+                *(
+                    [("knowledge", bundle.knowledge_version, {"version_id": bundle.knowledge_version}, "input")]
+                    if bundle.knowledge_version
+                    else []
+                ),
+            ],
+        )
         db.add(
             models.AnalysisResult(
                 run_id=run_id,
@@ -778,6 +791,20 @@ def persist_plan(
             expected_generation=head.generation if head else 0,
         )
     db.flush()
+    repo.record_artifact_use(
+        db,
+        version_id=plan_version_id,
+        family_id=family_id or "",
+        inputs=[
+            ("analysis", analysis_version_id, {"version_id": analysis_version_id}, "input"),
+            ("catalog", normalised.catalog_version, {"version_id": normalised.catalog_version}, "input"),
+            *(
+                [("knowledge", knowledge_version_id, {"version_id": knowledge_version_id}, "input")]
+                if knowledge_version_id
+                else []
+            ),
+        ],
+    )
     # 记录策略试验：目标 + 主策略 + 素材指纹，供后续"无效则换策略"判定。
     from study_companion.recommendation import trials as trial_rules
 

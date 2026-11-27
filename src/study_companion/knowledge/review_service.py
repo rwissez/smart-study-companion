@@ -1,4 +1,4 @@
-"""A 知识审核的写入与决策（02 §9、01 §9.2、06 §4.3）。
+﻿"""A 知识审核的写入与决策（02 §9、01 §9.2、06 §4.3）。
 
 分工与边界：
 
@@ -727,6 +727,40 @@ def _approve(
         expected_generation=head.generation if head is not None else 0,
     )
 
+    # 兼容性证明：记录"候选版→正式版"的对象差异，供导出与后续构建核对。
+    from study_companion.knowledge.change_set import diff_payloads
+
+    changes = diff_payloads(dict(candidate.payload_json or {}), new_payload)
+    if changes:
+        scope_json = {
+            "from_objects": len(candidate.payload_json.get("points", []) or []),
+            "to_objects": len(new_payload.get("points", []) or []),
+        }
+        db.add(
+            models.VersionCompatibility(
+                kind="knowledge",
+                from_version=candidate.version_id,
+                to_version=new_version_id,
+                scope_hash=repo.digest(scope_json),
+                policy_hash=repo.digest(candidate.rule_version or "a-human-review"),
+                scope_json=scope_json,
+                reason="教师审核通过："
+                + "，".join(
+                    f"{kind}{count}"
+                    for kind, count in (
+                        ("新增", sum(1 for item in changes if item.kind == "added")),
+                        ("删除", sum(1 for item in changes if item.kind == "removed")),
+                        ("改名", sum(1 for item in changes if item.kind == "renamed")),
+                        ("改内容", sum(1 for item in changes if item.kind == "changed")),
+                    )
+                    if count
+                ),
+                proof_refs_json=[
+                    f"{item.object_type}:{item.object_id}" for item in changes[:50]
+                ],
+                checked_at=repo.now_iso(),
+            )
+        )
     review.status = APPROVED_STATUS
     review.method = "human"
     review.actor_ref = actor
