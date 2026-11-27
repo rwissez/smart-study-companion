@@ -380,6 +380,16 @@ def main(argv: list[str] | None = None) -> int:
         help="输出目录（默认 data/catalogs/catalog-1/）",
     )
 
+    backup = sub.add_parser("backup", help="停写窗口内备份数据库与原始文件")
+    backup.add_argument("--out", type=Path, required=True, help="备份输出目录（新建或空目录）")
+
+    verify_backup = sub.add_parser("verify-backup", help="校验备份清单、数据库完整性与文件哈希")
+    verify_backup.add_argument("backup_dir", type=Path)
+
+    restore = sub.add_parser("restore", help="从备份恢复到目标根目录（先校验，再原子替换）")
+    restore.add_argument("backup_dir", type=Path)
+    restore.add_argument("--target", type=Path, required=True)
+
     args = parser.parse_args(argv)
 
     if args.command == "seed-demo":
@@ -395,6 +405,27 @@ def main(argv: list[str] | None = None) -> int:
     if args.command == "split-textbook":
         summary = split_textbook_command(args.pdfs, args.out)
         print(json.dumps(summary, ensure_ascii=False, indent=2))
+        return 0
+
+    if args.command == "backup":
+        from study_companion.maintenance.backup import create_backup
+
+        manifest = create_backup(args.out)
+        print(json.dumps(manifest, ensure_ascii=False, indent=2))
+        return 0
+
+    if args.command == "verify-backup":
+        from study_companion.maintenance.backup import verify_backup as _verify
+
+        report = _verify(args.backup_dir)
+        print(json.dumps({"ok": report["ok"], "issues": report["issues"]}, ensure_ascii=False, indent=2))
+        return 0 if report["ok"] else 1
+
+    if args.command == "restore":
+        from study_companion.maintenance.backup import restore_backup
+
+        result = restore_backup(args.backup_dir, args.target)
+        print(json.dumps(result, ensure_ascii=False, indent=2))
         return 0
 
     parser.error("unknown command")
