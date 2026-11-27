@@ -504,6 +504,15 @@ def _apply_model_diagnosis(
     )
 
     if diagnosis is None:
+        candidate_students = {candidate.student_id for candidate in collection.candidates}
+        for result in student_results:
+            if result.student_id in candidate_students:
+                continue
+            if not any(finding.performance == "needs_practice" for finding in result.findings):
+                continue
+            note = "该生没有可用的书面解题过程，本次未做模型错因解释"
+            if note not in result.limitations:
+                result.limitations.append(note)
         return
 
     if not diagnosis.items:
