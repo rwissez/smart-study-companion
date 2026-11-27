@@ -1,4 +1,4 @@
-# 湛知开发进度（DSH 执行记录）
+﻿# 湛知开发进度（DSH 执行记录）
 
 本文件是开发记录，不是 Web 功能。与 `execution_state.json` 同步维护，只记录**实际发生**的事实；未执行的测试一律写 `not_run`，不用"应该通过"替代。
 
@@ -18,7 +18,7 @@
 | P3 B | **passed（规则路径）** | 分指标统计、修订选择、选择题/填空题规则评分、班级画像与比较、局部更新与组完成触发 |
 | P4 C | **partial** | 六策略映射、任务组、三级提示、微课堂（规则模板）、`system_auto`+`teacher_direct` 发布、适用性复查；`agent_revision` 与模型完整审核未接 |
 | P5 Agent | **partial** | 对话持久化、只读工具循环（沿用 main）、未配置模型时规则摘要；写工具/确认卡/受助确认未接 |
-| P6 Web | **进行中** | 见文末 |
+| P6 Web | **passed** | 教师四页与学生三页、真实 API、49 张截图三档分辨率自检通过；方案编辑器为显式占位 |
 | P7 交付 | **partial** | 导出 ZIP（16 文件、回读校验）、备份/校验/恢复、真实 HTTP 闭环；真实模型与赛方数据未验 |
 
 ## 各阶段实际测试
@@ -28,10 +28,10 @@
 | `uv sync --locked --python 3.12` | 成功，42 resolved / 41 checked，锁文件已更新（新增 openpyxl、python-multipart） |
 | `uv run alembic heads` | `0006_delivery_backfill`（单头） |
 | 空库 / `0002_learning_observations` / `0003_idempotency` 三条升级 | 均成功；`integrity_check=ok`、`foreign_key_check` 空、62 张表 |
-| `uv run pytest -q` | **334 passed, 1 warning** |
+| `uv run pytest -q` | **337 passed, 1 warning** |
 | `_local/http_e2e.py`（真实 HTTP） | 见 E2E-http.txt：导入→A→B→C→学生作答/提示/评分→事件→导出下载全部成功 |
 | `_local/backup_smoke.py` + `tests/test_backup.py` | 备份→校验→恢复通过；篡改后校验失败 |
-| 前端 `npm run typecheck` / `build` / `test` / 截图 | 见文末（前端工作流报告） |
+| 前端 typecheck / build / vitest / verify-pages | 退出码全 0；6 文件 20 用例通过；49 张截图；控制台 0 错误 |
 
 ## 真实修复记录（保留，不掩盖）
 
