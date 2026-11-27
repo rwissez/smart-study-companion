@@ -69,6 +69,92 @@ class ChatRequest(BaseModel):
         return self
 
 
+def _readonly_snapshots(
+    db: DbSession, scope, target, node_id: str | None
+) -> dict[str, object]:
+    """按会话权限预取只读快照：当前方案与最近学习事件。
+
+    工具只读这里，模型无法用参数扩大范围；快照里不含参考答案与评分细则。
+    """
+
+    snapshots: dict[str, object] = {
+        "plans": [],
+        "recent_events": [],
+        "limitations": ["只读快照：服务端按会话权限预取，不含答案与评分细则"],
+    }
+    if target is None or target.type != "student" or scope.dataset_id is None:
+        return snapshots
+    student = db.get(models.Student, (scope.dataset_id, target.id))
+    if student is None:
+        return snapshots
+    dataset = db.get(models.Dataset, scope.dataset_id)
+    if dataset is None or not dataset.family_id:
+        return snapshots
+    heads = db.scalars(
+        select(models.FormalHead)
+        .where(
+            models.FormalHead.family_id == dataset.family_id,
+            models.FormalHead.dataset_id == scope.dataset_id,
+            models.FormalHead.kind == "plan",
+            models.FormalHead.target_key == target.id,
+            models.FormalHead.version_id.is_not(None),
+        )
+        .order_by(models.FormalHead.updated_at.desc())
+    ).all()
+    plans: list[dict] = []
+    for head in heads:
+        if node_id and head.node_key != node_id:
+            continue
+        version = db.get(models.Version, head.version_id)
+        if version is None or not version.payload_json:
+            continue
+        payload = version.payload_json or {}
+        activities = []
+        for recommendation in payload.get("recommendations", []) or []:
+            for activity in recommendation.get("activities", []) or []:
+                activities.append(
+                    {
+                        "activity_id": activity.get("activity_id"),
+                        "kind": activity.get("activity_kind"),
+                        "title": activity.get("title"),
+                        "material_id": activity.get("material_id"),
+                        "minutes": activity.get("estimate_minutes"),
+                        "exposure_mode": activity.get("exposure_mode"),
+                    }
+                )
+        plans.append(
+            {
+                "plan_version": version.version_id,
+                "node_id": version.node_key,
+                "student_id": target.id,
+                "goal": (payload.get("recommendations") or [{}])[0].get("goal_target_key"),
+                "reason": (payload.get("recommendations") or [{}])[0].get("reason"),
+                "activities": activities,
+                "limitations": payload.get("limitations") or [],
+            }
+        )
+    snapshots["plans"] = plans
+
+    student_uid = getattr(student, "student_uid", None)
+    if student_uid:
+        rows = db.scalars(
+            select(models.LearningEventRow)
+            .where(models.LearningEventRow.student_uid == student_uid)
+            .order_by(models.LearningEventRow.offset.desc())
+            .limit(10)
+        ).all()
+        snapshots["recent_events"] = [
+            {
+                "event_type": row.event_type,
+                "occurred_at": row.occurred_at,
+                "material_id": row.material_id,
+                "activity_id": row.activity_id,
+            }
+            for row in rows
+        ]
+    return snapshots
+
+
 def _server_context(
     db: DbSession,
     scope,
@@ -196,6 +282,7 @@ def _server_context(
     catalog_version = run.catalog_version if run else db.scalar(
         select(models.Catalog.version).where(models.Catalog.dataset_id == scope.dataset_id).order_by(models.Catalog.created_at.desc())
     )
+    extras = _readonly_snapshots(db, scope, target, node_id)
     return ServerContext(
         run_id=run_id or "", dataset_id=scope.dataset_id,
         catalog_version=catalog_version or "", allowed_student_ids=allowed,
@@ -205,6 +292,7 @@ def _server_context(
         bound_node_id=node_id,
         allowed_class_ids=class_ids,
         allowed_record_ids=allowed_records,
+        extras=extras,
     )
 
 

@@ -9,7 +9,7 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 from pydantic import BaseModel, Field
 
@@ -41,6 +41,8 @@ class ServerContext:
     bound_node_id: str | None = None
     allowed_class_ids: frozenset[str] | None = None
     allowed_record_ids: frozenset[str] | None = None
+    #: 服务端预取的只读快照（方案、最近事件），工具只读这里，不碰数据库。
+    extras: dict[str, Any] = field(default_factory=dict)
 
 
 class AnswerEvidenceItem(BaseModel):

@@ -59,4 +59,52 @@ def build_b_registry(ctx: ServerContext, role: str, task: TaskSpec | None = None
         lambda a: get_class_analysis(ctx, a.get("_call_id", "model"),
             a.get("class_id", ctx.bound_class_id), a.get("node_id", ctx.bound_node_id)),
     ))
+    def plan_query(args: dict[str, Any]):
+        plans = ctx.extras.get("plans") or []
+        if not plans:
+            raise DomainError("NOT_FOUND", "当前会话没有可读的正式方案")
+        allowed_keys = ("activity_id", "kind", "title", "material_id", "minutes", "exposure_mode")
+        projected = []
+        for plan in plans:
+            activities = [
+                {key: activity.get(key) for key in allowed_keys}
+                for activity in (plan.get("activities") or [])
+            ]
+            projected.append(
+                {
+                    "plan_version": plan.get("plan_version"),
+                    "node_id": plan.get("node_id"),
+                    "student_id": plan.get("student_id"),
+                    "goal": plan.get("goal"),
+                    "reason": plan.get("reason"),
+                    "activities": activities,
+                    "limitations": plan.get("limitations") or [],
+                }
+            )
+        return {
+            "student_id": ctx.bound_student_id,
+            "plans": projected,
+            "limitations": ctx.extras.get("limitations")
+            or ["只读快照：不含参考答案与评分细则"],
+        }
+
+    add(RegisteredTool(
+        _schema("get_student_plan", "读取绑定学生当前的正式学习方案（只读、已脱敏）", {}, []),
+        plan_query,
+    ))
+
+    def events_query(args: dict[str, Any]):
+        events = ctx.extras.get("recent_events") or []
+        limit = int(args.get("limit") or 10)
+        return {
+            "student_id": ctx.bound_student_id,
+            "events": events[: max(1, min(limit, 20))],
+            "limitations": ctx.extras.get("limitations") or ["只读快照：不含参考答案与评分细则"],
+        }
+
+    add(RegisteredTool(
+        _schema("get_recent_learning_events", "读取绑定学生最近的学习事件（只读）",
+                {"limit": {"type": "integer"}}, []),
+        events_query,
+    ))
     return ToolRegistry(tools)
