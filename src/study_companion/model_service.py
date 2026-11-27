@@ -95,6 +95,17 @@ def _canonical(payload: Any) -> str:
 
 
 def prompt_path(namespace: str, task_key: str) -> Path:
+    """定位提示词。
+
+    业务模块有的传 ``b.grade_solution.v1``（带命名空间前缀），有的传
+    ``review_plan.v1``；统一先去掉与 namespace 相同的前缀，找不到再退回原名。
+    """
+
+    prefix = f"{namespace}."
+    stripped = task_key[len(prefix) :] if task_key.startswith(prefix) else task_key
+    candidate = PROMPT_ROOT / namespace / f"{stripped}.md"
+    if candidate.is_file():
+        return candidate
     return PROMPT_ROOT / namespace / f"{task_key}.md"
 
 

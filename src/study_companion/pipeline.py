@@ -109,6 +109,66 @@ def _analysis_input(
     )
 
 
+
+
+#: 单次任务最多为几份方案调用模型独立复核；其余只走规则审核并记录限制。
+_PLAN_REVIEW_BUDGET: dict[str, int] = {}
+PLAN_REVIEW_LIMIT = int(os.getenv("C_PLAN_REVIEW_LIMIT", "4"))
+
+
+def _review_plan_with_model(plan_bundle, rule_review, *, job_id: str | None, catalog=None):
+    """规则审核 + 可选的模型独立复核；预算用完或失败时保留规则审核。"""
+
+    from study_companion.model_service import ModelService
+
+    service = ModelService()
+    if not service.configured:
+        return rule_review, plan_bundle
+    key = job_id or "no-job"
+    if _PLAN_REVIEW_BUDGET.get(key, 0) >= PLAN_REVIEW_LIMIT:
+        return rule_review, plan_bundle
+    _PLAN_REVIEW_BUDGET[key] = _PLAN_REVIEW_BUDGET.get(key, 0) + 1
+    try:
+        from study_companion.recommendation.plan_review_model import review_plan_with_model
+
+        protected = [
+            material.content
+            for material in (getattr(catalog, "materials", []) or [])
+            if material.material_type == "question" and material.content
+        ][:20]
+        outcome = review_plan_with_model(
+            service=service,
+            bundle=plan_bundle,
+            protected_texts=protected,
+            rule_checks=rule_review.checks,
+        )
+    except Exception:
+        return rule_review, plan_bundle
+    if not outcome.model_used:
+        return rule_review, plan_bundle
+    blocking = outcome.blocking_issues()
+    review = rule_review.model_copy(
+        update={
+            "checks": list(rule_review.checks) + list(outcome.checks),
+            "issues": list(rule_review.issues) + list(outcome.issues),
+            "status": "needs_review" if blocking else rule_review.status,
+            "method": "hybrid",
+        }
+    )
+    if outcome.limitations:
+        plan_bundle = plan_bundle.model_copy(
+            update={"limitations": list(plan_bundle.limitations) + list(outcome.limitations)}
+        )
+    return review, plan_bundle
+
+def _analysis_model_service():
+    """只在模型已配置时把 ModelService 传给 B，未配置环境完全跳过模型。"""
+
+    from study_companion.model_service import ModelService
+
+    service = ModelService()
+    return service if service.configured else None
+
 def _previous_student_result(
     db: Session, family_id: str, dataset_id: str, node_key: str, student_id: str
 ) -> StudentResult | None:
@@ -1141,7 +1201,7 @@ def handle_import_process(ctx: JobContext) -> dict[str, Any]:
     db.commit()
 
     config = AnalysisConfig(rule_version=RULE_VERSION)
-    bundle = analyze_dataset(prepared, catalog, context, config)
+    bundle = analyze_dataset(prepared, catalog, context, config, service=_analysis_model_service())
     _attach_error_types(bundle, prepared, catalog, None)
     included = [event.event_id for event in prepared.selected_events]
     result = persist_analysis_bundle(
@@ -1204,6 +1264,9 @@ def handle_import_process(ctx: JobContext) -> dict[str, Any]:
             raise
         plan_bundle = draft.bundle
         review = c_planner.review_plan_rules(plan_bundle)
+        review, plan_bundle = _review_plan_with_model(
+            plan_bundle, review, job_id=ctx.job.id, catalog=catalog
+        )
         student = students_by_id.get(student_result.student_id)
         published = persist_plan(
             db,
@@ -1725,7 +1788,9 @@ def handle_student_update(ctx: JobContext) -> dict[str, Any]:
         rule_version=RULE_VERSION,
         dataset_family_id=dataset.family_id,
     )
-    bundle = analyze_dataset(prepared, catalog, context, AnalysisConfig(rule_version=RULE_VERSION))
+    bundle = analyze_dataset(
+        prepared, catalog, context, AnalysisConfig(rule_version=RULE_VERSION), service=_analysis_model_service()
+    )
     _attach_error_types(bundle, prepared, catalog, current_knowledge_payload(db, dataset_id, dataset.family_id))
     affected_students = [item for item in bundle.student_results if item.student_id == student_id and item.node_id == node_id]
     affected_classes = [item for item in bundle.class_results if item.class_id == student.class_id and item.node_id == node_id]
@@ -1868,6 +1933,9 @@ def handle_student_update(ctx: JobContext) -> dict[str, Any]:
     )
     plan_bundle = draft.bundle
     review = c_planner.review_plan_rules(plan_bundle)
+    review, plan_bundle = _review_plan_with_model(
+        plan_bundle, review, job_id=ctx.job.id, catalog=catalog
+    )
     published = persist_plan(
         db,
         plan_bundle,
