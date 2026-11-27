@@ -1080,6 +1080,27 @@ def persist_plan(
     )
     plan_version_id = repo.new_id("plan")
     normalised = _normalise_plan(bundle, plan_version_id, indicator_names, material_titles)
+    # 规则审核对空列表会全部空过：零任务组/零推荐的方案也会拿到 validated。
+    # 正式发布前补内容硬门，空方案只落候选版本，绝不切换正式指针。
+    from study_companion.recommendation.publication import formal_content_issues
+
+    gate_issues = formal_content_issues(normalised)
+    if gate_issues:
+        publish = False
+        review = review.model_copy(
+            update={
+                "status": "needs_review",
+                "checks": list(review.checks)
+                + [
+                    ReviewCheck(
+                        code="formal_content_gate",
+                        passed=False,
+                        reason="；".join(item.message for item in gate_issues[:3]),
+                    )
+                ],
+                "issues": list(review.issues) + gate_issues,
+            }
+        )
     normalised = normalised.model_copy(
         update={
             "analysis_version": analysis_version_id,
@@ -1088,7 +1109,7 @@ def persist_plan(
             "publication_status": "published" if publish else "unpublished",
             "publication_basis": "automatic_review" if publish else None,
             "publish_path": "system_auto" if publish else None,
-            "validation_issues": review.issues,
+            "validation_issues": list(normalised.validation_issues) + gate_issues,
         }
     )
     # 先落不可变版本行，再写活动/状态表：后者的外键指向版本，顺序不能反。
@@ -1238,6 +1259,7 @@ def persist_plan(
         "publication_id": publication.publication_id if publication else None,
         "review_status": review.status,
         "publication_status": "published" if publication else "unpublished",
+        "publish_gate_issues": [item.model_dump(mode="json") for item in gate_issues],
     }
 
 

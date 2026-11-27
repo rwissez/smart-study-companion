@@ -132,6 +132,38 @@ def test_stale_base_version_is_rejected(client: TestClient, ctx: dict) -> None:
 
 
 
+def test_revision_cannot_clear_all_activities(client: TestClient, ctx: dict) -> None:
+    """教师清空活动后，预览可以保留为候选，但正式发布必须被硬门拒绝。"""
+
+    plan = _plan(client, ctx)
+    preview = client.post(
+        f"/api/v1/runs/{ctx['run_id']}/students/S01/recommendation-revisions/preview",
+        headers=ctx["headers"],
+        json={
+            "node_id": "N01",
+            "base_plan_version": plan["plan_version"],
+            "reason": "试图清空活动",
+            "changes": {"activities": []},
+        },
+    )
+    assert preview.status_code == 200, preview.text
+    data = preview.json()["data"]
+
+    published = client.post(
+        f"/api/v1/runs/{ctx['run_id']}/students/S01/recommendation-revisions/{data['preview_id']}/publish",
+        headers=ctx["headers"],
+        params={"node_id": "N01"},
+        json={"warning_digest": data["warning_digest"]},
+    )
+    assert published.status_code == 422, published.text
+    error = published.json()["error"]
+    assert error["code"] == "UNPROCESSABLE"
+    assert "活动" in error["message"] or "为空" in error["message"]
+
+    current = _plan(client, ctx)
+    assert current["plan_version"] == plan["plan_version"], "空方案不能切正式指针"
+
+
 def test_activity_rebuild_keeps_micro_lesson_without_material(
     client: TestClient, ctx: dict, session: Session
 ) -> None:

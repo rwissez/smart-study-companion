@@ -187,6 +187,94 @@ def _rebuild_activities(
 # --------------------------------------------------------------------------- #
 
 
+def formal_content_issues(plan: RecommendationBundle) -> list[ValidationIssue]:
+    """正式发布的内容硬门：至少 1 个任务组、每组至少 1 个活动、推荐与组对应。
+
+    规则审核对空列表会全部空过（``all([])`` 为真），``review.status`` 可能是
+    ``validated`` 而方案里其实一个任务组都没有。发布前必须单独核对内容，
+    空方案只能作为候选/待审核，不能切正式指针。
+    """
+
+    issues: list[ValidationIssue] = []
+    if not plan.task_groups or not plan.recommendations:
+        issues.append(
+            ValidationIssue(
+                code="PLAN_EMPTY",
+                message=(
+                    f"方案内容为空（任务组 {len(plan.task_groups)} 个、"
+                    f"推荐 {len(plan.recommendations)} 条），不能作为正式方案发布"
+                ),
+                severity="error",
+            )
+        )
+    group_ids = [group.group_id for group in plan.task_groups]
+    if len(set(group_ids)) != len(group_ids):
+        issues.append(
+            ValidationIssue(
+                code="GROUP_MISMATCH",
+                message="任务组编号重复，无法确定哪个推荐对应哪个组",
+                severity="error",
+            )
+        )
+    recommendations_by_group: dict[str, Recommendation] = {}
+    for rec in plan.recommendations:
+        if rec.group_id in recommendations_by_group:
+            issues.append(
+                ValidationIssue(
+                    code="GROUP_MISMATCH",
+                    message=f"任务组 {rec.group_id} 有多条推荐，无法一一对应",
+                    severity="error",
+                    recommendation_id=rec.recommendation_id,
+                )
+            )
+            continue
+        recommendations_by_group[rec.group_id] = rec
+        if rec.group_id not in group_ids:
+            issues.append(
+                ValidationIssue(
+                    code="GROUP_MISMATCH",
+                    message=f"推荐 {rec.recommendation_id} 没有对应的任务组",
+                    severity="error",
+                    recommendation_id=rec.recommendation_id,
+                )
+            )
+    for group in plan.task_groups:
+        rec = recommendations_by_group.get(group.group_id)
+        if rec is None:
+            issues.append(
+                ValidationIssue(
+                    code="GROUP_MISMATCH",
+                    message=f"任务组 {group.group_id} 没有对应的推荐",
+                    severity="error",
+                    field=group.group_id,
+                )
+            )
+            continue
+        activity_ids = [activity.activity_id for activity in rec.activities]
+        if not activity_ids and not group.activity_ids:
+            issues.append(
+                ValidationIssue(
+                    code="GROUP_EMPTY",
+                    message=f"任务组 {group.group_id} 没有任何活动",
+                    severity="error",
+                    field=group.group_id,
+                    recommendation_id=rec.recommendation_id,
+                )
+            )
+            continue
+        if group.activity_ids and activity_ids and set(group.activity_ids) != set(activity_ids):
+            issues.append(
+                ValidationIssue(
+                    code="GROUP_MISMATCH",
+                    message=f"任务组 {group.group_id} 登记的活动与推荐活动不一致",
+                    severity="error",
+                    field=group.group_id,
+                    recommendation_id=rec.recommendation_id,
+                )
+            )
+    return issues
+
+
 def hard_checks(
     base: RecommendationBundle,
     draft: RecommendationBundle,
@@ -441,6 +529,18 @@ def publish_teacher_revision(
     if head is None or head.version_id != base_plan_version:
         raise DomainError("REVISION_CONFLICT", "基础方案已被更新，请重新预览")
 
+    # 预览可能早于本次硬门加入，发布前再核一次内容，空方案不能切正式指针。
+    content_issues = formal_content_issues(draft)
+    if content_issues:
+        raise DomainError(
+            "UNPROCESSABLE",
+            "方案内容为空，不能发布：" + "；".join(item.message for item in content_issues[:3]),
+            [
+                {"field": item.field or "activities", "reason": item.message}
+                for item in content_issues
+            ],
+        )
+
     review = ReviewInfo(
         status="human_confirmed",
         method="human",
@@ -607,6 +707,56 @@ def _write_plan_rows(
     db.flush()
 
 
+def _bind_draft_identity(
+    draft: RecommendationBundle, plan_version_id: str
+) -> RecommendationBundle:
+    """给规划器候选补正式任务组/活动身份；已绑定的方案原样返回。
+
+    规划器输出用 ``pending-*`` 占位组、推荐尚未带 ``group_id``、活动 id 为空。
+    正式发布前必须补齐，否则任务组与推荐对不上，活动也写不进正式表。
+    """
+
+    groups = sorted(draft.task_groups, key=lambda group: group.order)
+    if not groups or len(groups) != len(draft.recommendations):
+        return draft
+    if not all(group.group_id.startswith("pending-") for group in groups):
+        return draft
+    if any(rec.group_id for rec in draft.recommendations):
+        return draft
+
+    recommendations: list[Recommendation] = []
+    bound_groups: list[TaskGroup] = []
+    for index, (group, rec) in enumerate(zip(groups, draft.recommendations), start=1):
+        group_id = f"grp-{plan_version_id}-{index:02d}"
+        activities = [
+            activity.model_copy(
+                update={
+                    "activity_id": activity.activity_id
+                    or f"act-{plan_version_id}-{index:02d}-{order:02d}",
+                    "group_id": group_id,
+                    "order": order,
+                }
+            )
+            for order, activity in enumerate(rec.activities, start=1)
+        ]
+        recommendations.append(
+            rec.model_copy(update={"group_id": group_id, "activities": activities})
+        )
+        bound_groups.append(
+            group.model_copy(
+                update={
+                    "group_id": group_id,
+                    "order": index,
+                    "activity_ids": [item.activity_id for item in activities],
+                    "required_activity_ids": [item.activity_id for item in activities],
+                }
+            )
+        )
+    return draft.model_copy(
+        update={"recommendations": recommendations, "task_groups": bound_groups}
+    )
+
+
 def publish_agent_revision(
     db: Session,
     *,
@@ -667,6 +817,18 @@ def publish_agent_revision(
         )
 
     plan_version_id = repo.new_id("plan")
+    # 规划器候选先补正式身份，再走内容硬门；空方案/空组不能切正式指针。
+    draft = _bind_draft_identity(draft, plan_version_id)
+    content_issues = formal_content_issues(draft)
+    if content_issues:
+        raise DomainError(
+            "UNPROCESSABLE",
+            "候选内容不完整，不能发布：" + "；".join(item.message for item in content_issues[:3]),
+            [
+                {"field": item.field or "activities", "reason": item.message}
+                for item in content_issues
+            ],
+        )
     final = draft.model_copy(
         update={
             "plan_version": plan_version_id,
