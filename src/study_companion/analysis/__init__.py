@@ -20,6 +20,11 @@ from study_companion.analysis.learning_profile import (
     build_dialog_basis,
     build_student_learning_profile,
 )
+from study_companion.analysis.prerequisite_gap import (
+    PrerequisiteGapSignal,
+    detect_prerequisite_gap,
+    gap_summary_for_c,
+)
 from study_companion.analysis.prepare import prepare_dataset
 from study_companion.analysis.rubric_loss import compute_class_rubric_losses, common_loss_issues
 from study_companion.analysis.service import analyze_dataset
@@ -49,4 +54,7 @@ __all__ = [
     "rerun_profile_with_observations",
     "ProfileComparison",
     "compare_student_profiles",
+    "PrerequisiteGapSignal",
+    "detect_prerequisite_gap",
+    "gap_summary_for_c",
 ]
