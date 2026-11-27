@@ -58,6 +58,13 @@ class PlanReviewRequest(BaseModel):
     reason: str = Field(default="", max_length=500)
 
 
+class RevisionSubmitRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    conversation_id: str | None = Field(default=None, max_length=64)
+    message_id: str | None = Field(default=None, max_length=64)
+
+
 def _dataset_for(db: DbSession, scope: Scope, dataset_id: str) -> models.Dataset:
     dataset = db.get(models.Dataset, dataset_id)
     if dataset is None or not dataset.family_id:
@@ -459,3 +466,55 @@ def decide_plan_review(
     proposal.state = "accepted"
     db.flush()
     return success({"review_id": review_id, **result})
+
+
+@router.post("/datasets/{dataset_id}/plan-revisions/{proposal_id}/submit", status_code=202)
+def submit_plan_revision(
+    dataset_id: str,
+    proposal_id: str,
+    payload: RevisionSubmitRequest,
+    db: DbSession,
+    scope: Scope,
+) -> dict:
+    """把已有候选交给教师确认；只登记确认，不发布，重复提交返回原确认。"""
+
+    scope.require("chat_teacher")
+    scope.require_teacher()
+    dataset = _dataset_for(db, scope, dataset_id)
+    from study_companion.agent.expanded_tools import submit_revision
+
+    result = submit_revision(
+        db,
+        dataset_id=dataset.id,
+        proposal_id=proposal_id,
+        actor=scope.session_id,
+        conversation_id=payload.conversation_id,
+        message_id=payload.message_id,
+    )
+    return success(result)
+
+
+@router.get("/datasets/{dataset_id}/revision-status")
+def get_revision_status(
+    dataset_id: str,
+    db: DbSession,
+    scope: Scope,
+    proposal_id: str | None = Query(default=None, min_length=1, max_length=64),
+    revision_id: str | None = Query(default=None, min_length=1, max_length=64),
+    confirmation_id: str | None = Query(default=None, min_length=1, max_length=64),
+) -> dict:
+    """按候选、修订或确认编号查询修订状态；只读，不移动正式指针。"""
+
+    scope.require("chat_teacher")
+    scope.require_teacher()
+    _dataset_for(db, scope, dataset_id)
+    from study_companion.agent.expanded_tools import revision_status
+
+    result = revision_status(
+        db,
+        dataset_id=dataset_id,
+        proposal_id=proposal_id,
+        revision_id=revision_id,
+        confirmation_id=confirmation_id,
+    )
+    return success(result)

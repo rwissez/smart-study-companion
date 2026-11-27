@@ -1,6 +1,6 @@
 """05 §6 里"只读但当前缺失"的 Agent 工具（schema 闭合、角色/任务受限、最小投影）。
 
-本模块补齐 8 个工具：
+本模块补齐 10 个工具：
 
 * ``get_student_progress`` —— 基于 B 正式分析版本比较（03 §10），无基线时如实说不可比
 * ``compare_classes`` —— 仅教师，复用 B 的班级比较键对齐规则（03 §12.4），禁止自算总分差
@@ -10,28 +10,39 @@
 * ``search_learning_materials`` —— 正式目录内按知识点/用途筛选，学生裁剪答案
 * ``get_lesson_view`` —— 读已发布微课堂安全正文，不重新生成
 * ``prepare_plan_revision`` —— 只生成候选（无正式副作用），需校验学生/基线/意图
+* ``submit_plan_revision`` —— 把已有候选交给教师确认，不发布、不可学生调用、重复提交幂等
+* ``get_revision_status`` —— 按候选/修订/确认查 draft/pending/confirmed/rejected，只读
 
 共同约束：handler 重新鉴权、最小投影、分页默认 20 最大 50；结果附
 ``evidence_refs`` 与 ``limitations``；失败抛 ``DomainError``，不返回未授权数据。
 
 数据来源说明（已知限制）：``ServerContext`` 目前只携带服务端预取的只读快照，
-没有注入数据库会话。本模块在工具被调用时才开一个短生命周期的**只读**会话
-（``extras["db_session"]`` 可注入，测试与将来的路由装配都走这条通道），
-用完即关、从不提交。等路由把只读会话显式注入 ``extras`` 后应删掉这里的兜底。
+没有注入数据库会话。本模块在工具被调用时才开一个短生命周期的会话
+（``extras["db_session"]`` 可注入，测试与将来的路由装配都走这条通道）。
+查询用完即关、从不提交；提交只写候选的审核记录与待确认记录，正式发布仍由
+教师确认后走 04 的 ``agent_revision`` 路径。等路由把会话显式注入 ``extras``
+后应删掉这里的兜底。
 """
 
 from __future__ import annotations
 
 from contextlib import contextmanager
 from dataclasses import dataclass
+from datetime import UTC, datetime
 from typing import Any, Callable, Iterator
 
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from study_companion.agent.loop import RegisteredTool, ToolRegistry
 from study_companion.agent.tasks import TaskSpec
 from study_companion.analysis import queries as analysis_queries
-from study_companion.contracts import DomainError, EvidenceRef
+from study_companion.contracts import (
+    DomainError,
+    EvidenceRef,
+    RecommendationBundle,
+    ReviewInfo,
+)
 from study_companion.recommendation import quality as c_quality
 from study_companion.recommendation import query as c_query
 from study_companion.tools.b_analysis import ServerContext
@@ -55,6 +66,8 @@ TASK_TOOLS: dict[str, tuple[str, ...]] = {
         "get_plan_reason",
         "search_learning_materials",
         "prepare_plan_revision",
+        "submit_plan_revision",
+        "get_revision_status",
     ),
     "student_learning_advice": (
         "get_plan_history",
@@ -65,8 +78,17 @@ TASK_TOOLS: dict[str, tuple[str, ...]] = {
     "knowledge_lookup": ("search_learning_materials",),
 }
 
-#: 仅教师可用的扩展工具。
-TEACHER_ONLY = frozenset({"compare_classes", "get_quality_report", "prepare_plan_revision"})
+#: 仅教师可用的扩展工具。修订候选的提交与状态查询都属于 plan_modify（05 §4），
+#: 学生端保持只读，不注册、也不放行这两个工具。
+TEACHER_ONLY = frozenset(
+    {
+        "compare_classes",
+        "get_quality_report",
+        "prepare_plan_revision",
+        "submit_plan_revision",
+        "get_revision_status",
+    }
+)
 
 
 def _schema(
@@ -110,6 +132,31 @@ def _read_session(ctx: ServerContext) -> Iterator[Session]:
     session = get_sessionmaker()()
     try:
         yield session
+    finally:
+        session.close()
+
+
+@contextmanager
+def _write_session(ctx: ServerContext) -> Iterator[Session]:
+    """候选提交用的事务边界：注入会话不自行提交，自开会话才提交。
+
+    路由把请求事务注入 ``extras`` 时由路由统一提交；测试同样复用同一会话。
+    只有工具在无路由环境自行开会话时才提交，避免把读写混在一起。
+    """
+
+    db = ctx.extras.get(DB_SESSION_KEY)
+    if db is not None:
+        yield db
+        return
+    from study_companion.db.session import get_sessionmaker
+
+    session = get_sessionmaker()()
+    try:
+        yield session
+        session.commit()
+    except Exception:
+        session.rollback()
+        raise
     finally:
         session.close()
 
@@ -692,6 +739,487 @@ def _prepare_revision(ctx: ServerContext, role: str, args: dict[str, Any]) -> di
 
 
 # --------------------------------------------------------------------------- #
+# submit_plan_revision / get_revision_status
+# --------------------------------------------------------------------------- #
+
+STATUS_DRAFT = "draft"
+STATUS_PENDING = "pending"
+STATUS_CONFIRMED = "confirmed"
+STATUS_REJECTED = "rejected"
+
+REVISION_STATUS_VALUES = (STATUS_DRAFT, STATUS_PENDING, STATUS_CONFIRMED, STATUS_REJECTED)
+
+
+def _parse_iso(value: str | None) -> datetime | None:
+    if not value:
+        return None
+    try:
+        parsed = datetime.fromisoformat(value)
+    except (TypeError, ValueError):
+        return None
+    return parsed.replace(tzinfo=UTC) if parsed.tzinfo is None else parsed
+
+
+def _is_expired(value: str | None) -> bool:
+    parsed = _parse_iso(value)
+    return parsed is not None and parsed <= datetime.now(UTC)
+
+
+def _candidate(db: Session, *, dataset_id: str, proposal_id: str) -> Any:
+    """读出候选并做对象级归属校验；不返回越权对象的存在性细节。"""
+
+    from study_companion.db import models
+
+    if not isinstance(proposal_id, str) or not proposal_id.strip():
+        raise DomainError("INVALID_ARGUMENT", "proposal_id 不能为空")
+    proposal = db.get(models.Proposal, (proposal_id, 1))
+    if proposal is None:
+        raise DomainError("NOT_FOUND", "候选不存在")
+    snapshot = proposal.snapshot_json or {}
+    if snapshot.get("dataset_id") != dataset_id:
+        raise DomainError("FORBIDDEN", "候选不属于当前数据集")
+    if not snapshot.get("student_id"):
+        raise DomainError("CONTEXT_MISMATCH", "候选缺少学生绑定")
+    return proposal
+
+
+def _revision_row(db: Session, proposal: Any) -> Any:
+    from study_companion.db import models
+
+    rows = db.scalars(
+        select(models.PlanRevision)
+        .where(models.PlanRevision.proposal_id == proposal.proposal_id)
+        .order_by(models.PlanRevision.created_at.desc())
+    ).all()
+    return next((row for row in rows if row.result_version), rows[0] if rows else None)
+
+
+def _confirmation_rows(db: Session, proposal: Any) -> list[Any]:
+    from study_companion.db import models
+
+    rows = db.scalars(
+        select(models.Confirmation)
+        .where(
+            models.Confirmation.kind == "plan_revision",
+            models.Confirmation.scope_key == proposal.scope_key,
+        )
+        .order_by(models.Confirmation.created_at.desc())
+    ).all()
+    return [
+        row
+        for row in rows
+        if any(
+            (target or {}).get("proposal_id") == proposal.proposal_id
+            for target in (row.targets_json or [])
+        )
+    ]
+
+
+def resolve_revision_target(
+    db: Session,
+    *,
+    dataset_id: str,
+    proposal_id: str | None = None,
+    revision_id: str | None = None,
+    confirmation_id: str | None = None,
+) -> Any:
+    """把候选、修订或确认编号解析为同一候选，并做数据集归属校验。"""
+
+    from study_companion.db import models
+
+    selectors = [
+        value for value in (proposal_id, revision_id, confirmation_id) if value is not None
+    ]
+    if len(selectors) != 1:
+        raise DomainError(
+            "INVALID_ARGUMENT",
+            "必须且只能提供一个 proposal_id、revision_id 或 confirmation_id",
+        )
+    if proposal_id is not None:
+        return _candidate(db, dataset_id=dataset_id, proposal_id=proposal_id)
+    if revision_id is not None:
+        if not isinstance(revision_id, str) or not revision_id.strip():
+            raise DomainError("INVALID_ARGUMENT", "revision_id 不能为空")
+        row = db.get(models.PlanRevision, revision_id)
+        if row is None or not row.proposal_id:
+            raise DomainError("NOT_FOUND", "修订记录不存在或不属于 Agent 候选")
+        return _candidate(db, dataset_id=dataset_id, proposal_id=str(row.proposal_id))
+    if not isinstance(confirmation_id, str) or not confirmation_id.strip():
+        raise DomainError("INVALID_ARGUMENT", "confirmation_id 不能为空")
+    confirmation = db.get(models.Confirmation, confirmation_id)
+    if confirmation is None or confirmation.kind != "plan_revision":
+        raise DomainError("NOT_FOUND", "确认记录不存在")
+    target = next(
+        (
+            item
+            for item in (confirmation.targets_json or [])
+            if (item or {}).get("proposal_id")
+        ),
+        None,
+    )
+    if target is None:
+        raise DomainError("NOT_FOUND", "确认记录没有对应的候选")
+    return _candidate(db, dataset_id=dataset_id, proposal_id=str(target["proposal_id"]))
+
+
+def revision_status_payload(db: Session, proposal: Any) -> dict[str, Any]:
+    """只读投影：候选当前处于 draft/pending/confirmed/rejected 哪一步。
+
+    状态完全由已存的候选、确认和修订记录推导，不写库、不发布。
+    """
+
+    confirmations = _confirmation_rows(db, proposal)
+    accepted = next((row for row in confirmations if row.status == "accepted"), None)
+    rejected = next((row for row in confirmations if row.status == "rejected"), None)
+    pending = next((row for row in confirmations if row.status == "pending"), None)
+    pending_active = pending if pending is not None and not _is_expired(pending.expires_at) else None
+    revision = _revision_row(db, proposal)
+    published_revision = revision if revision is not None and revision.result_version else None
+    proposal_expired = proposal.state == "expired"
+
+    if proposal.state == "accepted" or accepted is not None or published_revision is not None:
+        status = STATUS_CONFIRMED
+        chosen = accepted or pending
+        plan_version = published_revision.result_version if published_revision else None
+    elif proposal.state == "rejected" or rejected is not None:
+        status = STATUS_REJECTED
+        chosen = rejected
+        plan_version = None
+    elif pending_active is not None:
+        status = STATUS_PENDING
+        chosen = pending_active
+        plan_version = None
+    else:
+        # 未提交、确认已过期或候选自行过期，都退回 draft，由教师重新提交或重建。
+        status = STATUS_DRAFT
+        chosen = pending
+        plan_version = None
+
+    body = proposal.body_json or {}
+    review_info = body.get("review_info") or {}
+    expires_at = chosen.expires_at if chosen is not None else proposal.expires_at
+    confirmation_expired = bool(
+        chosen is not None and chosen.status == "pending" and _is_expired(chosen.expires_at)
+    )
+    candidate_expired = _is_expired(proposal.expires_at)
+    if status == STATUS_CONFIRMED:
+        next_step = "none"
+    elif status == STATUS_REJECTED:
+        next_step = "regenerate_candidate"
+    elif status == STATUS_PENDING:
+        next_step = "await_teacher_confirmation"
+    elif candidate_expired or proposal_expired:
+        next_step = "regenerate_candidate"
+    else:
+        next_step = "submit_for_confirmation"
+
+    limitations = [
+        "状态查询只读：不写候选、不生成方案版本、不移动正式指针",
+        "发布只能由教师确认后走 04 agent_revision 路径；本工具不提供发布能力",
+    ]
+    if status == STATUS_PENDING:
+        limitations.append("等待教师确认：模型和学生都不能代替教师确认或发布")
+    if confirmation_expired:
+        limitations.append("上一次确认已过期，需要重新提交候选")
+    if status == STATUS_CONFIRMED:
+        limitations.append("已发布状态来自正式修订记录；学生只能读本人已发布历史")
+
+    return {
+        "proposal_id": proposal.proposal_id,
+        "dataset_id": (proposal.snapshot_json or {}).get("dataset_id", ""),
+        "student_id": (proposal.snapshot_json or {}).get("student_id", ""),
+        "node_id": (proposal.snapshot_json or {}).get("node_id", ""),
+        "status": status,
+        "proposal_status": proposal.state,
+        "confirmation_id": chosen.confirmation_id if chosen is not None else None,
+        "confirmation_status": chosen.status if chosen is not None else None,
+        "confirmation_expired": confirmation_expired,
+        "base_plan_version": proposal.base_plan_version,
+        "plan_version": plan_version,
+        "revision_id": published_revision.revision_id if published_revision else None,
+        "publication_status": "published" if plan_version else "unpublished",
+        "review_status": review_info.get("status") or ("validated" if plan_version else "draft"),
+        "expires_at": expires_at,
+        "can_submit": status == STATUS_DRAFT and not candidate_expired,
+        "can_publish": False,
+        "requires_teacher_confirmation": status == STATUS_PENDING,
+        "next_step": next_step,
+        "limitations": limitations,
+    }
+
+
+def revision_status(
+    db: Session,
+    *,
+    dataset_id: str,
+    proposal_id: str | None = None,
+    revision_id: str | None = None,
+    confirmation_id: str | None = None,
+) -> dict[str, Any]:
+    proposal = resolve_revision_target(
+        db,
+        dataset_id=dataset_id,
+        proposal_id=proposal_id,
+        revision_id=revision_id,
+        confirmation_id=confirmation_id,
+    )
+    return revision_status_payload(db, proposal)
+
+
+def _submit_payload(
+    proposal: Any,
+    confirmation: Any,
+    *,
+    status: str,
+    idempotent: bool,
+    side_effects: str,
+    plan_version: str | None = None,
+) -> dict[str, Any]:
+    body = proposal.body_json or {}
+    limitations = [
+        "提交只登记教师确认，不创建正式方案版本、不移动正式指针",
+        "正式发布必须由教师确认后走 04 agent_revision 路径；本工具没有发布能力",
+    ]
+    if status == STATUS_PENDING:
+        limitations.append("确认由教师完成，模型和学生都不能代替；重复提交返回同一确认")
+    return {
+        "proposal_id": proposal.proposal_id,
+        "student_id": (proposal.snapshot_json or {}).get("student_id", ""),
+        "node_id": (proposal.snapshot_json or {}).get("node_id", ""),
+        "base_plan_version": proposal.base_plan_version,
+        "status": status,
+        "confirmation_id": confirmation.confirmation_id if confirmation is not None else None,
+        "confirmation_status": confirmation.status if confirmation is not None else None,
+        "expires_at": confirmation.expires_at if confirmation is not None else proposal.expires_at,
+        "plan_version": plan_version,
+        "publication_status": "published" if plan_version else "unpublished",
+        "review_status": (body.get("review_info") or {}).get("status")
+        or ("validated" if plan_version else "draft"),
+        "requires_teacher_confirmation": status == STATUS_PENDING,
+        "idempotent": idempotent,
+        "side_effects": side_effects,
+        "limitations": limitations,
+    }
+
+
+def submit_revision(
+    db: Session,
+    *,
+    dataset_id: str,
+    proposal_id: str,
+    actor: str,
+    student_id: str | None = None,
+    conversation_id: str | None = None,
+    message_id: str | None = None,
+) -> dict[str, Any]:
+    """把已有候选提交给教师确认。
+
+    只创建/复用 ``confirmations`` 里的待确认记录，不发布、不切正式指针。
+    审核沿用 04 的完整审核入口 ``review_plan_rules``；内容硬门复用
+    ``formal_content_issues``。教师确认后由既有 ``decide_confirmation`` 走
+    ``agent_revision`` 发布。
+    """
+
+    from study_companion.agent import proposals as proposal_rules
+    from study_companion.db import models
+    from study_companion.db import version_repository as repo
+    from study_companion.recommendation import planner as c_planner
+    from study_companion.recommendation.publication import formal_content_issues
+
+    if not isinstance(actor, str) or not actor.strip():
+        raise DomainError("CONTEXT_MISMATCH", "缺少受信任的教师会话，不能提交候选确认")
+
+    proposal = _candidate(db, dataset_id=dataset_id, proposal_id=proposal_id)
+    snapshot = proposal.snapshot_json or {}
+    candidate_student = str(snapshot.get("student_id") or "")
+    if student_id is not None and student_id != candidate_student:
+        raise DomainError("FORBIDDEN", "候选不属于该学生")
+    node_id = str(snapshot.get("node_id") or "")
+    if not node_id:
+        raise DomainError("CONTEXT_MISMATCH", "候选缺少节点绑定")
+
+    confirmations = _confirmation_rows(db, proposal)
+    revision = _revision_row(db, proposal)
+    published_revision = revision if revision is not None and revision.result_version else None
+    accepted = next((row for row in confirmations if row.status == "accepted"), None)
+
+    if proposal.state == "accepted" or accepted is not None or published_revision is not None:
+        return _submit_payload(
+            proposal,
+            accepted,
+            status=STATUS_CONFIRMED,
+            idempotent=True,
+            side_effects="none",
+            plan_version=published_revision.result_version if published_revision else None,
+        )
+
+    if proposal.state == "rejected" or any(row.status == "rejected" for row in confirmations):
+        raise DomainError("CONFLICT", "候选已被教师拒绝，不能再次提交；请重新生成候选")
+
+    pending = next(
+        (
+            row
+            for row in confirmations
+            if row.status == "pending" and not _is_expired(row.expires_at)
+        ),
+        None,
+    )
+    if pending is not None:
+        if pending.session_ref != actor:
+            raise DomainError(
+                "CONFLICT", "该候选已有待处理的教师确认，请由发起确认的会话继续处理"
+            )
+        return _submit_payload(
+            proposal,
+            pending,
+            status=STATUS_PENDING,
+            idempotent=True,
+            side_effects="none",
+        )
+
+    if proposal.state != "ready":
+        raise DomainError("CONFLICT", f"候选当前状态为 {proposal.state}，不能提交")
+    if _is_expired(proposal.expires_at):
+        raise DomainError("REVISION_CONFLICT", "候选已过期，请重新生成候选后再提交")
+
+    dataset = db.get(models.Dataset, dataset_id)
+    if dataset is None or not dataset.family_id:
+        raise DomainError("NOT_FOUND", "数据集不存在")
+    key = repo.FormalKey(
+        family_id=dataset.family_id,
+        dataset_id=dataset_id,
+        kind="plan",
+        node_key=node_id,
+        target_key=candidate_student,
+    )
+    head = repo.read_head(db, key)
+    if (head.version_id if head else None) != proposal.base_plan_version:
+        raise DomainError("DEPENDENCY_STALE", "基础方案已被更新，候选失效，请重新生成")
+
+    body = dict(proposal.body_json or {})
+    try:
+        draft = RecommendationBundle.model_validate(body.get("draft") or {})
+    except Exception as exc:
+        raise DomainError("UNPROCESSABLE", "候选正文不可读，不能提交") from exc
+    review: ReviewInfo | None = None
+    try:
+        review = ReviewInfo.model_validate(body.get("review_info") or {})
+    except Exception:
+        review = None
+    if review is None or review.status != "validated":
+        review = c_planner.review_plan_rules(draft)
+    if review.status != "validated":
+        failed = [check.code for check in review.checks if not check.passed]
+        raise DomainError(
+            "UNPROCESSABLE",
+            "候选未通过完整审核，不能提交：" + ("、".join(failed) or "存在未通过项"),
+        )
+    issues = formal_content_issues(draft)
+    if issues:
+        raise DomainError(
+            "UNPROCESSABLE",
+            "候选内容不完整，不能提交：" + "；".join(item.message for item in issues[:3]),
+        )
+
+    body["review_info"] = review.model_dump(mode="json")
+    body["submitted_at"] = repo.now_iso()
+    proposal.body_json = body
+    confirmation = proposal_rules.create_confirmation(
+        db,
+        proposal=proposal,
+        session_ref=actor,
+        conversation_id=conversation_id,
+        message_id=message_id,
+        summary=f"确认后会把「{candidate_student}」的新方案发布，原方案保留历史",
+    )
+    db.flush()
+    return _submit_payload(
+        proposal,
+        confirmation,
+        status=STATUS_PENDING,
+        idempotent=False,
+        side_effects="confirmation_created",
+    )
+
+
+def _submit_revision(ctx: ServerContext, role: str, args: dict[str, Any]) -> dict[str, Any]:
+    if role != "teacher":
+        raise DomainError("FORBIDDEN", "只有教师可以提交方案修订候选")
+    dataset_id = _dataset(ctx)
+    proposal_id = args.get("proposal_id")
+    if not isinstance(proposal_id, str) or not proposal_id.strip():
+        raise DomainError("INVALID_ARGUMENT", "proposal_id 不能为空")
+    actor = ctx.extras.get("owner_ref")
+    if not isinstance(actor, str) or not actor.strip():
+        raise DomainError("CONTEXT_MISMATCH", "缺少受信任的教师会话，不能提交候选确认")
+    conversation_id = ctx.extras.get("conversation_id")
+    message_id = ctx.extras.get("message_id")
+    with _write_session(ctx) as db:
+        proposal = _candidate(db, dataset_id=dataset_id, proposal_id=proposal_id)
+        student_id = str((proposal.snapshot_json or {}).get("student_id") or "")
+        _student(ctx, role, student_id)
+        if ctx.bound_student_id and ctx.bound_student_id != student_id:
+            raise DomainError("CONTEXT_MISMATCH", "写目标必须与会话绑定学生一致")
+        payload = submit_revision(
+            db,
+            dataset_id=dataset_id,
+            proposal_id=proposal_id,
+            actor=actor.strip(),
+            student_id=student_id,
+            conversation_id=conversation_id if isinstance(conversation_id, str) else None,
+            message_id=message_id if isinstance(message_id, str) else None,
+        )
+    refs = [
+        {
+            "kind": "recommendation",
+            "id": payload["proposal_id"],
+            "plan_version": payload.get("plan_version") or payload.get("base_plan_version"),
+            "dataset_id": dataset_id,
+        }
+    ]
+    limitations = list(payload.get("limitations") or [])
+    data = {**payload, "student_id": student_id}
+    data["limitations"] = limitations
+    return _ok(data, evidence_refs=refs, limitations=limitations)
+
+
+def _revision_status(ctx: ServerContext, role: str, args: dict[str, Any]) -> dict[str, Any]:
+    if role != "teacher":
+        raise DomainError("FORBIDDEN", "只有教师可以查询方案修订状态")
+    dataset_id = _dataset(ctx)
+    selectors = {
+        key: args.get(key)
+        for key in ("proposal_id", "revision_id", "confirmation_id")
+        if args.get(key) is not None
+    }
+    if len(selectors) != 1:
+        raise DomainError(
+            "INVALID_ARGUMENT",
+            "必须且只能提供一个 proposal_id、revision_id 或 confirmation_id",
+        )
+    for key, value in selectors.items():
+        if not isinstance(value, str) or not value.strip():
+            raise DomainError("INVALID_ARGUMENT", f"{key} 不能为空")
+    with _read_session(ctx) as db:
+        proposal = resolve_revision_target(db, dataset_id=dataset_id, **selectors)
+        student_id = str((proposal.snapshot_json or {}).get("student_id") or "")
+        _student(ctx, role, student_id)
+        payload = revision_status_payload(db, proposal)
+    refs = [
+        {
+            "kind": "recommendation",
+            "id": payload["proposal_id"],
+            "plan_version": payload.get("plan_version") or payload.get("base_plan_version"),
+            "dataset_id": dataset_id,
+        }
+    ]
+    limitations = list(payload.get("limitations") or [])
+    data = {**payload, "student_id": student_id}
+    data["limitations"] = limitations
+    return _ok(data, evidence_refs=refs, limitations=limitations)
+
+
+# --------------------------------------------------------------------------- #
 # 注册
 # --------------------------------------------------------------------------- #
 
@@ -936,6 +1464,32 @@ def _definitions() -> list[tuple[str, dict[str, Any], Callable[[ServerContext, s
             ),
             _prepare_revision,
         ),
+        (
+            "submit_plan_revision",
+            _schema(
+                "submit_plan_revision",
+                "把已存在的方案候选提交给教师确认；只登记确认、不发布，重复提交返回同一确认",
+                {
+                    "proposal_id": {"type": "string", "minLength": 1, "maxLength": 64},
+                },
+                ["proposal_id"],
+            ),
+            _submit_revision,
+        ),
+        (
+            "get_revision_status",
+            _schema(
+                "get_revision_status",
+                "按候选/修订/确认查询方案修订状态（draft/pending/confirmed/rejected），只读",
+                {
+                    "proposal_id": {"type": "string", "minLength": 1, "maxLength": 64},
+                    "revision_id": {"type": "string", "minLength": 1, "maxLength": 64},
+                    "confirmation_id": {"type": "string", "minLength": 1, "maxLength": 64},
+                },
+                [],
+            ),
+            _revision_status,
+        ),
     ]
 
 
@@ -993,8 +1547,13 @@ def _existing_tools(registry: ToolRegistry) -> list[RegisteredTool]:
 
 __all__ = [
     "DB_SESSION_KEY",
+    "REVISION_STATUS_VALUES",
     "TASK_TOOLS",
     "TEACHER_ONLY",
     "build_expanded_tools",
     "extend_registry",
+    "resolve_revision_target",
+    "revision_status",
+    "revision_status_payload",
+    "submit_revision",
 ]
