@@ -116,6 +116,34 @@ def load_prompt(namespace: str, task_key: str) -> str | None:
     return path.read_text(encoding="utf-8").strip()
 
 
+def _is_locally_trusted(url: str) -> bool:
+    """只把 loopback 视为本地可信模型；局域网和公网都算外发。"""
+
+    from urllib.parse import urlparse
+
+    host = (urlparse(url or "").hostname or "").strip().lower()
+    return host in {"localhost", "127.0.0.1", "::1"}
+
+
+def assert_external_model_allowed(settings: Any) -> None:
+    """统一外发授权门：未授权时禁止把赛方内容发到远端模型。
+
+    本地 loopback 模型视为可信；远端地址必须由本机设置显式允许。
+    """
+
+    url = getattr(settings, "model_base_url", "") or ""
+    if _is_locally_trusted(url):
+        return
+    if getattr(settings, "allow_external_model_input", False):
+        return
+    from study_companion.contracts import DomainError
+
+    raise DomainError(
+        "MODEL_EXTERNAL_NOT_ALLOWED",
+        "当前模型在远端，尚未授权外发赛方内容；请在本机设置中显式允许后再使用。",
+    )
+
+
 class ModelService:
     """对统一 provider 的薄包装；业务模块只依赖本类。"""
 
@@ -130,6 +158,8 @@ class ModelService:
 
     # -- 配置 ------------------------------------------------------------- #
     def _load_provider(self) -> Any:
+        if self._provider is None and self._provider_loaded is False:
+            assert_external_model_allowed(self._settings)
         if self._provider_loaded:
             return self._provider
         from study_companion.agent.factory import build_provider

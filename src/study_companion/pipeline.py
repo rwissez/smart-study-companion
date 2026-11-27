@@ -1464,6 +1464,8 @@ def attach_lessons(
                 point.get("definition", ""),
                 group.student_intro or "",
                 group.expected_outcome or "",
+                rec.reason or "",
+                getattr(group, "teacher_reason", "") or "",
             ]
             protected_texts: list[str] = []
             if catalog is not None:

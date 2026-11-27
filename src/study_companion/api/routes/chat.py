@@ -752,7 +752,11 @@ def post_chat(payload: ChatRequest, db: DbSession, scope: Scope, settings: AppSe
     from study_companion.model_settings import effective_settings
 
     payload = _resolve_binding(db, scope, payload)
-    provider = build_provider(effective_settings(settings))
+    chat_settings = effective_settings(settings)
+    from study_companion.model_service import assert_external_model_allowed
+
+    assert_external_model_allowed(chat_settings)
+    provider = build_provider(chat_settings)
     # 未配置模型时先尝试确定性的正式学情摘要；拿不到上下文才返回明确不可用。
     if provider.name == "unconfigured":
         target = payload.target
