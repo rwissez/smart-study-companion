@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from typing import Any
 
+from study_companion.agent.expanded_tools import extend_registry
 from study_companion.agent.loop import RegisteredTool, ToolRegistry
 from study_companion.agent.tasks import TaskSpec
 from study_companion.contracts import DomainError
@@ -134,5 +135,6 @@ def build_b_registry(ctx: ServerContext, role: str, task: TaskSpec | None = None
         _schema("get_open_interventions", "读取绑定学生当前的开放教师介入案例（只读）", {}, []),
         intervention_query,
     ))
-    return ToolRegistry(tools)
+    # 05 §6 的只读扩展工具：按任务表与角色筛选后并入，未列出的任务不会得到它们。
+    return extend_registry(ToolRegistry(tools), ctx, role, task)
 
