@@ -380,7 +380,101 @@ def _persist_turn(db, scope, payload: "ChatRequest", body: dict[str, Any], *, st
     body.setdefault("status", "completed" if status == "completed" else status)
     body.setdefault("segments", [])
     body.setdefault("operation_results", [])
+    _link_chat_help_disclosure(db, scope, payload, assistant_message)
     return body
+
+
+def _link_chat_help_disclosure(db, scope, payload: "ChatRequest", message) -> None:
+    """学生就某个活动求助时，把对话帮助记进披露账本（05 §8）。
+
+    只处理"学生 + 明确 activity_id + 有进行中作答"的情形；记账失败不影响回答本身。
+    """
+
+    from study_companion.library import help as help_rules
+
+    if scope.role != "student" or not payload.activity_id:
+        return
+    try:
+        attempt = db.scalars(
+            select(models.AttemptRow)
+            .where(
+                models.AttemptRow.activity_id == payload.activity_id,
+                models.AttemptRow.status == "in_progress",
+            )
+            .order_by(models.AttemptRow.created_at.desc())
+            .limit(1)
+        ).first()
+        if attempt is None or scope.dataset_id is None:
+            return
+        student = db.get(models.Student, (scope.dataset_id, scope.student_id))
+        if student is None or attempt.student_uid != getattr(student, "student_uid", None):
+            return
+        dataset = db.get(models.Dataset, scope.dataset_id)
+        version = db.get(models.Version, attempt.plan_version)
+        if dataset is None or version is None:
+            return
+        exposure = None
+        for recommendation in (version.payload_json or {}).get("recommendations", []) or []:
+            for activity in recommendation.get("activities", []) or []:
+                if activity.get("activity_id") == payload.activity_id:
+                    exposure = activity.get("exposure_mode")
+        protection = help_rules.protection_digest(
+            material_id=attempt.material_id, answer=None, level=0
+        )
+        disclosure = help_rules.open_intent(
+            db,
+            attempt_id=attempt.attempt_id,
+            channel="agent",
+            message_key=f"chat:{message.message_id}",
+            protection=protection,
+            submission_no=attempt.submission_no,
+            reply_ref=message.message_id,
+        )
+        from study_companion.library import learning_events as ledger
+
+        event = ledger.append(
+            db,
+            family_id=dataset.family_id,
+            dataset_id=dataset.id,
+            run_id=None,
+            student_uid=attempt.student_uid,
+            node_id=version.node_key,
+            plan_version=attempt.plan_version,
+            group_id=None,
+            activity_id=payload.activity_id,
+            material_id=attempt.material_id,
+            attempt_id=attempt.attempt_id,
+            event_type="agent_help_used",
+            source="student",
+            payload={"message_id": message.message_id, "conversation_id": message.conversation_id},
+            occurred_at=ledger.now_iso(),
+            dedupe={"message_id": message.message_id},
+        )
+        if exposure == "independent":
+            ledger.append(
+                db,
+                family_id=dataset.family_id,
+                dataset_id=dataset.id,
+                run_id=None,
+                student_uid=attempt.student_uid,
+                node_id=version.node_key,
+                plan_version=attempt.plan_version,
+                group_id=None,
+                activity_id=payload.activity_id,
+                material_id=attempt.material_id,
+                attempt_id=attempt.attempt_id,
+                event_type="assisted_mode_confirmed",
+                source="student",
+                payload={"channel": "agent", "message_id": message.message_id},
+                occurred_at=ledger.now_iso(),
+                dedupe={"message_id": message.message_id},
+            )
+        help_rules.mark_confirmed(db, disclosure, event_id=event.event_id)
+        attempt.assistance_status = "assisted"
+        db.flush()
+    except DomainError:
+        # 记账是附带事实：失败不改变回答，也不伪造成功。
+        return
 
 
 def _rule_fallback(db, scope, target, node_id: str | None) -> dict[str, Any] | None:
