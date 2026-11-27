@@ -80,6 +80,22 @@ def _current_student_result(
     )
     row = repo.read_formal(db, key)
     if row is None or not row.payload_json:
+        row = db.scalar(
+            select(models.Version)
+            .join(
+                models.Publication,
+                models.Publication.version_id == models.Version.version_id,
+            )
+            .where(
+                models.Version.dataset_id == dataset.id,
+                models.Version.kind == "student_analysis",
+                models.Version.node_key == node_id,
+                models.Version.target_key == student_id,
+            )
+            .order_by(models.Version.created_at.desc())
+            .limit(1)
+        )
+    if row is None or not row.payload_json:
         raise DomainError("RESULT_NOT_READY", "该学生在此节点尚无正式学情")
     return row, StudentResult.model_validate(row.payload_json)
 
