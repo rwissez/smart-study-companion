@@ -221,35 +221,6 @@ def submit_revision_for_review(
     )
 
 
-@router.get("/datasets/{dataset_id}/plan-reviews")
-def list_plan_reviews(
-    dataset_id: str,
-    db: DbSession,
-    scope: Scope,
-    page: int = Query(default=1, ge=1),
-    page_size: int = Query(default=20, ge=1, le=200),
-) -> dict:
-    scope.require("view_class_analysis")
-    _dataset_for_student(db, scope, dataset_id, "")
-    rows = db.scalars(
-        select(models.Proposal)
-        .where(models.Proposal.origin == "agent", models.Proposal.state == "ready")
-        .order_by(models.Proposal.created_at.desc())
-    ).all()
-    start = (page - 1) * page_size
-    items = [
-        {
-            "review_id": row.proposal_id,
-            "student_id": (row.snapshot_json or {}).get("student_id", ""),
-            "plan_version": row.base_plan_version or "",
-            "review_info": {"status": "needs_review", "method": "model"},
-            "summary": "Agent 候选修改等待教师确认",
-        }
-        for row in rows[start : start + page_size]
-    ]
-    return success({"items": items, "total": len(rows), "page": page, "page_size": page_size})
-
-
 @router.post("/datasets/{dataset_id}/students/{student_id}/plan/undo", status_code=202)
 def undo_plan(
     dataset_id: str,

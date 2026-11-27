@@ -50,6 +50,13 @@ def _authorized_dataset(db: DbSession, scope: Scope, run_id: str) -> models.Data
     return dataset
 
 
+def _split_ids(value: str | None) -> list[str] | None:
+    if not value:
+        return None
+    items = [item.strip() for item in value.split(",")]
+    return [item for item in items if item] or None
+
+
 @router.post("/runs/{run_id}/exports", status_code=status.HTTP_202_ACCEPTED)
 def create_export(
     run_id: str,
@@ -118,6 +125,31 @@ def list_exports(run_id: str, db: DbSession, scope: Scope) -> dict:
     ).all()
     items = [service.export_view(row) for row in rows]
     return success({"items": items, "total": len(items)})
+
+
+@router.get("/runs/{run_id}/exports/preflight")
+def preflight_export(
+    run_id: str,
+    db: DbSession,
+    scope: Scope,
+    node_ids: str | None = Query(default=None, max_length=2000),
+    case_student_ids: str | None = Query(default=None, max_length=2000),
+) -> dict:
+    """只读预检：与冻结共用同一套检查，不写导出记录也不入队任务。"""
+
+    dataset = _authorized_dataset(db, scope, run_id)
+    run = db.get(models.AnalysisRun, run_id)
+    if run is None:
+        raise DomainError("NOT_FOUND", "分析运行不存在")
+    return success(
+        service.preflight_export(
+            db,
+            run=run,
+            dataset=dataset,
+            node_ids=_split_ids(node_ids),
+            case_student_ids=_split_ids(case_student_ids),
+        )
+    )
 
 
 @router.get("/exports/{export_id}")

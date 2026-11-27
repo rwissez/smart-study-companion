@@ -1,4 +1,4 @@
-"""业务流水线：导入完成后的 A → B → C 调度与正式成果落库。
+﻿"""业务流水线：导入完成后的 A → B → C 调度与正式成果落库。
 
 本模块是唯一"把纯函数结果变成正式版本"的地方：
 
@@ -230,6 +230,17 @@ def persist_analysis_bundle(
             expected_generation=expected_generation,
         )
         published.append(version.version_id)
+        # 依赖边：B 版本实际使用了哪个目录/知识版本，导出闭包据此解析。
+        catalog_dep = _version_row(
+            db,
+            repo.FormalKey(family_id=family_id, dataset_id=bundle.dataset_id, kind="catalog"),
+        )
+        if catalog_dep is not None:
+            repo.register_edge(db, version, catalog_dep, role="catalog")
+        if bundle.knowledge_version:
+            knowledge_dep = db.get(models.Version, bundle.knowledge_version)
+            if knowledge_dep is not None:
+                repo.register_edge(db, version, knowledge_dep, role="knowledge")
         db.add(
             models.AnalysisResult(
                 run_id=run_id,
@@ -442,6 +453,13 @@ STRATEGY_PRIORITY = (
     "consolidation",
     "transfer",
 )
+
+
+def _version_row(db: Session, key: "repo.FormalKey") -> models.Version | None:
+    head = repo.read_head(db, key)
+    if head is None or not head.version_id:
+        return None
+    return db.get(models.Version, head.version_id)
 
 
 def current_knowledge_payload(db: Session, dataset_id: str, family_id: str | None) -> dict[str, Any]:
@@ -979,6 +997,30 @@ def handle_import_process(ctx: JobContext) -> dict[str, Any]:
             if with_lessons:
                 published["plan_version"] = with_lessons["plan_version"]
                 published["lessons"] = with_lessons["lessons"]
+            if published["publication_status"] == "published":
+                _record_applicability(
+                    db,
+                    key=repo.FormalKey(
+                        family_id=family_id,
+                        dataset_id=dataset_id,
+                        kind="plan",
+                        node_key=student_result.node_id,
+                        target_key=student_result.student_id,
+                    ),
+                    plan_version=published["plan_version"],
+                    analysis_version=analysis_version,
+                    knowledge_version=(
+                        knowledge_version_id
+                        if knowledge_result.review_info.status == "validated"
+                        else None
+                    ),
+                    catalog_version=catalog.version,
+                    result="applicable",
+                    event_cutoff=len(included),
+                    activity_ids=[],
+                    limitations=[],
+                    job_id=ctx.job.id,
+                )
         plans.append(
             {
                 "student_id": student_result.student_id,
@@ -1202,6 +1244,14 @@ def attach_lessons(
         dep = db.get(models.Version, edge.dep_version_id)
         if dep is not None:
             repo.register_edge(db, version, dep, role=edge.role)
+    # 微课堂正文也是本方案的正式依赖，导出闭包要能追到 content。
+    for lesson_version in lessons_created:
+        content_version = lesson_version.get("content_version")
+        if not content_version:
+            continue
+        content_row = db.get(models.Version, content_version)
+        if content_row is not None:
+            repo.register_edge(db, version, content_row, role="content")
     repo.publish(
         db,
         key=key,

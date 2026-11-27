@@ -1,4 +1,4 @@
-"""正式成果导出：冻结、序列化、打包、回读校验与授权下载（06 §8—§9）。
+﻿"""正式成果导出：冻结、序列化、打包、回读校验与授权下载（06 §8—§9）。
 
 关键约束：
 * 导出**只读冻结的正式版本集合**，不重算业务、不调用模型；
@@ -16,6 +16,7 @@ import json
 import os
 import tempfile
 import zipfile
+from collections import deque
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
@@ -24,15 +25,18 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from study_companion.contracts import (
+    AttemptView,
     DomainError,
+    GradingResultView,
     RecommendationBundle,
-    StudentResult,
+    RubricScore,
 )
 from study_companion.db import models
 from study_companion.db import version_repository as repo
 
 SCHEMA_VERSION = "1.1"
 EXPORT_FORMAT = "zip"
+AUTO_CASE_LIMIT = 3
 
 
 def _now() -> datetime:
@@ -67,8 +71,673 @@ def _format_decimal(value: float | None) -> str:
 
 
 # --------------------------------------------------------------------------- #
-# 冻结
+# 预检与冻结共用的检查
 # --------------------------------------------------------------------------- #
+
+
+def _finding(code: str, object_key: str, expected: str, remedy: str) -> dict[str, str]:
+    """统一的问题定位形状（06 §8.2）。"""
+
+    return {
+        "code": code,
+        "object_key": str(object_key),
+        "expected": expected,
+        "remedy": remedy,
+    }
+
+
+def _merge_findings(items: list[dict[str, str]]) -> list[dict[str, str]]:
+    seen: set[tuple[str, str]] = set()
+    merged: list[dict[str, str]] = []
+    for item in items:
+        marker = (item["code"], item["object_key"])
+        if marker in seen:
+            continue
+        seen.add(marker)
+        merged.append(item)
+    return merged
+
+
+def _is_published(db: Session, version_id: str) -> bool:
+    return (
+        db.scalar(
+            select(models.Publication.publication_id).where(
+                models.Publication.version_id == version_id
+            )
+        )
+        is not None
+    )
+
+
+_KIND_BY_ROLE = {
+    "student_analysis": "student_analysis",
+    "class_analysis": "class_analysis",
+    "knowledge": "knowledge",
+    "parent_plan": "plan",
+    "plan": "plan",
+    "content": "lesson",
+    "lesson": "lesson",
+}
+
+
+def _check_version(
+    db: Session,
+    dataset: models.Dataset,
+    version_id: str,
+    *,
+    expected: str,
+    expecting_kind: str | None = None,
+) -> tuple[models.Version | None, list[dict[str, str]]]:
+    """按精确版本校验存在性、系列归属与发布状态。"""
+
+    row = db.get(models.Version, version_id)
+    if row is None:
+        return None, [
+            _finding(
+                "DEPENDENCY_DANGLING",
+                version_id,
+                expected,
+                "恢复该版本或重新生成依赖它的正式成果后再导出",
+            )
+        ]
+    findings: list[dict[str, str]] = []
+    if row.family_id != dataset.family_id:
+        findings.append(
+            _finding(
+                "DEPENDENCY_CROSS_FAMILY",
+                version_id,
+                f"属于数据集系列 {dataset.family_id} 的正式版本",
+                "移除跨系列引用，改用本系列的正式版本",
+            )
+        )
+    if not _is_published(db, version_id):
+        findings.append(
+            _finding(
+                "DEPENDENCY_UNPUBLISHED",
+                version_id,
+                "已发布的正式版本",
+                "完成审核并发布该版本，或重新生成依赖它的正式成果",
+            )
+        )
+    if expecting_kind and row.kind != expecting_kind:
+        findings.append(
+            _finding(
+                "DEPENDENCY_KIND_MISMATCH",
+                version_id,
+                f"类型为 {expecting_kind} 的版本",
+                "修正依赖登记后重新导出",
+            )
+        )
+    return row, findings
+
+
+def _build_closure(
+    db: Session,
+    dataset: models.Dataset,
+    *,
+    catalog_version: str,
+    plan_versions: dict[str, str],
+    student_versions: dict[str, dict[str, str]],
+    class_versions: dict[str, dict[str, str]],
+    knowledge_version: str | None,
+    blocking: list[dict[str, str]],
+    warnings: list[dict[str, str]],
+) -> dict[str, Any]:
+    """沿 artifact_edges 与方案载荷收集精确依赖闭包，并校验每个版本。
+
+    只记录真实的 ``artifact_edges``；方案载荷里的 analysis/knowledge/parent
+    引用作为兜底闭包继续解析，但不伪装成数据库依赖边。
+    """
+
+    student_info: dict[str, dict[str, Any]] = {}
+    plan_info: dict[str, dict[str, Any]] = {}
+    class_info: dict[str, dict[str, Any]] = {}
+    knowledge_info: dict[str, bool] = {}
+    content_info: dict[str, bool] = {}
+    edges: set[tuple[str, str, str]] = set()
+    seen: set[str] = set()
+    queue: deque[models.Version] = deque()
+
+    def mark(
+        row: models.Version,
+        *,
+        student_id: str = "",
+        node_id: str = "",
+        current: bool = False,
+    ) -> None:
+        if row.version_id not in seen:
+            seen.add(row.version_id)
+            queue.append(row)
+        if row.kind == "student_analysis":
+            bucket = student_info.setdefault(
+                row.version_id,
+                {
+                    "student_id": row.target_key or student_id,
+                    "node_id": row.node_key or node_id,
+                    "current": False,
+                },
+            )
+            bucket["current"] = bool(bucket["current"] or current)
+        elif row.kind == "plan":
+            bucket = plan_info.setdefault(
+                row.version_id,
+                {
+                    "student_id": row.target_key or student_id,
+                    "node_id": row.node_key or node_id,
+                    "current": False,
+                },
+            )
+            bucket["current"] = bool(bucket["current"] or current)
+        elif row.kind == "class_analysis":
+            bucket = class_info.setdefault(
+                row.version_id,
+                {
+                    "class_id": row.target_key,
+                    "node_id": row.node_key,
+                    "current": False,
+                },
+            )
+            bucket["current"] = bool(bucket["current"] or current)
+        elif row.kind == "knowledge":
+            knowledge_info[row.version_id] = True
+        elif row.kind == "lesson":
+            content_info[row.version_id] = True
+
+    def follow(
+        version_id: str,
+        *,
+        role: str,
+        parent_id: str = "",
+        expected: str,
+        student_id: str = "",
+        node_id: str = "",
+        current: bool = False,
+    ) -> None:
+        row, findings = _check_version(
+            db,
+            dataset,
+            version_id,
+            expected=expected,
+            expecting_kind=_KIND_BY_ROLE.get(role),
+        )
+        blocking.extend(findings)
+        if row is None:
+            return
+        if parent_id:
+            edges.add((parent_id, row.version_id, role))
+        mark(row, student_id=student_id, node_id=node_id, current=current)
+
+    # 本包直接选中的当前版本：即使没有任何依赖边也要进入闭包。
+    for student_id, node_map in student_versions.items():
+        for node, version_id in node_map.items():
+            row = db.get(models.Version, version_id)
+            if row is not None:
+                mark(row, student_id=student_id, node_id=node, current=True)
+    for _class_id, node_map in class_versions.items():
+        for node, version_id in node_map.items():
+            row = db.get(models.Version, version_id)
+            if row is not None:
+                mark(row, node_id=node, current=True)
+    for student_id, version_id in plan_versions.items():
+        row = db.get(models.Version, version_id)
+        if row is not None:
+            mark(row, student_id=student_id, node_id=row.node_key, current=True)
+    if knowledge_version:
+        row = db.get(models.Version, knowledge_version)
+        if row is not None:
+            mark(row)
+
+    while queue:
+        row = queue.popleft()
+        if row.kind == "plan":
+            payload = dict(row.payload_json or {})
+            meta = plan_info.get(row.version_id, {})
+            student_id = meta.get("student_id") or row.target_key
+            node_id = meta.get("node_id") or row.node_key
+            for role, reference, expected in (
+                ("student_analysis", payload.get("analysis_version"), "已发布的正式学生学情"),
+                ("knowledge", payload.get("knowledge_version"), "已发布的正式知识体系"),
+                ("parent_plan", payload.get("parent_plan_version"), "已发布的父方案版本"),
+            ):
+                if reference:
+                    follow(
+                        reference,
+                        role=role,
+                        expected=expected,
+                        student_id=student_id,
+                        node_id=node_id,
+                    )
+            for recommendation in payload.get("recommendations", []) or []:
+                for activity in recommendation.get("activities", []) or []:
+                    content_version = activity.get("content_version")
+                    content_ref = activity.get("content_ref") or {}
+                    if not content_version and isinstance(content_ref, dict):
+                        content_version = content_ref.get("content_version")
+                    if content_version:
+                        follow(
+                            content_version,
+                            role="content",
+                            expected="已发布的微课堂内容版本",
+                            student_id=student_id,
+                            node_id=node_id,
+                        )
+        for edge in repo.dependencies(db, row):
+            follow(
+                edge.dep_version_id,
+                role=edge.role,
+                parent_id=row.version_id,
+                expected="该依赖边指向已发布的正式版本",
+            )
+
+    catalog = db.get(models.Catalog, catalog_version)
+    if catalog is None:
+        blocking.append(
+            _finding(
+                "CATALOG_MISSING",
+                catalog_version,
+                "已发布的正式课程目录",
+                "重新构建并发布课程目录后再导出",
+            )
+        )
+    else:
+        catalog_dataset = db.get(models.Dataset, catalog.dataset_id)
+        if catalog_dataset is None or catalog_dataset.family_id != dataset.family_id:
+            blocking.append(
+                _finding(
+                    "CATALOG_CROSS_FAMILY",
+                    catalog_version,
+                    f"属于数据集系列 {dataset.family_id} 的课程目录",
+                    "选择本系列的目录版本后再导出",
+                )
+            )
+
+    # 适用性只取本包当前方案版本相关记录，不把其他学生的记录带进来。
+    current_plan_ids = sorted(set(plan_versions.values()))
+    applicability_ids: list[str] = []
+    if current_plan_ids:
+        for row in db.scalars(
+            select(models.PlanApplicability)
+            .where(models.PlanApplicability.plan_version.in_(current_plan_ids))
+            .order_by(models.PlanApplicability.applicability_id)
+        ).all():
+            applicability_ids.append(row.applicability_id)
+            if row.result == "incompatible":
+                blocking.append(
+                    _finding(
+                        "APPLICABILITY_INCOMPATIBLE",
+                        row.applicability_id,
+                        "方案对当前学情仍可用或已明确限制",
+                        "重新生成并发布适用当前学情的方案后再导出",
+                    )
+                )
+            elif row.result == "limited":
+                warnings.append(
+                    _finding(
+                        "APPLICABILITY_LIMITED",
+                        row.applicability_id,
+                        "方案仅局部适用，导出会保留限制说明",
+                        "在教师端复核该方案的适用范围",
+                    )
+                )
+
+    compatibility_refs: list[str] = []
+    if seen:
+        from sqlalchemy import or_
+
+        for row in db.scalars(
+            select(models.VersionCompatibility)
+            .where(
+                or_(
+                    models.VersionCompatibility.from_version.in_(sorted(seen)),
+                    models.VersionCompatibility.to_version.in_(sorted(seen)),
+                )
+            )
+            .order_by(models.VersionCompatibility.kind)
+        ).all():
+            compatibility_refs.append(
+                f"{row.kind}:{row.from_version}:{row.to_version}:{row.scope_hash}:{row.policy_hash}"
+            )
+
+    return {
+        "student": student_info,
+        "class": class_info,
+        "plan": plan_info,
+        "knowledge": sorted(knowledge_info),
+        "content": sorted(content_info),
+        "dependency_edges": [
+            {"from": source, "to": target, "role": role}
+            for source, target, role in sorted(edges)
+        ],
+        "applicability_ids": sorted(set(applicability_ids)),
+        "compatibility_refs": sorted(set(compatibility_refs)),
+    }
+
+
+def assess_export_scope(
+    db: Session,
+    *,
+    run: models.AnalysisRun,
+    dataset: models.Dataset,
+    node_ids: list[str] | None,
+    case_student_ids: list[str] | None,
+) -> dict[str, Any]:
+    """只读地评估一次导出范围；预检与冻结共用同一套判定。"""
+
+    blocking: list[dict[str, str]] = []
+    warnings: list[dict[str, str]] = []
+    family_id = dataset.family_id or ""
+    if not family_id:
+        blocking.append(
+            _finding(
+                "FAMILY_MISSING",
+                dataset.id,
+                "数据集具备系列身份",
+                "为数据集登记系列后再导出",
+            )
+        )
+
+    available_nodes = list(run.node_ids_json or [])
+    selected_nodes = list(dict.fromkeys(node_ids)) if node_ids else list(available_nodes)
+    if not selected_nodes:
+        blocking.append(
+            _finding(
+                "NODE_SCOPE_EMPTY",
+                run.id,
+                "至少一个已发布测验节点",
+                "先完成该运行的学情分析",
+            )
+        )
+    for node in selected_nodes:
+        if node not in available_nodes:
+            blocking.append(
+                _finding(
+                    "NODE_OUT_OF_RUN",
+                    node,
+                    "节点属于该运行",
+                    "选择该运行范围内的节点后重试",
+                )
+            )
+
+    roster = db.scalars(
+        select(models.Student).where(models.Student.dataset_id == dataset.id)
+    ).all()
+    students = [row.student_id for row in roster]
+    classes = sorted({row.class_id for row in roster})
+    if not students:
+        blocking.append(
+            _finding(
+                "ROSTER_EMPTY",
+                dataset.id,
+                "数据集包含学生名册",
+                "先导入学生名册并完成分析",
+            )
+        )
+
+    student_versions: dict[str, dict[str, str]] = {}
+    for node in selected_nodes:
+        for student_id in students:
+            version = repo.read_formal(
+                db,
+                repo.FormalKey(
+                    family_id=family_id,
+                    dataset_id=dataset.id,
+                    kind="student_analysis",
+                    run_key=run.id,
+                    node_key=node,
+                    target_key=student_id,
+                ),
+            )
+            if version is None:
+                blocking.append(
+                    _finding(
+                        "STUDENT_ANALYSIS_MISSING",
+                        f"{student_id}/{node}",
+                        "已发布的正式学生学情",
+                        "等待学情分析完成并发布，或调整导出节点",
+                    )
+                )
+                continue
+            student_versions.setdefault(student_id, {})[node] = version.version_id
+
+    class_versions: dict[str, dict[str, str]] = {}
+    for node in selected_nodes:
+        for class_id in classes:
+            version = repo.read_formal(
+                db,
+                repo.FormalKey(
+                    family_id=family_id,
+                    dataset_id=dataset.id,
+                    kind="class_analysis",
+                    run_key=run.id,
+                    node_key=node,
+                    target_key=class_id,
+                ),
+            )
+            if version is None:
+                blocking.append(
+                    _finding(
+                        "CLASS_ANALYSIS_MISSING",
+                        f"{class_id}/{node}",
+                        "已发布的正式班级分析",
+                        "等待班级聚合完成并发布，或调整导出节点",
+                    )
+                )
+                continue
+            class_versions.setdefault(class_id, {})[node] = version.version_id
+
+    plans: dict[str, models.Version] = {}
+    usables: set[str] = set()
+    for student_id in students:
+        for node in selected_nodes:
+            version = repo.read_formal(
+                db,
+                repo.FormalKey(
+                    family_id=family_id,
+                    dataset_id=dataset.id,
+                    kind="plan",
+                    node_key=node,
+                    target_key=student_id,
+                ),
+            )
+            if version is None:
+                continue
+            plans[student_id] = version
+            try:
+                bundle = RecommendationBundle.model_validate(version.payload_json or {})
+            except Exception:
+                blocking.append(
+                    _finding(
+                        "PLAN_INVALID",
+                        version.version_id,
+                        "可解析的正式学习方案",
+                        "重新审核并发布该学生的方案",
+                    )
+                )
+                continue
+            if any(
+                recommendation.activities for recommendation in bundle.recommendations
+            ):
+                usables.add(student_id)
+            else:
+                # 已审核的"无适配材料/补证或介入"结果：允许导出，但案例不能选它。
+                warnings.append(
+                    _finding(
+                        "PLAN_NO_ACTIVITY",
+                        version.version_id,
+                        "该学生方案为正式审核过的无适配材料/补证结果",
+                        "导出会保留空活动与限制说明；如需可执行建议，请先补充可用材料",
+                    )
+                )
+            break
+    for student_id in students:
+        if student_id not in plans:
+            blocking.append(
+                _finding(
+                    "PLAN_MISSING",
+                    student_id,
+                    "已发布的正式学习方案",
+                    "为该学生生成并发布方案，或缩小导出范围",
+                )
+            )
+
+    knowledge_version = None
+    knowledge_row = repo.read_formal(
+        db,
+        repo.FormalKey(family_id=family_id, dataset_id=dataset.id, kind="knowledge"),
+    )
+    if knowledge_row is not None:
+        knowledge_version = knowledge_row.version_id
+    else:
+        warnings.append(
+            _finding(
+                "KNOWLEDGE_MISSING",
+                dataset.id,
+                "已发布的正式知识体系",
+                "发布知识体系后可提供完整知识图谱",
+            )
+        )
+
+    auto_selected = not case_student_ids
+    if case_student_ids:
+        case_ids = list(dict.fromkeys(case_student_ids))
+        if not case_ids:
+            blocking.append(
+                _finding(
+                    "CASE_STUDENT_INVALID",
+                    "case_student_ids",
+                    "至少一名典型案例学生",
+                    "去掉空值或让学生端显式指定学生编号",
+                )
+            )
+        first_node = selected_nodes[0] if selected_nodes else ""
+        for student_id in case_ids:
+            if student_id not in students:
+                blocking.append(
+                    _finding(
+                        "CASE_STUDENT_NOT_IN_DATASET",
+                        student_id,
+                        "属于该数据集的学生",
+                        "从该数据集学生名册中选择典型案例",
+                    )
+                )
+            elif student_id not in student_versions:
+                blocking.append(
+                    _finding(
+                        "CASE_STUDENT_NO_ANALYSIS",
+                        student_id,
+                        "该学生在本运行有正式学情结果",
+                        "等待该学生分析发布，或更换案例学生",
+                    )
+                )
+            elif student_id not in usables:
+                blocking.append(
+                    _finding(
+                        "CASE_STUDENT_NO_PLAN",
+                        student_id,
+                        "至少一份可用学习方案",
+                        "为该学生生成并发布可用方案后再选为案例",
+                    )
+                )
+            else:
+                case_node = plans[student_id].node_key or first_node
+                if case_node and case_node not in student_versions.get(student_id, {}):
+                    blocking.append(
+                        _finding(
+                            "CASE_STUDENT_NO_NODE_ANALYSIS",
+                            f"{student_id}/{case_node}",
+                            "该学生在该方案节点有正式学情结果",
+                            "更换导出节点或案例学生",
+                        )
+                    )
+    else:
+        candidates = [
+            student_id
+            for student_id in sorted(student_versions)
+            if student_id in usables
+        ]
+        case_ids = candidates[:AUTO_CASE_LIMIT]
+        if not case_ids:
+            blocking.append(
+                _finding(
+                    "CASE_NONE_AVAILABLE",
+                    dataset.id,
+                    "至少一名有正式结果与可用方案的案例学生",
+                    "先完成学情与方案发布，或显式指定已授权案例学生",
+                )
+            )
+        else:
+            warnings.append(
+                _finding(
+                    "CASE_AUTO_SELECTED",
+                    ",".join(case_ids),
+                    "默认按正式学情结果自动选取前三名有方案的学生",
+                    "如需指定典型案例，请在请求中提交 case_student_ids",
+                )
+            )
+
+    closure = _build_closure(
+        db,
+        dataset,
+        catalog_version=run.catalog_version,
+        plan_versions={student_id: version.version_id for student_id, version in plans.items()},
+        student_versions=student_versions,
+        class_versions=class_versions,
+        knowledge_version=knowledge_version,
+        blocking=blocking,
+        warnings=warnings,
+    )
+
+    return {
+        "run_id": run.id,
+        "node_ids": selected_nodes,
+        "students": students,
+        "classes": classes,
+        "student_versions": student_versions,
+        "class_versions": class_versions,
+        "plan_versions": {student_id: version.version_id for student_id, version in plans.items()},
+        "knowledge_version": knowledge_version,
+        "case_ids": case_ids,
+        "case_selection": "auto" if auto_selected else "explicit",
+        "blocking": _merge_findings(blocking),
+        "warnings": _merge_findings(warnings),
+        "closure": closure,
+        "coverage": {
+            "students": len(student_versions),
+            "classes": len(class_versions),
+            "cases": len(case_ids),
+        },
+    }
+
+
+def _case_selection_note(mode: str) -> str:
+    if mode == "auto":
+        return "典型案例学生由系统按正式学情结果自动选取，正式提交前需教师确认"
+    return "典型案例学生由教师显式指定"
+
+
+def preflight_export(
+    db: Session,
+    *,
+    run: models.AnalysisRun,
+    dataset: models.Dataset,
+    node_ids: list[str] | None,
+    case_student_ids: list[str] | None,
+) -> dict[str, Any]:
+    """只读预检：不写导出记录、不入队任务，返回与冻结同源的检查结果。"""
+
+    assessment = assess_export_scope(
+        db,
+        run=run,
+        dataset=dataset,
+        node_ids=node_ids,
+        case_student_ids=case_student_ids,
+    )
+    return {
+        "ready": not assessment["blocking"],
+        "blocking": assessment["blocking"],
+        "warnings": assessment["warnings"],
+        "coverage": assessment["coverage"],
+    }
 
 
 def freeze_export(
@@ -88,104 +757,18 @@ def freeze_export(
     if not dataset.family_id:
         raise DomainError("UNPROCESSABLE", "数据集缺少系列身份")
 
-    available_nodes = list(run.node_ids_json or [])
-    selected_nodes = node_ids or available_nodes
-    if not selected_nodes:
-        raise DomainError("EXPORT_INCOMPLETE", "该运行没有可导出的测验节点")
-    for node in selected_nodes:
-        if node not in available_nodes:
-            raise DomainError(
-                "EXPORT_INCOMPLETE",
-                f"节点 {node} 不在该运行范围内",
-                [{"field": "node_ids", "reason": "节点不属于本次运行"}],
-            )
-
-    students = db.scalars(
-        select(models.Student.student_id).where(models.Student.dataset_id == dataset.id)
-    ).all()
-    if not students:
-        raise DomainError("EXPORT_INCOMPLETE", "该数据集没有学生名册")
-
-    student_versions: dict[str, dict[str, str]] = {}
-    missing: list[dict[str, str]] = []
-    for node in selected_nodes:
-        for student_id in students:
-            key = repo.FormalKey(
-                family_id=dataset.family_id,
-                dataset_id=dataset.id,
-                kind="student_analysis",
-                run_key=run_id,
-                node_key=node,
-                target_key=student_id,
-            )
-            version = repo.read_formal(db, key)
-            if version is None:
-                missing.append({"code": "STUDENT_ANALYSIS_MISSING", "object": f"{student_id}/{node}"})
-                continue
-            student_versions.setdefault(student_id, {})[node] = version.version_id
-
-    classes = sorted(
-        {
-            row
-            for row in db.scalars(
-                select(models.Student.class_id).where(models.Student.dataset_id == dataset.id)
-            ).all()
-        }
+    assessment = assess_export_scope(
+        db,
+        run=run,
+        dataset=dataset,
+        node_ids=node_ids,
+        case_student_ids=case_student_ids,
     )
-    class_versions: dict[str, dict[str, str]] = {}
-    for node in selected_nodes:
-        for class_id in classes:
-            key = repo.FormalKey(
-                family_id=dataset.family_id,
-                dataset_id=dataset.id,
-                kind="class_analysis",
-                run_key=run_id,
-                node_key=node,
-                target_key=class_id,
-            )
-            version = repo.read_formal(db, key)
-            if version is None:
-                missing.append({"code": "CLASS_ANALYSIS_MISSING", "object": f"{class_id}/{node}"})
-                continue
-            class_versions.setdefault(class_id, {})[node] = version.version_id
-
-    plan_versions: dict[str, str] = {}
-    for student_id in students:
-        for node in selected_nodes:
-            key = repo.FormalKey(
-                family_id=dataset.family_id,
-                dataset_id=dataset.id,
-                kind="plan",
-                node_key=node,
-                target_key=student_id,
-            )
-            version = repo.read_formal(db, key)
-            if version is not None:
-                plan_versions[student_id] = version.version_id
-    if not plan_versions:
-        missing.append({"code": "PLAN_MISSING", "object": "全部学生都没有正式学习方案"})
-
-    knowledge_version = None
-    knowledge_key = repo.FormalKey(
-        family_id=dataset.family_id, dataset_id=dataset.id, kind="knowledge"
-    )
-    knowledge_row = repo.read_formal(db, knowledge_key)
-    if knowledge_row is not None:
-        knowledge_version = knowledge_row.version_id
-
-    selected_students = case_student_ids or sorted(student_versions)[:3]
-    for student_id in selected_students:
-        if student_id not in student_versions:
-            raise DomainError(
-                "EXPORT_INCOMPLETE",
-                f"典型案例学生 {student_id} 没有正式学情结果",
-                [{"field": "case_student_ids", "reason": "缺少该学生的正式分析"}],
-            )
-    if missing and any(item["code"] in {"PLAN_MISSING", "CLASS_ANALYSIS_MISSING"} for item in missing):
+    if assessment["blocking"]:
         raise DomainError(
             "EXPORT_INCOMPLETE",
             "正式成果不完整，不能生成正式包",
-            [{"field": item["object"], "reason": item["code"]} for item in missing[:5]],
+            assessment["blocking"][:20],
         )
 
     selection = {
@@ -194,14 +777,17 @@ def freeze_export(
         "dataset_family_id": dataset.family_id,
         "catalog_version": run.catalog_version,
         "rule_version": run.rule_version,
-        "node_ids": selected_nodes,
-        "case_student_ids": selected_students,
+        "node_ids": assessment["node_ids"],
+        "case_student_ids": assessment["case_ids"],
+        "case_selection": assessment["case_selection"],
         "versions": {
-            "student": student_versions,
-            "class": class_versions,
-            "plans": plan_versions,
-            "knowledge": knowledge_version,
+            "student": assessment["student_versions"],
+            "class": assessment["class_versions"],
+            "plans": assessment["plan_versions"],
+            "knowledge": assessment["knowledge_version"],
         },
+        "closure": assessment["closure"],
+        "warnings": assessment["warnings"],
         "event_cutoff": int(run.event_cutoff or 0),
         "created_at": _stamp(),
     }
@@ -232,7 +818,15 @@ def freeze_export(
         storage_key=None,
         archive_hash=None,
         bytes=None,
-        check_report_json={"preflight": "passed", "payload": "pending"},
+        check_report_json={
+            "preflight": "passed",
+            "payload": "pending",
+            "case_selection": {
+                "mode": assessment["case_selection"],
+                "note": _case_selection_note(assessment["case_selection"]),
+            },
+            "warnings": assessment["warnings"],
+        },
         status="queued",
         created_at=_stamp(),
         updated_at=_stamp(),
@@ -254,18 +848,66 @@ def _load(db: Session, version_id: str | None) -> dict[str, Any]:
     return dict(row.payload_json or {}) if row is not None else {}
 
 
+def _within_cutoff(value: str | None, cutoff: str | None) -> bool:
+    """冻结后新产生的在线记录不进入旧包。"""
+
+    if not value or not cutoff:
+        return True
+    try:
+        return datetime.fromisoformat(value) <= datetime.fromisoformat(cutoff)
+    except (TypeError, ValueError):
+        return str(value) <= str(cutoff)
+
+
 def build_files(db: Session, export: models.Export) -> dict[str, bytes]:
     selection = dict(export.selection_json or {})
     run = db.get(models.AnalysisRun, selection["run_id"])
     dataset = db.get(models.Dataset, selection["dataset_id"])
     catalog_row = db.get(models.Catalog, selection["catalog_version"])
+    catalog = None
+    if catalog_row is not None:
+        from study_companion.library.datasets import load_catalog
+
+        catalog = load_catalog(db, selection["catalog_version"], dataset.id if dataset else None)
     if run is None or dataset is None or catalog_row is None:
         raise DomainError("EXPORT_INCOMPLETE", "冻结范围引用的对象已不可读")
     node_ids = selection["node_ids"]
     versions = selection["versions"]
+    closure = dict(selection.get("closure") or {})
+    knowledge_version = versions.get("knowledge")
+
+    student_entries: dict[str, dict[str, Any]] = dict(closure.get("student") or {})
+    plan_entries: dict[str, dict[str, Any]] = dict(closure.get("plan") or {})
+    content_ids: list[str] = list(closure.get("content") or [])
+    if not student_entries:
+        for student_id, node_map in versions["student"].items():
+            for node, version_id in node_map.items():
+                student_entries[version_id] = {
+                    "student_id": student_id,
+                    "node_id": node,
+                    "current": True,
+                }
+    if not plan_entries:
+        for student_id, version_id in versions["plans"].items():
+            plan_entries[version_id] = {
+                "student_id": student_id,
+                "node_id": "",
+                "current": True,
+            }
+    if not content_ids:
+        content_ids = sorted(
+            db.scalars(
+                select(models.Version.version_id).where(
+                    models.Version.dataset_id == dataset.id,
+                    models.Version.kind == "lesson",
+                )
+            ).all()
+        )
 
     curriculum: list[dict[str, Any]] = []
-    for indicator in (catalog_row.payload_json or {}).get("indicators", []):
+    catalog_indicators = [item.model_dump(mode="json") for item in catalog.indicators] if catalog else []
+    catalog_materials = [item.model_dump(mode="json") for item in catalog.materials] if catalog else []
+    for indicator in catalog_indicators:
         curriculum.append(
             {
                 "key": f"req:{selection['catalog_version']}:{indicator['indicator_id']}",
@@ -325,7 +967,7 @@ def build_files(db: Session, export: models.Export) -> dict[str, bytes]:
         )
 
     materials: list[dict[str, Any]] = []
-    for material in (catalog_row.payload_json or {}).get("materials", []):
+    for material in catalog_materials:
         materials.append(
             {
                 "key": f"mat:{selection['catalog_version']}:{material['material_id']}",
@@ -363,42 +1005,44 @@ def build_files(db: Session, export: models.Export) -> dict[str, bytes]:
     student_records: list[dict[str, Any]] = []
     class_records: list[dict[str, Any]] = []
     metric_rows: list[list[str]] = []
-    for student_id, node_map in versions["student"].items():
-        for node, version_id in node_map.items():
-            payload = _load(db, version_id)
-            student_records.append(
-                {
-                    "key": f"student:{version_id}:{student_id}",
-                    "student_id": student_id,
-                    "node_id": node,
-                    "analysis_version": version_id,
-                    "current": True,
-                    "knowledge_version": versions.get("knowledge"),
-                    "catalog_version": selection["catalog_version"],
-                    "event_cutoff": selection["event_cutoff"],
-                    "result": payload,
-                    "limitations": payload.get("limitations", []),
-                }
+    for version_id, meta in sorted(student_entries.items()):
+        student_id = str(meta.get("student_id") or "")
+        node = str(meta.get("node_id") or "")
+        current = bool(meta.get("current"))
+        payload = _load(db, version_id)
+        student_records.append(
+            {
+                "key": f"student:{version_id}:{student_id}",
+                "student_id": student_id,
+                "node_id": node,
+                "analysis_version": version_id,
+                "current": current,
+                "knowledge_version": knowledge_version,
+                "catalog_version": selection["catalog_version"],
+                "event_cutoff": selection["event_cutoff"],
+                "result": payload,
+                "limitations": payload.get("limitations", []),
+            }
+        )
+        for metric in payload.get("metrics", []):
+            metric_rows.append(
+                [
+                    metric.get("metric_id", ""),
+                    "student",
+                    student_id,
+                    node,
+                    (metric.get("scope") or {}).get("indicator_id") or "",
+                    (metric.get("scope") or {}).get("kp_id") or "",
+                    "" if metric.get("numerator") is None else str(metric["numerator"]),
+                    "" if metric.get("denominator") is None else str(metric["denominator"]),
+                    _format_decimal(metric.get("value")),
+                    metric.get("unit", ""),
+                    version_id,
+                    f"metric:{version_id}:{metric.get('metric_id')}",
+                    metric.get("evidence_status") or "",
+                    "true" if current else "false",
+                ]
             )
-            for metric in payload.get("metrics", []):
-                metric_rows.append(
-                    [
-                        metric.get("metric_id", ""),
-                        "student",
-                        student_id,
-                        node,
-                        (metric.get("scope") or {}).get("indicator_id") or "",
-                        (metric.get("scope") or {}).get("kp_id") or "",
-                        "" if metric.get("numerator") is None else str(metric["numerator"]),
-                        "" if metric.get("denominator") is None else str(metric["denominator"]),
-                        _format_decimal(metric.get("value")),
-                        metric.get("unit", ""),
-                        version_id,
-                        f"metric:{version_id}:{metric.get('metric_id')}",
-                        metric.get("evidence_status") or "",
-                        "true",
-                    ]
-                )
     for class_id, node_map in versions["class"].items():
         for node, version_id in node_map.items():
             payload = _load(db, version_id)
@@ -445,44 +1089,96 @@ def build_files(db: Session, export: models.Export) -> dict[str, bytes]:
                 )
 
     plan_records: list[dict[str, Any]] = []
-    for student_id, version_id in versions["plans"].items():
+    content_activity: dict[str, dict[str, str]] = {}
+    for version_id, meta in sorted(plan_entries.items()):
+        student_id = str(meta.get("student_id") or "")
         payload = _load(db, version_id)
         plan = RecommendationBundle.model_validate(payload)
-        origin = plan.analysis_version or ""
-        current = versions["student"].get(student_id, {}).get(node_ids[0], "")
+        node_id = plan.node_id or str(meta.get("node_id") or "")
+        current = bool(meta.get("current"))
+        origin_version = plan.analysis_version or ""
+        current_version = (
+            versions["student"].get(student_id, {}).get(node_id)
+            or versions["student"].get(student_id, {}).get(node_ids[0], "")
+        )
+        activities: list[dict[str, Any]] = []
+        for recommendation in plan.recommendations:
+            for activity in recommendation.activities:
+                projection = activity.model_dump(mode="json")
+                if activity.content_version:
+                    projection["content_key"] = f"content:{activity.content_version}"
+                    content_activity.setdefault(
+                        activity.content_version,
+                        {"activity_id": activity.activity_id, "plan_version": version_id},
+                    )
+                activities.append(projection)
+        applicability = None
+        if current:
+            applicability_row = db.scalar(
+                select(models.PlanApplicability)
+                .where(models.PlanApplicability.plan_version == version_id)
+                .order_by(models.PlanApplicability.checked_at.desc())
+                .limit(1)
+            )
+            if applicability_row is not None:
+                applicability = {
+                    "applicability_id": applicability_row.applicability_id,
+                    "result": applicability_row.result,
+                    "checked_at": applicability_row.checked_at,
+                    "event_cutoff": applicability_row.event_cutoff,
+                    "activity_ids": list(applicability_row.activity_ids_json or []),
+                    "evidence_refs": list(applicability_row.evidence_refs_json or []),
+                    "limitations": list(applicability_row.limitations_json or []),
+                }
         plan_records.append(
             {
                 "key": f"plan:{version_id}:{student_id}",
                 "student_id": student_id,
-                "node_id": plan.node_id,
+                "node_id": node_id,
                 "plan_version": version_id,
-                "origin_analysis_key": origin,
-                "current_analysis_key": current,
+                "current": current,
+                "origin_analysis_key": f"student:{origin_version}:{student_id}"
+                if origin_version
+                else "",
+                "current_analysis_key": f"student:{current_version}:{student_id}"
+                if current_version
+                else "",
                 "knowledge_version": plan.knowledge_version,
                 "catalog_version": plan.catalog_version,
                 "review_status": (plan.review_info.status if plan.review_info else "validated"),
                 "publication_basis": plan.publication_basis or "automatic_review",
-                "applicability": None,
+                "applicability": applicability,
                 "groups": [group.model_dump(mode="json") for group in plan.task_groups],
-                "activities": [activity.model_dump(mode="json") for activity in
-                               (item for rec in plan.recommendations for item in rec.activities)],
+                "activities": activities,
                 "limitations": plan.limitations,
             }
         )
 
     evidence: list[dict[str, Any]] = []
+    record_keys: dict[tuple[str, str], list[str]] = {}
+    roster_ids = list(
+        db.scalars(
+            select(models.Student.student_id).where(models.Student.dataset_id == dataset.id)
+        ).all()
+    )
     events = db.scalars(
         select(models.AnswerEvent)
-        .where(models.AnswerEvent.dataset_id == dataset.id)
+        .where(
+            models.AnswerEvent.dataset_id == dataset.id,
+            models.AnswerEvent.student_id.in_(roster_ids),
+            models.AnswerEvent.node_id.in_(node_ids),
+        )
         .order_by(models.AnswerEvent.event_id)
         .limit(500)
     ).all()
     for event in events:
         payload = dict(event.payload_json or {})
         record_id = payload.get("selected_record_id") or event.event_id
+        key = f"ev:{selection['run_id']}:{record_id}"
+        record_keys.setdefault((event.student_id, event.node_id), []).append(key)
         evidence.append(
             {
-                "key": f"ev:{selection['run_id']}:{record_id}",
+                "key": key,
                 "ref": {"kind": "record", "id": record_id, "run_id": selection["run_id"]},
                 "detail_type": "record",
                 "detail": {
@@ -503,6 +1199,7 @@ def build_files(db: Session, export: models.Export) -> dict[str, bytes]:
             }
         )
 
+    cutoff = selection.get("created_at")
     learning: list[dict[str, Any]] = []
     for row in db.scalars(
         select(models.LearningEventRow)
@@ -510,6 +1207,8 @@ def build_files(db: Session, export: models.Export) -> dict[str, bytes]:
         .order_by(models.LearningEventRow.offset)
         .limit(500)
     ).all():
+        if not _within_cutoff(row.occurred_at, cutoff):
+            continue
         identity = db.get(models.StudentIdentity, row.student_uid)
         learning.append(
             {
@@ -528,20 +1227,136 @@ def build_files(db: Session, export: models.Export) -> dict[str, bytes]:
             }
         )
 
-    micro_lessons: list[dict[str, Any]] = []
-    for version in db.scalars(
-        select(models.Version).where(
-            models.Version.dataset_id == dataset.id, models.Version.kind == "lesson"
+    student_uid_to_id = {
+        row.student_uid: row.student_id
+        for row in db.scalars(
+            select(models.Student).where(models.Student.dataset_id == dataset.id)
+        ).all()
+        if row.student_uid
+    }
+    attempt_rows = []
+    if student_uid_to_id:
+        attempt_rows = [
+            row
+            for row in db.scalars(
+                select(models.AttemptRow)
+                .join(
+                    models.Version,
+                    models.Version.version_id == models.AttemptRow.plan_version,
+                )
+                .where(
+                    models.AttemptRow.student_uid.in_(sorted(student_uid_to_id)),
+                    models.Version.dataset_id == dataset.id,
+                )
+                .order_by(models.AttemptRow.created_at)
+            ).all()
+            if _within_cutoff(row.created_at, cutoff)
+        ]
+    attempt_by_id = {row.attempt_id: row for row in attempt_rows}
+    for row in attempt_rows:
+        answer = dict(row.answer_json or {})
+        view = AttemptView(
+            attempt_id=row.attempt_id,
+            student_id=student_uid_to_id.get(row.student_uid, ""),
+            plan_version=row.plan_version,
+            activity_id=row.activity_id,
+            material_id=row.material_id,
+            status=row.status,
+            submitted_at=row.submitted_at,
+            final_answer=answer.get("final_answer"),
+            solution_steps=answer.get("solution_steps"),
+            assistance_status=row.assistance_status,
+            hint_max_level=answer.get("hint_max_level"),
+            agent_help_count=answer.get("agent_help_count"),
+            submission_no=row.submission_no,
+            latest_grade_id=row.latest_grade_id,
         )
-    ).all():
+        learning.append(
+            {
+                "key": f"attempt:{row.attempt_id}",
+                "kind": "attempt",
+                "plan_version": row.plan_version,
+                "activity_id": row.activity_id,
+                "data": view.model_dump(mode="json"),
+            }
+        )
+
+    grade_rows = []
+    if attempt_by_id:
+        grade_rows = [
+            row
+            for row in db.scalars(
+                select(models.Grade)
+                .where(models.Grade.attempt_id.in_(sorted(attempt_by_id)))
+                .order_by(models.Grade.created_at, models.Grade.revision)
+            ).all()
+            if _within_cutoff(row.created_at, cutoff)
+        ]
+    for row in grade_rows:
+        attempt = attempt_by_id[row.attempt_id]
+        grade_payload = dict(row.payload_json or {})
+        grade_status = (
+            row.status
+            if row.status in {"pending", "graded", "needs_review", "unanswered"}
+            else "needs_review"
+        )
+        validation_status = (
+            row.validation_status
+            if row.validation_status in {"not_checked", "validated", "rejected"}
+            else "not_checked"
+        )
+        rubric_scores: list[RubricScore] = []
+        if grade_status == "graded":
+            for item in grade_payload.get("rubric_scores", []) or []:
+                try:
+                    rubric_scores.append(RubricScore.model_validate(item))
+                except Exception:
+                    continue
+        method = grade_payload.get("method")
+        if method not in {"rule", "model", "hybrid", "teacher"}:
+            method = "rule"
+        view = GradingResultView(
+            grade_id=row.grade_id,
+            attempt_id=row.attempt_id,
+            revision=row.revision,
+            status=grade_status,
+            validation_status=validation_status,
+            score=row.score if grade_status == "graded" else None,
+            max_score=row.max_score,
+            rubric_scores=rubric_scores,
+            method=method,
+            evidence_refs=[],
+            limitations=[str(item) for item in grade_payload.get("limitations", []) or []],
+            created_at=row.created_at,
+            rule_version=str(grade_payload.get("rule_version", "") or ""),
+            prompt_version=grade_payload.get("prompt_version"),
+        )
+        learning.append(
+            {
+                "key": f"grade:{row.grade_id}",
+                "kind": "grade",
+                "plan_version": attempt.plan_version,
+                "activity_id": attempt.activity_id,
+                "data": view.model_dump(mode="json"),
+            }
+        )
+    has_online_history = bool(attempt_rows or grade_rows)
+
+    micro_lessons: list[dict[str, Any]] = []
+    for version_id in sorted(content_ids):
+        version = db.get(models.Version, version_id)
+        if version is None:
+            continue
         payload = dict(version.payload_json or {})
+        link = content_activity.get(version_id, {})
         micro_lessons.append(
             {
-                "key": f"content:{version.version_id}",
+                "key": f"content:{version_id}",
                 "content_id": payload.get("content_id"),
-                "content_version": version.version_id,
-                "activity_id": "",
-                "plan_version": payload.get("origin_plan_version"),
+                "content_version": version_id,
+                "activity_id": link.get("activity_id", ""),
+                "plan_version": payload.get("origin_plan_version")
+                or link.get("plan_version", ""),
                 "body": payload.get("body"),
                 "review_status": (payload.get("review_info") or {}).get("status"),
                 "evidence_refs": [],
@@ -549,12 +1364,25 @@ def build_files(db: Session, export: models.Export) -> dict[str, bytes]:
         )
 
     case_ids = selection["case_student_ids"]
+    case_mode = selection.get("case_selection", "explicit")
+    student_class = {
+        row.student_id: row.class_id
+        for row in db.scalars(
+            select(models.Student).where(models.Student.dataset_id == dataset.id)
+        ).all()
+    }
     input_items: list[dict[str, Any]] = []
     output_items: list[dict[str, Any]] = []
     for student_id in case_ids:
-        node = node_ids[0]
-        version_id = versions["student"].get(student_id, {}).get(node, "")
         plan_version = versions["plans"].get(student_id, "")
+        plan_payload = _load(db, plan_version)
+        node = plan_payload.get("node_id") or node_ids[0]
+        version_id = versions["student"].get(student_id, {}).get(node, "")
+        case_limitations = ["输入为正式快照中的真实记录；原始作答按授权访问"]
+        if case_mode == "auto":
+            case_limitations.append(
+                "该案例学生由系统按正式学情结果自动选取，需教师确认后作为正式提交名单"
+            )
         input_items.append(
             {
                 "key": f"in:{student_id}",
@@ -562,27 +1390,79 @@ def build_files(db: Session, export: models.Export) -> dict[str, bytes]:
                 "student_id": student_id,
                 "node_id": node,
                 "scope": {"node_id": node},
-                "input_versions": [dataset.id, selection["catalog_version"], versions.get("knowledge")],
-                "requirement_keys": [f"req:{selection['catalog_version']}:{item['indicator_id']}" for item in curriculum],
-                "record_keys": [],
-                "limitations": ["输入为正式快照中的真实记录；原始作答按授权访问"],
+                "input_versions": [
+                    item
+                    for item in (
+                        dataset.id,
+                        selection["catalog_version"],
+                        knowledge_version,
+                    )
+                    if item
+                ],
+                "requirement_keys": [
+                    f"req:{selection['catalog_version']}:{item['indicator_id']}"
+                    for item in curriculum
+                ],
+                "record_keys": list(record_keys.get((student_id, node), [])),
+                "limitations": case_limitations,
             }
         )
         payload = _load(db, version_id)
+        class_id = student_class.get(student_id, "")
+        class_version = versions["class"].get(class_id, {}).get(node, "")
+        activity_ids = [
+            activity.get("activity_id")
+            for recommendation in plan_payload.get("recommendations", []) or []
+            for activity in recommendation.get("activities", []) or []
+            if activity.get("activity_id")
+        ]
         output_items.append(
             {
                 "key": f"out:{student_id}",
                 "case_id": student_id,
                 "student_analysis_key": f"student:{version_id}:{student_id}",
                 "plan_key": f"plan:{plan_version}:{student_id}" if plan_version else "",
-                "class_analysis_keys": [],
-                "finding_ids": [item.get("finding_id") for item in payload.get("findings", [])],
-                "metric_keys": [f"metric:{version_id}:{item.get('metric_id')}" for item in payload.get("metrics", [])],
-                "activity_ids": [],
+                "class_analysis_keys": (
+                    [f"class:{class_version}:{class_id}"] if class_version else []
+                ),
+                "finding_ids": [
+                    item.get("finding_id") for item in payload.get("findings", [])
+                ],
+                "metric_keys": [
+                    f"metric:{version_id}:{item.get('metric_id')}"
+                    for item in payload.get("metrics", [])
+                ],
+                "activity_ids": activity_ids,
                 "evidence_refs": [],
                 "limitations": payload.get("limitations", []),
             }
         )
+
+    manifest_limitations: list[str] = []
+    if case_mode == "auto":
+        manifest_limitations.append(
+            "典型案例学生未由教师显式指定：系统按正式学情结果自动选取有可用方案的学生，正式提交前需教师确认"
+        )
+    if not has_online_history:
+        manifest_limitations.append(
+            "本包学生没有在线尝试与评分记录：learning_history.json 的 attempt/grade 条目为空，只保留学习事件"
+        )
+    if any(not bool(meta.get("current")) for meta in student_entries.values()) or any(
+        not bool(meta.get("current")) for meta in plan_entries.values()
+    ):
+        manifest_limitations.append(
+            "包内含历史依赖版本：student_analysis.json 与 recommendations.json 以 current=false 标记"
+        )
+    warning_codes = {
+        str(item.get("code")) for item in (selection.get("warnings") or []) if isinstance(item, dict)
+    }
+    if "PLAN_NO_ACTIVITY" in warning_codes:
+        manifest_limitations.append(
+            "部分学生的正式方案为已审核的\u201c无适配材料/补证或介入\u201d结果，recommendations.json 保留空活动与限制说明"
+        )
+    closure_knowledge = sorted(closure.get("knowledge") or [])
+    if knowledge_version and knowledge_version not in closure_knowledge:
+        closure_knowledge.append(knowledge_version)
 
     manifest = {
         "schema_version": SCHEMA_VERSION,
@@ -600,15 +1480,17 @@ def build_files(db: Session, export: models.Export) -> dict[str, bytes]:
         "node_ids": node_ids,
         "versions": {
             "catalog": [selection["catalog_version"]],
-            "knowledge": [versions.get("knowledge")] if versions.get("knowledge") else [],
-            "student": sorted({v for node_map in versions["student"].values() for v in node_map.values()}),
-            "class": sorted({v for node_map in versions["class"].values() for v in node_map.values()}),
-            "plans": sorted(versions["plans"].values()),
-            "content": [item["content_version"] for item in micro_lessons],
+            "knowledge": sorted(closure_knowledge),
+            "student": sorted(student_entries),
+            "class": sorted(
+                {v for node_map in versions["class"].values() for v in node_map.values()}
+            ),
+            "plans": sorted(plan_entries),
+            "content": sorted(content_ids),
         },
-        "dependency_edges": [],
-        "applicability_ids": [],
-        "compatibility_refs": [],
+        "dependency_edges": list(closure.get("dependency_edges") or []),
+        "applicability_ids": sorted(closure.get("applicability_ids") or []),
+        "compatibility_refs": sorted(closure.get("compatibility_refs") or []),
         "evidence_index": {"file": "evidence_records.json", "record_count": len(evidence)},
         "coverage": {
             "students": len(versions["student"]),
@@ -622,7 +1504,7 @@ def build_files(db: Session, export: models.Export) -> dict[str, bytes]:
         },
         "files": [],
         "validation": {"preflight": "passed", "payload": "pending"},
-        "limitations": [],
+        "limitations": manifest_limitations,
     }
 
     payloads: dict[str, bytes] = {
@@ -779,6 +1661,15 @@ def build_archive(db: Session, export: models.Export, output_root: Path) -> dict
     archive_hash = _sha(final_path.read_bytes())
     manifest = json.loads(files["manifest.json"].decode("utf-8"))
     manifest["validation"] = {"preflight": "passed", "payload": "passed"}
+    selection = dict(export.selection_json or {})
+    case_mode = selection.get("case_selection", "explicit")
+    report["case_selection"] = {
+        "mode": case_mode,
+        "note": _case_selection_note(case_mode),
+    }
+    if selection.get("warnings"):
+        report["warnings"] = list(selection["warnings"])
+    report["dependency_edges"] = len(manifest.get("dependency_edges") or [])
     return {
         "storage_key": f"exports/{export.export_id}.zip",
         "archive_hash": archive_hash,

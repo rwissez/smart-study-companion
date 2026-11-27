@@ -578,3 +578,148 @@ def _write_plan_rows(
                     )
                 )
     db.flush()
+
+
+def publish_agent_revision(
+    db: Session,
+    *,
+    dataset: models.Dataset,
+    student_id: str,
+    node_id: str,
+    proposal: models.Proposal,
+    draft: RecommendationBundle,
+    review: ReviewInfo,
+    authorization_ref: str,
+) -> dict[str, Any]:
+    """Agent 候选的正式发布（04 §8 的 ``agent_revision`` 路径）。
+
+    前置：候选已通过完整审核、基础版本仍然当前、活动历史不被删改。
+    正式指针的切换与教师直编共用同一 CAS，失败不产生半发布。
+    """
+
+    from study_companion.library.datasets import load_catalog
+
+    if review.status != "validated":
+        raise DomainError("UNPROCESSABLE", "候选未通过完整审核，不能发布")
+    key = repo.FormalKey(
+        family_id=dataset.family_id or "",
+        dataset_id=dataset.id,
+        kind="plan",
+        node_key=node_id,
+        target_key=student_id,
+    )
+    head = repo.read_head(db, key)
+    current_version = head.version_id if head else None
+    if proposal.base_plan_version != current_version:
+        raise DomainError("DEPENDENCY_STALE", "基础方案已被更新，候选失效，请重新生成")
+
+    base_row = (
+        db.get(models.Version, proposal.base_plan_version)
+        if proposal.base_plan_version
+        else None
+    )
+    if base_row is None or not base_row.payload_json:
+        raise DomainError("DEPENDENCY_STALE", "基础方案版本不可读")
+    base = RecommendationBundle.model_validate(base_row.payload_json)
+    catalog = load_catalog(db, draft.catalog_version, dataset.id)
+    protected = {
+        row.activity_id
+        for row in db.scalars(
+            select(models.ActivityStateRow).where(
+                models.ActivityStateRow.origin_plan_version == proposal.base_plan_version
+            )
+        ).all()
+        if row.state in {"completed", "in_progress"}
+    }
+    errors = hard_checks(base, draft, catalog=catalog, completed_activity_ids=protected)
+    if errors:
+        raise DomainError(
+            "UNPROCESSABLE",
+            "候选未通过硬性检查：" + "；".join(item.message for item in errors[:3]),
+            [{"field": item.activity_id or item.field or "activities", "reason": item.message} for item in errors],
+        )
+
+    plan_version_id = repo.new_id("plan")
+    final = draft.model_copy(
+        update={
+            "plan_version": plan_version_id,
+            "parent_plan_version": proposal.base_plan_version,
+            "review_status": "validated",
+            "publication_status": "published",
+            "publication_basis": "automatic_review",
+            "publish_path": "agent_revision",
+            "review_info": review,
+            "created_at": repo.now_iso(),
+        }
+    )
+    version = repo.create_version(
+        db,
+        kind="plan",
+        key=key,
+        payload=final.model_dump(mode="json"),
+        rule_version="c-agent-revision",
+        input_digest=proposal.draft_hash,
+        job_id=None,
+        version_id=plan_version_id,
+        origin_kind="agent",
+    )
+    repo.register_edge(db, version, base_row, role="parent_plan")
+    for edge in repo.dependencies(db, base_row):
+        dep = db.get(models.Version, edge.dep_version_id)
+        if dep is not None:
+            repo.register_edge(db, version, dep, role=edge.role)
+
+    repo.publish(
+        db,
+        key=key,
+        version=version,
+        path="agent_revision",
+        basis="automatic_review",
+        review_id="",
+        actor_ref=authorization_ref,
+        expected_version_id=head.version_id if head else None,
+        expected_generation=head.generation if head else 0,
+    )
+    _write_plan_rows(
+        db,
+        plan_version_id,
+        final,
+        student_uid=_student_uid(dataset, db, student_id),
+    )
+    db.add(
+        models.PlanRevision(
+            revision_id=repo.new_id("rev"),
+            proposal_id=proposal.proposal_id,
+            proposal_revision=proposal.proposal_revision,
+            scope_key=proposal.scope_key,
+            base_plan_version=proposal.base_plan_version,
+            restore_version=None,
+            result_version=plan_version_id,
+            reason=str((proposal.body_json or {}).get("intent_summary", ""))[:500],
+            origin="agent_revision",
+            job_id=None,
+            created_at=repo.now_iso(),
+        )
+    )
+    db.add(
+        models.SystemAudit(
+            audit_id=repo.new_id("audit"),
+            scope_key=proposal.scope_key,
+            actor_ref=authorization_ref,
+            action="plan_agent_publish",
+            subject_ref=student_id,
+            before_ref=proposal.base_plan_version,
+            after_ref=plan_version_id,
+            details_json={"proposal_id": proposal.proposal_id, "draft_hash": proposal.draft_hash},
+            created_at=repo.now_iso(),
+        )
+    )
+    db.flush()
+    return {
+        "plan_version": plan_version_id,
+        "previous_plan_version": proposal.base_plan_version,
+        "review_status": "validated",
+        "publication_status": "published",
+        "publication_basis": "automatic_review",
+        "publish_path": "agent_revision",
+    }
