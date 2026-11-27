@@ -306,7 +306,7 @@ def _catalog_context(db: DbSession, dataset_id: str, version: str) -> CatalogCon
     return CatalogContract(version=version, topics=payload.get("topics", []), indicators=indicators, materials=materials, links=payload.get("links", []))
 
 
-def _persist_turn(db, scope, payload: "ChatRequest", body: dict[str, Any], *, status: str = "completed") -> dict[str, Any]:
+def _persist_turn(db, scope, payload: "ChatRequest", body: dict[str, Any], *, status: str = "completed", trace_source: list | None = None) -> dict[str, Any]:
     """把本轮对话写入持久化会话，并补齐新契约字段。
 
     旧客户端拿到同样的 ``text``；新客户端可用 ``conversation_id`` 继续多轮。
@@ -380,6 +380,20 @@ def _persist_turn(db, scope, payload: "ChatRequest", body: dict[str, Any], *, st
     body.setdefault("status", "completed" if status == "completed" else status)
     body.setdefault("segments", [])
     body.setdefault("operation_results", [])
+    if trace_source:
+        from study_companion.agent.traces import record_tool_traces
+
+        record_tool_traces(
+            db,
+            traces=trace_source,
+            conversation_id=conversation_id,
+            scope_payload={
+                "dataset_id": scope.dataset_id,
+                "student_id": scope.student_id,
+                "node_id": payload.node_id,
+                "role": scope.role,
+            },
+        )
     _link_chat_help_disclosure(db, scope, payload, assistant_message)
     return body
 
@@ -703,9 +717,28 @@ def post_chat(payload: ChatRequest, db: DbSession, scope: Scope, settings: AppSe
             # 旧客户端的验收用例依赖工具执行结果；新客户端按 01 §9.5 只拿安全投影。
             item["result"] = getattr(trace, "result", None)
         tool_trace.append(item)
+    from study_companion.agent.fact_check import check_answer
+
+    allowed_evidence_ids = {
+        str(ref.get("id")) for ref in result.state.evidence_refs if isinstance(ref, dict) and ref.get("id")
+    }
+    fact_check = check_answer(
+        text=result.text or "",
+        evidence_refs=list(result.state.evidence_refs),
+        allowed_evidence_ids=allowed_evidence_ids,
+        tool_results=[
+            getattr(trace, "result", None)
+            for trace in result.tool_trace
+            if getattr(trace, "result", None) is not None
+        ],
+    )
     body = {
         "text": result.text or "",
         "tool_trace": tool_trace,
+        "fact_check": fact_check,
+        "warnings": [
+            {"code": item["code"], "message": item["message"]} for item in fact_check["issues"]
+        ],
         "stopped_reason": result.stopped_reason,
         "prompt_version": prompt_version,
         "evidence_refs": result.state.evidence_refs,
@@ -724,5 +757,6 @@ def post_chat(payload: ChatRequest, db: DbSession, scope: Scope, settings: AppSe
             payload,
             body,
             status="failed" if result.stopped_reason else "completed",
+            trace_source=result.tool_trace,
         )
     )
