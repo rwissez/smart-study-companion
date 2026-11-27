@@ -123,6 +123,9 @@ def preview_micro_lesson(
         }
     )
     return success(view)
+
+
+@router.post("/runs/{run_id}/students/{student_id}/activities/{activity_id}/micro-lesson/complete")
 def complete_micro_lesson(
     run_id: str,
     student_id: str,
