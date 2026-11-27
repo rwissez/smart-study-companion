@@ -338,12 +338,39 @@ def build_knowledge(
             "未配置模型：本轮只生成课程指标级知识点与已登记关联，未执行教材正文提取与语义复核"
         )
 
+    mapped_indicators = {
+        indicator_id
+        for material in catalog.materials
+        for indicator_id in (material.indicator_ids or [])
+    }
+    indicator_ids = {indicator.indicator_id for indicator in catalog.indicators}
+    question_materials = [item for item in catalog.materials if item.material_type == "question"]
+    mapping_gaps = {
+        "indicators_without_material": sorted(indicator_ids - mapped_indicators),
+        "materials_without_indicator": sorted(
+            item.material_id
+            for item in question_materials
+            if not (set(item.indicator_ids or []) & indicator_ids)
+        ),
+        "materials_without_rubric": sorted(
+            item.material_id
+            for item in question_materials
+            if item.question_type == "solution" and not (item.rubric_points or [])
+        ),
+        "points_without_annotation": sorted(
+            point.kp_id
+            for point in points
+            if not any(point.kp_id in (annotation.target_ids or []) for annotation in annotations)
+        ),
+        "limitations": ["缺口按目录与材料表计算；缺失项不自动补全，需教师确认"],
+    }
     review_summary = {
         "dataset_id": dataset_id,
         "catalog_version": catalog.version,
         "knowledge_version": knowledge_version,
         "candidate_version": knowledge_version,
         "generated_at": "",
+        "mapping_gaps": mapping_gaps,
         "counts": {
             "source_files": len({loc.source_file for point in points for loc in point.source_locators}),
             "total_pages": 0,

@@ -106,6 +106,25 @@ def test_import_runs_pipeline_and_publishes_plans(client: TestClient, imported: 
         }
 
 
+def test_knowledge_quality_lists_mapping_gaps(client: TestClient, imported: dict) -> None:
+    headers = {"Authorization": f"Bearer {_teacher_token(client, imported['dataset_id'])}"}
+    response = client.get(
+        f"/api/v1/datasets/{imported['dataset_id']}/knowledge/quality",
+        headers=headers,
+    )
+    assert response.status_code == 200, response.text
+    summary = response.json()["data"]
+    gaps = summary.get("mapping_gaps")
+    assert isinstance(gaps, dict) and gaps.get("limitations")
+    for key in (
+        "indicators_without_material",
+        "materials_without_indicator",
+        "materials_without_rubric",
+        "points_without_annotation",
+    ):
+        assert key in gaps
+
+
 def test_class_profile_keeps_roster_denominator(client: TestClient, imported: dict) -> None:
     headers = {"Authorization": f"Bearer {_teacher_token(client, imported['dataset_id'])}"}
     response = client.get(
