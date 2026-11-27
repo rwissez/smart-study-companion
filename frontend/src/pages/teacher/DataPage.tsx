@@ -25,6 +25,7 @@ import { queryKeys } from "../../lib/queryKeys";
 import { StatePanel } from "../../components/feedback/StatePanel";
 import { JobProgress } from "../../components/jobs/JobProgress";
 import { ConfirmDialog } from "../../components/ui/ConfirmDialog";
+import { ModelAccessDialog } from "../../components/settings/ModelAccessDialog";
 import { formatDate, jobStatusLabel } from "../../lib/format";
 import {
   countLabel,
@@ -81,6 +82,7 @@ export function DataPage() {
   const [exportBusy, setExportBusy] = useState(false);
   const [exportError, setExportError] = useState<string | null>(null);
   const [exportDetail, setExportDetail] = useState<ExportItem | null>(null);
+  const [modelAccessOpen, setModelAccessOpen] = useState(false);
   const [selectedCases, setSelectedCases] = useState<string[]>([]);
   const importKey = useRef<string | null>(null);
   const fileInput = useRef<HTMLInputElement>(null);
@@ -323,6 +325,9 @@ export function DataPage() {
           </p>
         </div>
         <div className="pageActions">
+          <button type="button" className="btn" onClick={() => setModelAccessOpen(true)}>
+            模型与外发授权
+          </button>
           <button type="button" className="btn" onClick={() => { void datasets.refetch(); void jobs.refetch(); }}>刷新</button>
         </div>
       </div>
@@ -950,6 +955,7 @@ export function DataPage() {
         <p>切换后旧数据集的查询缓存会被清空并重建会话，未提交的表单会丢失。</p>
         {switchError ? <p className="fieldError" role="alert">{switchError}</p> : null}
       </ConfirmDialog>
+      <ModelAccessDialog open={modelAccessOpen} onClose={() => setModelAccessOpen(false)} />
     </div>
   );
 }

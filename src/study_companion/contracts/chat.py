@@ -194,6 +194,7 @@ class ModelSettingsUpdate(Contract):
     model_id: str | None = None
     api_key: str | None = None
     clear_api_key: bool = False
+    allow_external_model_input: bool | None = None
 
     @model_validator(mode="after")
     def no_conflict(self):

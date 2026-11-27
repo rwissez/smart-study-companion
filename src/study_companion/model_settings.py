@@ -22,6 +22,7 @@ class ModelOverride(BaseModel):
     base_url: str | None = None
     model_name: str | None = None
     api_key: str | None = Field(default=None, repr=False)
+    allow_external_model_input: bool | None = None
 
 
 def _path(settings: Settings | None = None) -> Path:
@@ -60,4 +61,6 @@ def effective_settings(settings: Settings | None = None) -> Settings:
         updates["model_name"] = override.model_name
     if override.api_key is not None:
         updates["model_api_key"] = override.api_key
+    if override.allow_external_model_input is not None:
+        updates["allow_external_model_input"] = override.allow_external_model_input
     return base.model_copy(update=updates) if updates else base

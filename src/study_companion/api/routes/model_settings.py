@@ -31,6 +31,7 @@ def get_model_settings(scope: Scope, settings: AppSettings) -> dict:
             "url": payload["url"],
             "model_id": payload["model_id"],
             "has_api_key": payload["has_api_key"],
+            "allow_external_model_input": effective_settings(settings).allow_external_model_input,
         }
     )
 
@@ -51,6 +52,11 @@ def update_model_settings(payload: ModelSettingsUpdate, scope: Scope, settings: 
         base_url=payload.url or current.base_url,
         model_name=payload.model_id or current.model_name,
         api_key="" if payload.clear_api_key else (payload.api_key if payload.api_key is not None else current.api_key),
+        allow_external_model_input=(
+            payload.allow_external_model_input
+            if payload.allow_external_model_input is not None
+            else current.allow_external_model_input
+        ),
     )
     save_override(override, settings)
     service = ModelService(effective_settings(settings))
@@ -62,6 +68,7 @@ def update_model_settings(payload: ModelSettingsUpdate, scope: Scope, settings: 
             "url": described["url"],
             "model_id": described["model_id"],
             "has_api_key": described["has_api_key"],
+            "allow_external_model_input": effective_settings(settings).allow_external_model_input,
         }
     )
 

@@ -760,6 +760,7 @@ export interface ModelSettings {
   url: string | null;
   model_id: string | null;
   has_api_key: boolean;
+  allow_external_model_input: boolean;
 }
 
 // ------------------------------------------------------------------- 对话历史

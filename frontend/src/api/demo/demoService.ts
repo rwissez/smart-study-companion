@@ -848,7 +848,14 @@ export function completeActivity(planVersion: string, activityId: string): Compl
 }
 
 export function getModelSettings(): ModelSettings {
-  return { configured: false, provider: null, url: null, model_id: null, has_api_key: false };
+  return {
+    configured: false,
+    provider: null,
+    url: null,
+    model_id: null,
+    has_api_key: false,
+    allow_external_model_input: false,
+  };
 }
 
 export function saveModelSettings(): ModelSettings {

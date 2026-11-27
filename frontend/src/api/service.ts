@@ -529,6 +529,7 @@ export async function saveModelSettings(payload: {
   model_id?: string;
   api_key?: string;
   clear_api_key?: boolean;
+  allow_external_model_input?: boolean;
 }): Promise<ModelSettings> {
   if (isDemo) return demo.saveModelSettings();
   return request<ModelSettings>("/model-settings", { method: "PUT", body: JSON.stringify(payload) });
@@ -891,4 +892,5 @@ export async function regenerateStudentLessons(
     },
   );
 }
+
 
