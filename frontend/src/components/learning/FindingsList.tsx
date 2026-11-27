@@ -17,7 +17,16 @@ const PERFORMANCE_TONE: Record<string, string> = {
 
 function diagnosticText(value: Finding["diagnostic_details"]): string[] {
   if (!value) return [];
-  if (Array.isArray(value)) return value.filter((item): item is string => typeof item === "string");
+  if (Array.isArray(value)) {
+    return value.flatMap((item) => {
+      if (typeof item === "string") return item.trim() ? [item] : [];
+      if (item && typeof item === "object" && "summary" in item) {
+        const summary = String((item as { summary?: unknown }).summary ?? "").trim();
+        return summary ? [summary] : [];
+      }
+      return [];
+    });
+  }
   return Object.entries(value).flatMap(([key, item]) => {
     if (typeof item === "string" && item.trim()) return [`${key}：${item}`];
     if (typeof item === "number") return [`${key}：${item}`];
