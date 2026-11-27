@@ -354,15 +354,44 @@ ul, ol { padding-left: 20px; }
 
 /* --------------------------------------------------------------- 微课堂组件 */
 
-.mathFormula { margin: 0; text-align: center; overflow-wrap: anywhere; }
+.lessonParagraph { margin-top: var(--space-3); }
+.lessonParagraph:first-of-type { margin-top: var(--space-2); }
+.mathFormula { margin: 0; text-align: center; overflow-wrap: anywhere; font-family: var(--font-math); font-size: 21px; line-height: 1.9; }
+.mathRelation { padding: 0 0.2em; }
+.mathOp { padding: 0 0.08em; }
+.mathPower sup { font-size: 0.72em; line-height: 1; }
+.lessonFormulaCaption { margin-top: var(--space-1); text-align: center; }
 .derivationList { list-style: none; padding: 0; margin: var(--space-2) 0; display: flex; flex-direction: column; gap: var(--space-3); }
-.derivationStep { display: grid; grid-template-columns: minmax(0, 1fr); gap: 2px; padding-left: var(--space-4); border-left: 2px solid var(--color-border); }
-.derivationExpr { overflow-wrap: anywhere; }
+.derivationStep { display: grid; grid-template-columns: 24px minmax(0, 1fr); gap: var(--space-3); align-items: start; }
+.derivationIndex {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 24px; height: 24px; border-radius: 50%;
+  background: var(--color-selected-bg); color: var(--color-text-secondary);
+  font-size: var(--font-xs); font-variant-numeric: tabular-nums;
+}
+.derivationStepBody { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.derivationExpr { font-family: var(--font-math); font-size: 18px; line-height: 1.8; overflow-wrap: anywhere; }
 .contrastGrid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--space-4); margin: var(--space-3) 0; }
 .contrastCell { border: 1px solid var(--color-border); border-radius: var(--radius-md); padding: var(--space-3); min-width: 0; }
-.contrastCell p { overflow-wrap: anywhere; }
+.contrastCellWrong { border-color: var(--color-error); }
+.contrastCellRight { border-color: var(--color-success); }
+.contrastHeadingWrong { color: var(--color-error); }
+.contrastHeadingWrong::before { content: "✗ "; }
+.contrastHeadingRight { color: var(--color-success); }
+.contrastHeadingRight::before { content: "✓ "; }
+.contrastExpr { white-space: pre-wrap; overflow-wrap: anywhere; font-family: var(--font-math); font-size: 16px; }
 .numberLineWrap { border: 1px solid var(--color-border); border-radius: var(--radius-md); padding: var(--space-2); overflow-x: auto; }
 .numberLineWrap svg { display: block; width: 100%; min-width: 560px; height: auto; }
+.lessonCitation .sourceList { margin-top: var(--space-2); }
+.sourceItem { display: flex; flex-direction: column; gap: var(--space-1); }
+.citationToggle { text-align: left; white-space: normal; line-height: 1.6; }
+.citationDetail { border-left: 2px solid var(--color-border); padding-left: var(--space-3); display: flex; flex-direction: column; gap: var(--space-1); }
+.lessonMathNote { margin-top: var(--space-2); }
+.lessonUnknown { border: 1px dashed var(--color-border); border-radius: var(--radius-md); padding: var(--space-3); }
+
+@media (max-width: 900px) {
+  .contrastGrid { grid-template-columns: 1fr; }
+}
 
 /* ------------------------------------------------------------------ 方案编辑器 */
 

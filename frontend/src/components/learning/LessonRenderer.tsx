@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
 import type {
   LessonComponent,
   LessonContrastComponent,
@@ -17,6 +17,109 @@ interface Rational {
 }
 
 const MAX_COMPONENT_TEXT = 2000;
+
+/**
+ * 受限表达式的安全排版：上标、运算符、关系符分别成元素，不引入外部脚本，
+ * 也不把表达式当 HTML。项目没有 KaTeX/MathJax 依赖，因此不做完整 LaTeX。
+ */
+function renderMathNodes(expr: string): ReactNode[] {
+  const nodes: ReactNode[] = [];
+  let buffer = "";
+  let cursor = 0;
+  const flush = () => {
+    if (buffer) {
+      nodes.push(buffer);
+      buffer = "";
+    }
+  };
+  while (cursor < expr.length) {
+    const char = expr[cursor];
+    if (char === "^") {
+      flush();
+      let power = "";
+      let next = cursor + 1;
+      if (expr[next] === "(") {
+        const close = expr.indexOf(")", next);
+        if (close > next) {
+          power = expr.slice(next + 1, close);
+          next = close + 1;
+        }
+      }
+      if (!power) {
+        const match = /^[+-]?\d+/.exec(expr.slice(next));
+        if (match) {
+          power = match[0];
+          next += power.length;
+        } else if (expr[next] !== undefined) {
+          power = expr[next];
+          next += 1;
+        }
+      }
+      nodes.push(
+        <span className="mathPower" key={`power-${cursor}`}>
+          <sup>{power}</sup>
+        </span>,
+      );
+      cursor = next;
+      continue;
+    }
+    if (char === "*") {
+      flush();
+      nodes.push(
+        <span className="mathOp" key={`op-${cursor}`} aria-label="乘">
+          ×
+        </span>,
+      );
+      cursor += 1;
+      continue;
+    }
+    if (char === "/") {
+      flush();
+      nodes.push(
+        <span className="mathOp" key={`slash-${cursor}`} aria-label="除以">
+          /
+        </span>,
+      );
+      cursor += 1;
+      continue;
+    }
+    if (char === "<" || char === ">" || char === "=") {
+      flush();
+      let symbol = char;
+      if (expr[cursor + 1] === "=") {
+        symbol = char === "<" ? "≤" : "≥";
+        cursor += 2;
+      } else {
+        cursor += 1;
+      }
+      nodes.push(
+        <span className="mathRelation" key={`rel-${cursor}`} aria-label={`关系符 ${symbol}`}>
+          {symbol}
+        </span>,
+      );
+      continue;
+    }
+    buffer += char;
+    cursor += 1;
+  }
+  flush();
+  return nodes;
+}
+
+/** 只读取已授权来源的安全字段；即使来源里带 url 也不渲染成链接。 */
+function sourceDetail(source: Record<string, unknown> | null): string | null {
+  if (!source) return null;
+  const base = source.source_label ?? source.label ?? source.file_name ?? source.title;
+  if (typeof base !== "string" || !base.trim()) return null;
+  const parts = [base.trim()];
+  const chapter = source.chapter ?? source.section;
+  if (typeof chapter === "string" && chapter.trim()) parts.push(chapter.trim());
+  const page = source.printed_page ?? source.pdf_page ?? source.page;
+  if (typeof page === "number" || (typeof page === "string" && page.trim())) {
+    parts.push(`第 ${String(page).trim()} 页`);
+  }
+  return parts.join(" · ");
+}
 
 function parseRational(raw: string | null | undefined): Rational | null {
   if (typeof raw !== "string") return null;
@@ -111,6 +214,7 @@ function validateCitation(component: { labels: Array<{ label: string; source_ind
     const hasSource = label.source_index !== undefined && label.source_index !== null;
     const hasEvidence = label.evidence_index !== undefined && label.evidence_index !== null;
     if (hasSource && hasEvidence) return "引用不能同时指向两个索引";
+    if (!hasSource && !hasEvidence) return "引用必须指向一个来源或证据";
     for (const index of [label.source_index, label.evidence_index]) {
       if (index !== undefined && index !== null && (!Number.isInteger(index) || index < 0)) return "引用索引非法";
     }
@@ -217,11 +321,19 @@ export function LessonRenderer({ lesson }: { lesson: MicroLessonView }) {
       </div>
     );
   }
+  const hasMath = validation.components.some(
+    (component) => component.type === "formula" || component.type === "derivation" || component.type === "contrast",
+  );
   return (
-    <div className="reading stackLg">
+    <div className="reading stackLg lessonBody">
       {validation.components.map((component) => (
         <LessonComponentView key={component.id} component={component} lesson={lesson} />
       ))}
+      {hasMath ? (
+        <p className="xs muted lessonMathNote">
+          数学式按受限表达式排版（上标、运算符、分行），不是完整 LaTeX 渲染，也不加载外部脚本。
+        </p>
+      ) : null}
     </div>
   );
 }
@@ -241,16 +353,20 @@ function LessonComponentView({ component, lesson }: { component: LessonComponent
     case "citation":
       return <CitationBlock component={component} lesson={lesson} />;
     default:
-      return null;
+      return (
+        <section className="lessonUnknown">
+          <p className="small muted">这一段内容类型当前版本不支持，已安全跳过，不影响其余内容阅读。</p>
+        </section>
+      );
   }
 }
 
 function TextBlock({ component }: { component: LessonTextComponent }) {
   return (
-    <section>
+    <section className="lessonBlock">
       {component.heading ? <h2 className="sectionTitle">{component.heading}</h2> : null}
       {component.paragraphs.map((paragraph, index) => (
-        <p className="prose" key={index} style={{ marginTop: index === 0 ? 8 : 12 }}>
+        <p className="prose lessonParagraph" key={index}>
           {paragraph}
         </p>
       ))}
@@ -261,11 +377,11 @@ function TextBlock({ component }: { component: LessonTextComponent }) {
 function FormulaBlock({ component }: { component: LessonFormulaComponent }) {
   const [copied, setCopied] = useState(false);
   return (
-    <section>
-      <p className="mathFormula" style={{ fontSize: 22, lineHeight: 1.6, fontFamily: "var(--font-math)" }}>
-        {component.expr}
+    <section className="lessonBlock">
+      <p className="mathFormula" aria-label={`公式 ${component.expr}`}>
+        {renderMathNodes(component.expr)}
       </p>
-      {component.caption ? <p className="small muted">{component.caption}</p> : null}
+      {component.caption ? <p className="small muted lessonFormulaCaption">{component.caption}</p> : null}
       <button
         type="button"
         className="btn btnSm btnGhost"
@@ -285,36 +401,41 @@ function FormulaBlock({ component }: { component: LessonFormulaComponent }) {
 function DerivationBlock({ component }: { component: LessonDerivationComponent }) {
   const modeLabel = component.mode === "equation" ? "等式变形" : component.mode === "inequality" ? "不等式变形" : "表达式推演";
   return (
-    <section>
+    <section className="lessonBlock">
       <h3 className="paneTitle">{modeLabel}</h3>
       <ol className="derivationList">
         {component.steps.map((step, index) => (
           <li key={index} className="derivationStep">
-            <span className="derivationExpr" style={{ fontFamily: "var(--font-math)", fontSize: 18 }}>{step.expr}</span>
-            <span className="small muted">{step.note}</span>
+            <span className="derivationIndex" aria-hidden="true">{index + 1}</span>
+            <span className="derivationStepBody">
+              <span className="derivationExpr" aria-label={`第 ${index + 1} 步：${step.expr}`}>
+                {renderMathNodes(step.expr)}
+              </span>
+              <span className="small muted">{step.note}</span>
+            </span>
           </li>
         ))}
       </ol>
-      <p className="xs muted">每一步都是课程材料里的原有推导，页面不生成新的解答步骤。</p>
+      <p className="xs muted">每一步都来自课程材料并经过独立数学复核，页面不生成新的解答步骤。</p>
     </section>
   );
 }
 
 function ContrastBlock({ component }: { component: LessonContrastComponent }) {
   return (
-    <section>
+    <section className="lessonBlock">
       <div className="contrastGrid">
         <div className="contrastCell">
           <h4 className="paneTitle">原题 / 情境</h4>
-          <p className="prose" style={{ whiteSpace: "pre-wrap" }}>{component.before}</p>
+          <p className="prose contrastExpr">{component.before}</p>
         </div>
-        <div className="contrastCell">
-          <h4 className="paneTitle">错误做法</h4>
-          <p className="prose" style={{ whiteSpace: "pre-wrap" }}>{component.incorrect}</p>
+        <div className="contrastCell contrastCellWrong">
+          <h4 className="paneTitle contrastHeadingWrong">错误做法</h4>
+          <p className="prose contrastExpr">{component.incorrect}</p>
         </div>
-        <div className="contrastCell">
-          <h4 className="paneTitle">正确做法</h4>
-          <p className="prose" style={{ whiteSpace: "pre-wrap" }}>{component.correct}</p>
+        <div className="contrastCell contrastCellRight">
+          <h4 className="paneTitle contrastHeadingRight">正确做法</h4>
+          <p className="prose contrastExpr">{component.correct}</p>
         </div>
       </div>
       {component.note ? <p className="small muted">{component.note}</p> : null}
@@ -438,37 +559,52 @@ function CitationBlock({ component, lesson }: { component: { labels: Array<{ lab
   const [openIndex, setOpenIndex] = useState<number | null>(null);
   const sources = Array.isArray(lesson.safe_sources) ? lesson.safe_sources : [];
   return (
-    <section>
-      <h3 className="paneTitle">引用</h3>
+    <section className="lessonBlock lessonCitation">
+      <h3 className="paneTitle">讲解依据</h3>
       <ul className="sourceList">
         {component.labels.map((label, index) => {
-          const source = label.source_index !== undefined && label.source_index !== null ? sources[label.source_index] : null;
-          const sourceLabel = source
-            ? String(source.source_label ?? source.label ?? source.file_name ?? source.title ?? "已授权材料")
-            : null;
+          const sourceIndex = label.source_index;
+          const evidenceIndex = label.evidence_index;
+          const source =
+            sourceIndex !== undefined && sourceIndex !== null
+              ? ((sources[sourceIndex] as Record<string, unknown> | undefined) ?? null)
+              : null;
+          const detail = sourceDetail(source);
+          const resolved = detail !== null;
+          const open = openIndex === index;
+          const summary =
+            sourceIndex !== undefined && sourceIndex !== null
+              ? `来源索引 ${sourceIndex}`
+              : `关联证据 ${evidenceIndex}`;
           return (
-            <li key={index} className="small">
+            <li key={index} className="sourceItem">
               <button
                 type="button"
-                className="btn btnSm btnGhost"
-                onClick={() => setOpenIndex(openIndex === index ? null : index)}
+                className="btn btnSm btnGhost citationToggle"
+                aria-expanded={open}
+                onClick={() => setOpenIndex(open ? null : index)}
               >
                 {label.label}
-                {sourceLabel ? ` · ${sourceLabel}` : ""}
-                {label.evidence_index !== undefined && label.evidence_index !== null ? " · 关联证据" : ""}
+                <span className="xs muted"> · {summary} · {resolved ? "可展开来源" : "未附带来源原文"}</span>
               </button>
-              {openIndex === index ? (
-                <div className="xs muted" style={{ marginTop: 4 }}>
-                  {sourceLabel
-                    ? `来源：${sourceLabel}（服务端已授权；不提供外部链接）`
-                    : "来源：该引用没有可读的授权来源；如需证据请在对应作答或课程页查看。"}
+              {open ? (
+                <div className="citationDetail" role="group" aria-label={`${label.label} 的来源说明`}>
+                  {resolved ? (
+                    <p className="small">来源：{detail}（服务端已授权；不提供外部链接）</p>
+                  ) : evidenceIndex !== undefined && evidenceIndex !== null ? (
+                    <p className="small">
+                      关联证据 {evidenceIndex}：当前发布版本没有附带可展开的证据原文，请按上面的知识点/诊断编号在对应课程页核对。
+                    </p>
+                  ) : (
+                    <p className="small">当前发布版本没有下发可核验的来源，页面不显示外部链接。</p>
+                  )}
+                  <p className="xs muted">引用只指向服务端授权的材料或证据，不提供可点击的外部链接。</p>
                 </div>
               ) : null}
             </li>
           );
         })}
       </ul>
-      <p className="xs muted">引用只指向服务端授权的材料或证据，不提供可点击的外部链接。</p>
     </section>
   );
 }

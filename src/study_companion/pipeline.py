@@ -1507,6 +1507,7 @@ def attach_lessons(
                 origin_plan_version=new_version_id,
                 content_id=content_id,
                 content_version=content_version,
+                creation_method="model" if model_draft is not None else "rule",
             )
             if model_limitations:
                 payload["limitations"] = list(payload.get("limitations") or []) + model_limitations

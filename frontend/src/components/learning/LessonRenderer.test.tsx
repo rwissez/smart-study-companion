@@ -1,4 +1,4 @@
-import { render, screen } from "@testing-library/react";
+import { fireEvent, render, screen, within } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
 import { LessonRenderer, validateLesson } from "./LessonRenderer";
 import type { MicroLessonView } from "../../api/types";
@@ -21,7 +21,7 @@ function lesson(components: unknown[], overrides: Partial<MicroLessonView> = {})
 }
 
 const SIX_COMPONENTS = [
-  { type: "text", id: "t1", heading: "规则", paragraphs: ["括号前是负号，去掉括号每一项都变号。"] },
+  { type: "text", id: "t1", heading: "规则", paragraphs: ["括号前是负号，去掉括号每一项都变号。", "先看括号前的符号，再逐项检查。"] },
   { type: "formula", id: "f1", expr: "-(2x-7) = -2x+7", caption: "负号乘进括号" },
   {
     type: "derivation",
@@ -53,9 +53,9 @@ const SIX_COMPONENTS = [
 
 describe("LessonRenderer", () => {
   it("六类固定组件都能安全渲染，数轴用文字标注开闭", () => {
-    render(<LessonRenderer lesson={lesson(SIX_COMPONENTS)} />);
+    const { container } = render(<LessonRenderer lesson={lesson(SIX_COMPONENTS)} />);
     expect(screen.getByText("括号前是负号，去掉括号每一项都变号。")).toBeInTheDocument();
-    expect(screen.getByText("-(2x-7) = -2x+7")).toBeInTheDocument();
+    expect(screen.getByLabelText("公式 -(2x-7) = -2x+7")).toBeInTheDocument();
     expect(screen.getByText("等式变形")).toBeInTheDocument();
     expect(screen.getByText("错误做法")).toBeInTheDocument();
     expect(screen.getByText("正确做法")).toBeInTheDocument();
@@ -64,6 +64,12 @@ describe("LessonRenderer", () => {
     expect(screen.getAllByText("不含端点").length).toBeGreaterThan(0);
     expect(screen.getByText(/交集结果/)).toBeInTheDocument();
     expect(screen.getAllByText(/课程要求/).length).toBeGreaterThan(0);
+    // text 分段：两段各自成为独立段落
+    expect(container.querySelectorAll(".lessonParagraph").length).toBe(2);
+    // 正误对照三栏有独立标记，正确/错误栏可区分
+    expect(container.querySelectorAll(".contrastCell").length).toBe(3);
+    expect(container.querySelector(".contrastCellWrong")).not.toBeNull();
+    expect(container.querySelector(".contrastCellRight")).not.toBeNull();
   });
 
   it("未知组件类型回退到安全文本，不渲染脚本或 HTML", () => {
@@ -76,13 +82,77 @@ describe("LessonRenderer", () => {
     expect(container.querySelector("script")).toBeNull();
   });
 
-  it("公式按纯文本展示，不把表达式当 HTML", () => {
+  it("公式按受限表达式排版：上标、乘号、关系符不再当普通文本", () => {
+    const math = lesson([
+      { type: "formula", id: "f3", expr: "x^2*3=12", caption: "受限排版" },
+    ]);
+    const { container } = render(<LessonRenderer lesson={math} />);
+    const formula = container.querySelector(".mathFormula");
+    expect(formula).not.toBeNull();
+    expect(formula?.getAttribute("aria-label")).toBe("公式 x^2*3=12");
+    expect(formula?.querySelector("sup")?.textContent).toBe("2");
+    expect(formula?.textContent).toBe("x2×3=12");
+    expect(formula?.querySelector(".mathRelation")?.textContent).toBe("=");
+    expect(screen.getByText(/不是完整 LaTeX 渲染/)).toBeInTheDocument();
+  });
+
+  it("公式内容不会被当作 HTML 注入", () => {
     const withMarkup = lesson([
       { type: "formula", id: "f2", expr: "<img src=x onerror=alert(1)>", caption: "危险表达式" },
     ]);
     const { container } = render(<LessonRenderer lesson={withMarkup} />);
-    expect(screen.getByText("<img src=x onerror=alert(1)>")).toBeInTheDocument();
+    const formula = container.querySelector(".mathFormula");
+    expect(formula?.textContent).toBe("<img src=x onerror=alert(1)>");
+    expect(formula?.getAttribute("aria-label")).toBe("公式 <img src=x onerror=alert(1)>");
     expect(container.querySelector("img")).toBeNull();
+    expect(container.querySelector("script")).toBeNull();
+  });
+
+  it("推导步骤逐行编号，编号与步骤文本对应", () => {
+    const { container } = render(<LessonRenderer lesson={lesson(SIX_COMPONENTS)} />);
+    const steps = container.querySelectorAll(".derivationStep");
+    expect(steps.length).toBe(3);
+    expect(within(steps[0] as HTMLElement).getByText("1")).toBeInTheDocument();
+    expect(within(steps[2] as HTMLElement).getByText("3")).toBeInTheDocument();
+    expect(steps[1].textContent).toContain("两边减 8");
+  });
+
+  it("citation 可以展开已授权来源，并显示页码", () => {
+    const withSource = lesson(
+      [{ type: "citation", id: "z2", labels: [{ label: "课程要求", source_index: 0 }] }],
+      { safe_sources: [{ source_label: "七年级数学教材", printed_page: 42 }] },
+    );
+    render(<LessonRenderer lesson={withSource} />);
+    expect(screen.queryByText(/来源：/)).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: /课程要求/ }));
+    expect(screen.getByText(/来源：七年级数学教材 · 第 42 页/)).toBeInTheDocument();
+    expect(screen.getByText(/不提供可点击的外部链接/)).toBeInTheDocument();
+  });
+
+  it("citation 没有来源原文时如实说明，不伪造链接", () => {
+    const unresolved = lesson(
+      [
+        {
+          type: "citation",
+          id: "z3",
+          labels: [{ label: "知识点「去括号的符号」", evidence_index: 0 }],
+        },
+      ],
+      { safe_sources: [] },
+    );
+    const { container } = render(<LessonRenderer lesson={unresolved} />);
+    fireEvent.click(screen.getByRole("button", { name: /知识点/ }));
+    expect(screen.getByText(/没有附带可展开的证据原文/)).toBeInTheDocument();
+    expect(container.querySelector("a")).toBeNull();
+  });
+
+  it("citation 必须恰有一个索引，否则拒绝渲染", () => {
+    const noIndex = lesson([{ type: "citation", id: "z4", labels: [{ label: "没有索引" }] }]);
+    expect(validateLesson(noIndex).ok).toBe(false);
+    const both = lesson([
+      { type: "citation", id: "z5", labels: [{ label: "两个索引", source_index: 0, evidence_index: 1 }] },
+    ]);
+    expect(validateLesson(both).ok).toBe(false);
   });
 
   it("数轴交集结构不符合审核规则时拒绝渲染", () => {

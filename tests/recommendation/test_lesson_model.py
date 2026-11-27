@@ -7,7 +7,9 @@ from dataclasses import dataclass
 from study_companion.contracts import EvidenceRef, LessonDraft
 from study_companion.recommendation.lesson import validate_lesson
 from study_companion.recommendation.lesson_model import (
+    REQUIRED_REVIEW_CHECKS,
     LessonModelOut,
+    LessonReviewCheckOut,
     LessonReviewOut,
     generate_with_model,
 )
@@ -18,6 +20,16 @@ class Result:
     succeeded: bool
     value: object
     error: dict | None = None
+
+
+def _pass_review() -> LessonReviewOut:
+    return LessonReviewOut(
+        decision="pass",
+        checks=[
+            LessonReviewCheckOut(check_id=check_id, result="pass", reason="")
+            for check_id in REQUIRED_REVIEW_CHECKS
+        ],
+    )
 
 
 class FakeService:
@@ -62,19 +74,19 @@ def _refs() -> list[EvidenceRef]:
 
 
 def test_model_draft_is_used_when_review_passes() -> None:
-    service = FakeService(_draft(), LessonReviewOut(decision="pass", reasons=[]))
+    service = FakeService(_draft(), _pass_review())
     draft, limitations = generate_with_model(
         service=service,  # type: ignore[arg-type]
         title="去括号",
         goal="会变号",
         kp_id="kp-1",
         evidence_refs=_refs(),
-        teaching_points=["负号分配到每一项"],
+        teaching_points=["负号分配到括号内每一项", "上次去括号时漏乘了第二项，符号也写错了"],
         protected_texts=["受保护题 Q1 的原文"],
     )
     assert isinstance(draft, LessonDraft)
     assert draft.kp_ids == ["kp-1"]
-    assert [item.type for item in draft.components] == ["text", "contrast"]
+    assert [item.type for item in draft.components] == ["text", "contrast", "citation"]
     assert limitations == []
     assert service.calls == ["c.write_content.v1", "c.review_lesson.v1"]
 

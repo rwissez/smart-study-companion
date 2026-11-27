@@ -174,7 +174,7 @@ def build_rule_lesson(
             CitationComponent(
                 id="source",
                 type="citation",
-                labels=[CitationLabel(label="本次讲解的知识依据", evidence_index=0)],
+                labels=[CitationLabel(label=f"知识点：{title[:36]}", evidence_index=0)],
             )
         )
     draft = LessonDraft(
@@ -274,12 +274,13 @@ def lesson_payload(
     origin_plan_version: str | None,
     content_id: str,
     content_version: str,
+    creation_method: str = "rule",
 ) -> dict[str, Any]:
     return {
         "content_id": content_id,
         "content_version": content_version,
         "schema_version": SCHEMA_VERSION,
-        "creation_method": "rule",
+        "creation_method": creation_method,
         "body": draft.model_dump(mode="json"),
         "body_hash": _hash(draft.model_dump(mode="json")),
         "review_info": review.model_dump(mode="json"),
@@ -292,6 +293,22 @@ def lesson_view(payload: dict[str, Any]) -> dict[str, Any]:
     body = dict(payload.get("body") or {})
     if not body:
         raise DomainError("RESULT_NOT_READY", "微课堂正文不可读")
+    safe_sources = []
+    for ref in body.get("evidence_refs") or []:
+        kind = ref.get("kind")
+        source_id = ref.get("id")
+        if not kind or not source_id:
+            continue
+        label = {"knowledge_point": "知识点"}.get(kind, "证据")
+        version = ref.get("knowledge_version")
+        safe_sources.append(
+            {
+                "kind": kind,
+                "id": source_id,
+                "knowledge_version": version,
+                "label": f"{label} {source_id}" + (f"（知识版本 {version}）" if version else ""),
+            }
+        )
     return {
         "content_id": payload.get("content_id"),
         "content_version": payload.get("content_version"),
@@ -299,7 +316,7 @@ def lesson_view(payload: dict[str, Any]) -> dict[str, Any]:
         "title": body.get("title", ""),
         "goal": body.get("goal", ""),
         "components": body.get("components", []),
-        "safe_sources": [],
+        "safe_sources": safe_sources,
         "fallback_text": body.get("fallback_text"),
         "review_status": (payload.get("review_info") or {}).get("status", "validated"),
     }
