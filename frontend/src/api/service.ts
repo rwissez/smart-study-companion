@@ -37,6 +37,8 @@ import type {
   MicroLessonView,
   ModelSettings,
   Page,
+  PlanReviewDecisionResult,
+  PlanReviewItem,
   PlanView,
   ProgressComparison,
   ProposalResponse,
@@ -791,6 +793,47 @@ export async function confirmProposal(
     {
       method: "POST",
       body: JSON.stringify({ confirmation_id: payload.confirmationId, allow: payload.allow }),
+    },
+  );
+}
+
+// ------------------------------------------------------------- 教师方案审核列表
+
+export async function listPlanReviews(
+  datasetId: string,
+  options: { page?: number; pageSize?: number } = {},
+): Promise<Page<PlanReviewItem>> {
+  if (isDemo) return { items: [], total: 0, page: 1, page_size: 20 };
+  return request<Page<PlanReviewItem>>(
+    `/datasets/${segment(datasetId)}/plan-reviews${query({
+      page: options.page ?? 1,
+      page_size: options.pageSize ?? 20,
+    })}`,
+  );
+}
+
+export async function decidePlanReview(
+  datasetId: string,
+  reviewId: string,
+  nodeId: string,
+  payload: {
+    decision: "approve" | "reject" | "edit";
+    changes?: RevisionChanges | null;
+    reason: string;
+    basePlanVersion?: string | null;
+  },
+): Promise<PlanReviewDecisionResult> {
+  if (isDemo) throw new Error("演示模式不会提交真实方案审核。");
+  return request<PlanReviewDecisionResult>(
+    `/datasets/${segment(datasetId)}/plan-reviews/${segment(reviewId)}${query({ node_id: nodeId })}`,
+    {
+      method: "POST",
+      body: JSON.stringify({
+        decision: payload.decision,
+        changes: payload.changes ?? null,
+        reason: payload.reason,
+        base_plan_version: payload.basePlanVersion ?? null,
+      }),
     },
   );
 }

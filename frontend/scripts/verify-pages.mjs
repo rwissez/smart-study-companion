@@ -418,6 +418,36 @@ try {
   await page.getByText("已接受并执行发布").waitFor({ timeout: 30000 });
   await fixed(59, "agent-confirm-result-1440");
 
+  // ------------------------------------------------ 方案审核列表（真实候选 → 通过）
+  await nav("班级总览");
+  await page.getByText("名册人数", { exact: true }).waitFor();
+  await page.locator(".pageHeader select").first().selectOption("DC02");
+  await page.getByText(/名册共 1 人/).waitFor();
+  await page.locator("tr").filter({ hasText: "S02" }).getByRole("button", { name: "查看画像" }).click();
+  await page.waitForURL(/\/teacher\/students\/S02/);
+  await page.getByText("学习方案摘要", { exact: true }).waitFor();
+  await page.getByRole("button", { name: "就此学生提问" }).click();
+  await page.waitForURL(/\/teacher\/chat/);
+  await page.getByText("会话历史", { exact: true }).waitFor();
+  await page.locator("#chat-input").fill("给 S02 生成一版候选方案");
+  await page.getByRole("button", { name: "发送", exact: true }).click();
+  await page.locator(".chatMsg").nth(1).waitFor({ timeout: 60000 });
+  await page.getByRole("button", { name: "生成方案候选" }).click();
+  await page.getByText("需要确认：发布新的学习方案").waitFor({ timeout: 30000 });
+
+  await nav("方案审核");
+  await page.getByRole("heading", { name: "方案审核" }).waitFor();
+  await page.getByText("候选摘要").waitFor();
+  const reviewRow = page.locator("tr").filter({ hasText: "S02" }).first();
+  await reviewRow.waitFor({ timeout: 30000 });
+  await fixed(70, "plan-review-list-1440");
+  await reviewRow.getByRole("button", { name: "通过", exact: true }).click();
+  await page.getByRole("alertdialog", { name: "确认通过并发布候选方案" }).waitFor();
+  await page.getByLabel("审核理由（可选）").fill("与当前学情一致，安排可执行");
+  await page.getByRole("button", { name: "确认通过", exact: true }).click();
+  await page.getByText("已通过并发布", { exact: true }).waitFor({ timeout: 30000 });
+  await fixed(71, "plan-review-approved-1440");
+
   // 介入详情：当前种子没有 teacher_attention 案例，仅验证真实“不存在”状态
   try {
     await page.evaluate(() => {

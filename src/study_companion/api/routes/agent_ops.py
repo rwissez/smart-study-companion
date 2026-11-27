@@ -1,4 +1,4 @@
-﻿"""Agent 候选方案、确认与教师审核（05 §7、04 §8—9.3）。
+"""Agent 候选方案、确认与教师审核（05 §7、04 §8—9.3）。
 
 无模型时，"让 Agent 改方案"是确定性的：按目标学生的正式学情重跑 C 规划器，
 生成候选；教师确认后才走 ``agent_revision`` 发布。模型只影响意图理解，
@@ -264,21 +264,72 @@ def list_plan_reviews(
         .order_by(models.Proposal.created_at.desc())
     ).all()
     start = (page - 1) * page_size
-    items = [
-        {
-            "review_id": row.proposal_id,
-            "student_id": (row.snapshot_json or {}).get("student_id", ""),
-            "plan_version": row.base_plan_version or "",
-            "review_info": (row.body_json or {}).get("review_info", {}),
-            "summary": "；".join(
-                str(item.get("summary", "")) for item in (row.changes_summary_json or [])
+
+    def _precheck(row: models.Proposal) -> dict:
+        body = row.body_json or {}
+        draft = body.get("draft") or {}
+        activities = [
+            activity
+            for recommendation in draft.get("recommendations", []) or []
+            for activity in recommendation.get("activities", []) or []
+        ]
+        draft_ids = {activity.get("activity_id") for activity in activities}
+        protected: set[str] = set()
+        if row.base_plan_version:
+            states = db.scalars(
+                select(models.ActivityStateRow).where(
+                    models.ActivityStateRow.origin_plan_version == row.base_plan_version
+                )
+            ).all()
+            protected = {
+                state.activity_id
+                for state in states
+                if state.state in {"completed", "in_progress"}
+            }
+        removed = sorted(item for item in protected - draft_ids if item)
+        goal = next(
+            (
+                recommendation.get("goal_target_key")
+                for recommendation in draft.get("recommendations", []) or []
+                if recommendation.get("goal_target_key")
             ),
-            "estimated_minutes": (row.body_json or {}).get("estimated_minutes"),
-            "warnings": (row.body_json or {}).get("warnings", []),
-            "expires_at": row.expires_at,
+            "",
+        )
+        return {
+            "node_id": (row.snapshot_json or {}).get("node_id", ""),
+            "goal": goal,
+            "activity_count": len(activities),
+            "hard_block": bool(removed),
+            "blocked_reason": "候选移除了已完成或进行中的活动" if removed else "",
         }
-        for row in rows[start : start + page_size]
-    ]
+
+    items = []
+    for row in rows[start : start + page_size]:
+        precheck = _precheck(row)
+        items.append(
+            {
+                "review_id": row.proposal_id,
+                "student_id": (row.snapshot_json or {}).get("student_id", ""),
+                "node_id": precheck["node_id"],
+                "plan_version": row.base_plan_version or "",
+                "review_info": (row.body_json or {}).get("review_info", {}),
+                "summary": "；".join(
+                    str(item.get("summary", "")) for item in (row.changes_summary_json or [])
+                ),
+                "changes": {
+                    "goal": precheck["goal"],
+                    "activity_count": precheck["activity_count"],
+                    "estimated_minutes": (row.body_json or {}).get("estimated_minutes"),
+                },
+                "precheck": {
+                    "hard_block": precheck["hard_block"],
+                    "reason": precheck["blocked_reason"],
+                },
+                "estimated_minutes": (row.body_json or {}).get("estimated_minutes"),
+                "warnings": (row.body_json or {}).get("warnings", []),
+                "expires_at": row.expires_at,
+            }
+        )
     return success({"items": items, "total": len(rows), "page": page, "page_size": page_size})
 
 

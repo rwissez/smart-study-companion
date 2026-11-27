@@ -168,3 +168,12 @@ export function IconSettings(props: IconProps) {
     </Icon>
   );
 }
+
+export function IconReview(props: IconProps) {
+  return (
+    <Icon {...props}>
+      <path d="M9 4h6l1 2h3a1 1 0 0 1 1 1v13a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h3l1-2Z" />
+      <path d="m8.5 13 2 2 4-4.5" />
+    </Icon>
+  );
+}

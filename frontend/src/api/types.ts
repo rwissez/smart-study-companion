@@ -1087,4 +1087,29 @@ export interface ConfirmationResult {
   operations: ConfirmationOperation[];
 }
 
+// ------------------------------------------------------------ 教师方案审核列表
+
+export interface PlanReviewItem {
+  review_id: string;
+  student_id: string;
+  plan_version: string;
+  review_info: Record<string, unknown>;
+  summary: string;
+  estimated_minutes: number | null;
+  warnings: RevisionWarning[];
+  expires_at: string;
+}
+
+export interface PlanReviewDecisionResult {
+  review_id: string;
+  plan_version?: string | null;
+  review_status: string;
+  publication_status?: string | null;
+  publish_path?: string | null;
+  preview_id?: string | null;
+  warning_digest?: string | null;
+  warnings?: RevisionWarning[];
+}
+
+
 

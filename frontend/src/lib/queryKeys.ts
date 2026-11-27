@@ -65,4 +65,5 @@ export const queryKeys = {
     [...base(scope), "quality", "recommendations", runId, "node", nodeId, "class", classId ?? "all"] as const,
   materials: (scope: ScopeKey, catalogVersion: string | null) =>
     [...base(scope), "material", "search", "catalog", catalogVersion ?? "current"] as const,
+  planReviews: (scope: ScopeKey, page: number) => [...base(scope), "plan", "reviews", "page", page] as const,
 };

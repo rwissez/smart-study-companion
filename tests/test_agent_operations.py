@@ -136,7 +136,10 @@ def test_teacher_can_approve_agent_candidate_via_plan_reviews(client: TestClient
     listed = client.get(
         f"/api/v1/datasets/{teacher_ctx['dataset_id']}/plan-reviews", headers=teacher_ctx["headers"]
     ).json()["data"]
-    assert any(item["review_id"] == proposal_id for item in listed["items"])
+    row = next(item for item in listed["items"] if item["review_id"] == proposal_id)
+    assert row["node_id"] == "N01"
+    assert row["changes"]["activity_count"] >= 0
+    assert "hard_block" in row["precheck"]
 
     approved = client.post(
         f"/api/v1/datasets/{teacher_ctx['dataset_id']}/plan-reviews/{proposal_id}",
