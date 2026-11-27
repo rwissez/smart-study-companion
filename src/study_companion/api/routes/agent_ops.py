@@ -258,11 +258,15 @@ def list_plan_reviews(
 ) -> dict:
     scope.require("view_class_analysis")
     _dataset_for(db, scope, dataset_id)
-    rows = db.scalars(
-        select(models.Proposal)
-        .where(models.Proposal.origin == "agent", models.Proposal.state == "ready")
-        .order_by(models.Proposal.created_at.desc())
-    ).all()
+    rows = [
+        row
+        for row in db.scalars(
+            select(models.Proposal)
+            .where(models.Proposal.origin == "agent", models.Proposal.state == "ready")
+            .order_by(models.Proposal.created_at.desc())
+        ).all()
+        if (row.snapshot_json or {}).get("dataset_id") == dataset_id
+    ]
     start = (page - 1) * page_size
 
     def _precheck(row: models.Proposal) -> dict:
@@ -301,6 +305,18 @@ def list_plan_reviews(
             "activity_count": len(activities),
             "hard_block": bool(removed),
             "blocked_reason": "候选移除了已完成或进行中的活动" if removed else "",
+            "blocked_activity_ids": removed,
+            "activities": [
+                {
+                    "activity_id": activity.get("activity_id"),
+                    "activity_kind": activity.get("activity_kind"),
+                    "material_id": activity.get("material_id"),
+                    "title": (activity.get("title") or "")[:80],
+                    "estimate_minutes": activity.get("estimate_minutes"),
+                    "exposure_mode": activity.get("exposure_mode"),
+                }
+                for activity in activities
+            ],
         }
 
     items = []
@@ -324,7 +340,9 @@ def list_plan_reviews(
                 "precheck": {
                     "hard_block": precheck["hard_block"],
                     "reason": precheck["blocked_reason"],
+                    "blocked_activity_ids": precheck["blocked_activity_ids"],
                 },
+                "activities": precheck["activities"],
                 "estimated_minutes": (row.body_json or {}).get("estimated_minutes"),
                 "warnings": (row.body_json or {}).get("warnings", []),
                 "expires_at": row.expires_at,

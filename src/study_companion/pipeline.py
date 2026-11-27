@@ -590,6 +590,20 @@ def _textbook_candidates(
     return deduped, totals
 
 
+
+#: 单次任务最多为几节微课堂调用模型（其余用规则模板），避免批量导入放大成本。
+_LESSON_MODEL_BUDGET: dict[str, int] = {}
+LESSON_MODEL_LIMIT = 6
+
+
+def _take_lesson_model_budget(job_id: str | None) -> bool:
+    key = job_id or "no-job"
+    used = _LESSON_MODEL_BUDGET.get(key, 0)
+    if used >= LESSON_MODEL_LIMIT:
+        return False
+    _LESSON_MODEL_BUDGET[key] = used + 1
+    return True
+
 def current_knowledge_payload(db: Session, dataset_id: str, family_id: str | None) -> dict[str, Any]:
     """读取当前正式知识版本正文；没有构建过就返回空字典（C 会明确标注缺少依据）。"""
 
@@ -1181,6 +1195,7 @@ def handle_import_process(ctx: JobContext) -> dict[str, Any]:
                 knowledge_payload=lesson_payload,
                 job_id=ctx.job.id,
                 student_uid=student.student_uid,
+                catalog=catalog,
             )
             if with_lessons:
                 published["plan_version"] = with_lessons["plan_version"]
@@ -1242,6 +1257,7 @@ def attach_lessons(
     knowledge_payload: dict[str, Any] | None,
     job_id: str | None,
     student_uid: str | None,
+    catalog: Any | None = None,
 ) -> dict[str, Any] | None:
     """为方案中的任务组补充个性化微课堂，作为父方案的子修订发布。
 
@@ -1250,6 +1266,7 @@ def attach_lessons(
     """
 
     from study_companion.contracts import Activity
+    from study_companion.model_service import ModelService
     from study_companion.recommendation import lesson as lesson_service
 
     plan_row = db.get(models.Version, plan_version)
@@ -1300,20 +1317,47 @@ def attach_lessons(
                         "knowledge_version": knowledge_version,
                     }
                 ]
-            draft = lesson_service.build_rule_lesson(
-                title=point.get("name", "") or group.goal,
-                goal=point.get("definition", "") or group.expected_outcome or group.goal,
+            title = point.get("name", "") or group.goal
+            goal = point.get("definition", "") or group.expected_outcome or group.goal
+            teaching_points = [
+                point.get("definition", ""),
+                group.student_intro or "",
+                group.expected_outcome or "",
+            ]
+            protected_texts: list[str] = []
+            if catalog is not None:
+                protected_texts = [
+                    material.content
+                    for material in catalog.materials
+                    if material.material_type == "question" and material.content
+                ]
+            model_draft = None
+            model_limitations: list[str] = []
+            model_service = ModelService()
+            if model_service.configured and _take_lesson_model_budget(job_id):
+                from study_companion.recommendation import lesson_model
+
+                model_draft, model_limitations = lesson_model.generate_with_model(
+                    service=model_service,
+                    title=title,
+                    goal=goal,
+                    kp_id=kp_id,
+                    evidence_refs=[EvidenceRef(**item) for item in evidence],
+                    teaching_points=teaching_points,
+                    protected_texts=protected_texts,
+                )
+            draft = model_draft or lesson_service.build_rule_lesson(
+                title=title,
+                goal=goal,
                 kp_id=kp_id,
                 evidence_refs=[EvidenceRef(**item) for item in evidence],
-                teaching_points=[
-                    point.get("definition", ""),
-                    group.student_intro or "",
-                    group.expected_outcome or "",
-                ],
+                teaching_points=teaching_points,
                 fallback_text=point.get("definition", ""),
             )
-            issues = lesson_service.validate_lesson(draft)
-            review = lesson_service.review_info_for(draft, issues)
+            issues = lesson_service.validate_lesson(draft, protected_texts=protected_texts)
+            review = lesson_service.review_info_for(
+                draft, issues, method="model" if model_draft is not None else "rule"
+            )
             payload = lesson_service.lesson_payload(
                 draft,
                 review=review,
@@ -1321,6 +1365,8 @@ def attach_lessons(
                 content_id=content_id,
                 content_version=content_version,
             )
+            if model_limitations:
+                payload["limitations"] = list(payload.get("limitations") or []) + model_limitations
             lesson_key = repo.FormalKey(
                 family_id=family_id,
                 dataset_id=dataset_id,
