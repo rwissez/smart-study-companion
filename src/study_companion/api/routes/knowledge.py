@@ -284,3 +284,36 @@ def get_change_set(
             "limitations": ["只比较正式知识版本的对象集合，不评价语义正确性"],
         }
     )
+
+@router.post("/datasets/{dataset_id}/knowledge/rebuild", status_code=202)
+def rebuild_knowledge(
+    dataset_id: str,
+    db: DbSession,
+    scope: Scope,
+    catalog_version: str | None = Query(default=None, max_length=128),
+    reason: str = Query(default="", max_length=200),
+) -> dict:
+    """重建知识体系：重新构建知识点与模型关系，通过校验才发布。"""
+
+    scope.require("review_knowledge")
+    scope.require_teacher()
+    _dataset_family(db, dataset_id)
+    from study_companion.jobs.service import enqueue
+    from study_companion.jobs.worker import ensure_worker_started
+
+    job = enqueue(
+        db,
+        kind="knowledge_rebuild",
+        scope={
+            "dataset_id": dataset_id,
+            "catalog_version": catalog_version or "",
+            "reason": reason,
+        },
+        payload={"reason": reason},
+        dataset_id=dataset_id,
+        requested_by=scope.session_id,
+    )
+    db.commit()
+    ensure_worker_started()
+    return success({"job_id": job.id, "status": job.status})
+

@@ -57,6 +57,7 @@ def register_handlers() -> None:
     """导入即注册；重复调用安全。新增业务处理器在此登记模块导入。"""
 
     import study_companion.pipeline  # noqa: F401  (decorator 在本模块导入时执行)
+    import study_companion.knowledge.rebuild  # noqa: F401  (知识重建处理器)
 
 
 def enqueue_after_import(
