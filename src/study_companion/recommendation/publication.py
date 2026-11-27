@@ -129,7 +129,31 @@ def _rebuild_activities(
     rebuilt: list[Activity] = []
     for order, activity in enumerate(requested, start=1):
         if not activity.material_id:
-            raise DomainError("MATERIAL_INVALID", "活动缺少材料编号")
+            # 微课堂没有题库材料，靠内容版本定位；其它活动必须有材料。
+            if activity.activity_kind == "micro_lesson" and activity.content_version:
+                rebuilt.append(
+                    activity.model_copy(
+                        update={
+                            "order": order,
+                            "activity_id": activity.activity_id
+                            or f"act-{plan_version}-{index:02d}-{order:02d}",
+                            "group_id": activity.group_id or f"grp-{plan_version}-{index:02d}",
+                            "state": "not_started",
+                        }
+                    )
+                )
+                continue
+            raise DomainError(
+                "MATERIAL_INVALID",
+                "活动缺少材料编号",
+                [
+                    {
+                        "field": "material_id",
+                        "activity_id": activity.activity_id or "",
+                        "reason": "题目活动必须有材料编号；微课堂需带内容版本",
+                    }
+                ],
+            )
         material = materials.get(activity.material_id)
         if material is None:
             raise DomainError(

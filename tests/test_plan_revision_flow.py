@@ -9,7 +9,10 @@ from fastapi.testclient import TestClient
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from study_companion.contracts import RecommendationBundle, RevisionChanges
 from study_companion.db import models
+from study_companion.library.datasets import load_catalog
+from study_companion.recommendation import publication
 from study_companion.jobs.worker import drain
 
 FIXTURES = Path(__file__).parent / "fixtures" / "six_tables"
@@ -126,3 +129,39 @@ def test_stale_base_version_is_rejected(client: TestClient, ctx: dict) -> None:
         json={"warning_digest": preview["warning_digest"]},
     )
     assert stale.status_code == 409, "同一预览不能重复发布"
+
+
+
+def test_activity_rebuild_keeps_micro_lesson_without_material(
+    client: TestClient, ctx: dict, session: Session
+) -> None:
+    """修改活动列表时，微课堂没有题库材料也必须原样保留。"""
+
+    from sqlalchemy import select as sa_select
+
+    plan_row = session.scalars(
+        sa_select(models.Version)
+        .where(
+            models.Version.kind == "plan",
+            models.Version.dataset_id == ctx["dataset_id"],
+            models.Version.node_key == "N01",
+            models.Version.target_key == "S01",
+        )
+        .order_by(models.Version.created_at.desc())
+        .limit(1)
+    ).first()
+    assert plan_row is not None
+    base = RecommendationBundle.model_validate(plan_row.payload_json)
+    catalog = load_catalog(session, base.catalog_version, base.dataset_id)
+    activities = base.recommendations[0].activities
+    assert any(item.activity_kind == "micro_lesson" for item in activities)
+    draft = publication.apply_changes(
+        base,
+        RevisionChanges(activities=activities),
+        catalog=catalog,
+        plan_version="plan-test",
+    )
+    rebuilt = draft.recommendations[0].activities
+    lesson = next(item for item in rebuilt if item.activity_kind == "micro_lesson")
+    assert lesson.content_version
+    assert lesson.material_id is None
