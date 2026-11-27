@@ -1,4 +1,4 @@
-"""A 知识体系正式读取、审核与质量报告。
+﻿"""A 知识体系正式读取、审核与质量报告。
 
 P1 只提供**诚实**的读取骨架：没有构建过正式知识版本时返回
 ``RESULT_NOT_READY``，绝不把目录投影冒充知识体系。P2 接入真实构建、审核与质量
@@ -19,6 +19,7 @@ from study_companion.contracts import DomainError, DomainError as _DomainError  
 from study_companion.db import models
 from study_companion.db import version_repository as repo
 from study_companion.knowledge import review_service
+from study_companion.knowledge.change_set import diff_payloads, impact_of
 
 router = APIRouter(tags=["knowledge"])
 
@@ -207,3 +208,79 @@ def get_knowledge_quality(
     if not report:
         raise DomainError("RESULT_NOT_READY", "该知识版本没有质量报告")
     return success(report)
+
+
+@router.get("/datasets/{dataset_id}/knowledge/change-set")
+def get_change_set(
+    dataset_id: str,
+    db: DbSession,
+    scope: Scope,
+    from_version: str = Query(default="", max_length=128),
+    to_version: str = Query(default="", max_length=128),
+) -> dict:
+    """比较两版知识体系：新增/删除/改名/改内容，以及受影响的指标、题目与方案。"""
+
+    scope.require("view_curriculum")
+    family_id = _dataset_family(db, dataset_id)
+    head = repo.read_formal(
+        db, repo.FormalKey(family_id=family_id, dataset_id=dataset_id, kind="knowledge")
+    )
+    target_id = to_version or (head.version_id if head else "")
+    if not target_id:
+        raise DomainError("RESULT_NOT_READY", "尚未发布知识体系，无法比较")
+    target = db.get(models.Version, target_id)
+    if target is None or target.dataset_id != dataset_id or target.kind != "knowledge":
+        raise DomainError("NOT_FOUND", "目标知识版本不存在")
+    if from_version:
+        source = db.get(models.Version, from_version)
+        if source is None or source.dataset_id != dataset_id or source.kind != "knowledge":
+            raise DomainError("NOT_FOUND", "起始知识版本不存在")
+    else:
+        source = (
+            db.get(models.Version, target.parent_version)
+            if getattr(target, "parent_version", None)
+            else None
+        )
+        if source is None:
+            raise DomainError("VALIDATION_ERROR", "请提供 from_version，或目标版本带有父版本")
+    previous = dict(source.payload_json or {})
+    current = dict(target.payload_json or {})
+    changes = diff_payloads(previous, current)
+    impact = impact_of(changes, current)
+    affected = [
+        row.version_id
+        for row in db.scalars(
+            select(models.Version).where(
+                models.Version.dataset_id == dataset_id, models.Version.kind == "plan"
+            )
+        ).all()
+        if (row.payload_json or {}).get("knowledge_version") == source.version_id
+    ]
+    return success(
+        {
+            "dataset_id": dataset_id,
+            "from_version": source.version_id,
+            "to_version": target.version_id,
+            "changes": [
+                {
+                    "object_type": item.object_type,
+                    "object_id": item.object_id,
+                    "kind": item.kind,
+                    "previous_id": item.previous_id,
+                    "fields": item.fields,
+                    "name": item.name,
+                    "detail": item.detail,
+                }
+                for item in changes
+            ],
+            "counts": {
+                "added": sum(1 for item in changes if item.kind == "added"),
+                "removed": sum(1 for item in changes if item.kind == "removed"),
+                "renamed": sum(1 for item in changes if item.kind == "renamed"),
+                "changed": sum(1 for item in changes if item.kind == "changed"),
+            },
+            "impact": impact,
+            "affected_plan_versions": sorted(set(affected)),
+            "limitations": ["只比较正式知识版本的对象集合，不评价语义正确性"],
+        }
+    )
