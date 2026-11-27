@@ -36,6 +36,17 @@ if (-not (Test-Listening 8000)) {
         Write-Host "请先在项目根目录执行 uv sync --locked。"
         exit 1
     }
+    Write-Host "检查数据库结构..."
+    Push-Location $root
+    try {
+        & $python -m alembic upgrade head
+        if ($LASTEXITCODE -ne 0) {
+            Write-Host "数据库迁移失败，请查看上面的错误；未启动后端。" -ForegroundColor Red
+            exit 1
+        }
+    } finally {
+        Pop-Location
+    }
     $backend = Start-Process -FilePath $python `
         -ArgumentList "-m", "uvicorn", "study_companion.main:app", "--host", "127.0.0.1", "--port", "8000" `
         -WorkingDirectory $root -WindowStyle Hidden `
