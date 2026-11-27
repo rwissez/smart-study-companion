@@ -14,6 +14,7 @@ from study_companion.api.errors import install_error_handlers
 from study_companion.api.middleware import RequestIdMiddleware
 from study_companion.api.routes import (
     chat,
+    conversations,
     datasets,
     demo_sessions,
     evidence,
@@ -97,6 +98,7 @@ def create_app() -> FastAPI:
         knowledge,
         learning,
         lesson,
+        conversations,
         model_settings,
         plan_edit,
         profile,

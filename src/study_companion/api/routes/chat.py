@@ -11,7 +11,7 @@ from typing import Any
 from fastapi import APIRouter
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 
 from study_companion.agent import AgentLoop, PromptRegistry, ToolRegistry, build_provider
 from study_companion.agent.router import route_task
@@ -44,15 +44,26 @@ class ChatTarget(BaseModel):
 class ChatRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
-    messages: list[ChatMessage] = Field(min_length=1, max_length=40)
+    # 01 §9.5：新客户端用单条 message，旧客户端用 messages；两者互斥。
+    messages: list[ChatMessage] | None = Field(default=None, max_length=40)
+    message: str | None = Field(default=None, max_length=8000)
+    conversation_id: str | None = Field(default=None, max_length=128)
     run_id: str | None = Field(default=None, max_length=64)
     student_id: str | None = Field(default=None, max_length=64)
     node_id: str | None = Field(default=None, max_length=64)
     target: ChatTarget | None = None
     task_type: str | None = Field(default=None, max_length=64)
+    activity_id: str | None = Field(default=None, max_length=128)
+    plan_version: str | None = Field(default=None, max_length=128)
 
     @model_validator(mode="after")
     def validate_target_alias(self):
+        if (self.messages is None) == (self.message is None):
+            raise ValueError("message 与 messages 必须且只能提供一个")
+        if self.message is not None:
+            if not self.message.strip():
+                raise ValueError("message 不能为空")
+            object.__setattr__(self, "messages", [ChatMessage(role="user", content=self.message)])
         if self.student_id and self.target and (self.target.type != "student" or self.target.id != self.student_id):
             raise ValueError("student_id 与 target 必须一致")
         return self
@@ -207,14 +218,99 @@ def _catalog_context(db: DbSession, dataset_id: str, version: str) -> CatalogCon
     return CatalogContract(version=version, topics=payload.get("topics", []), indicators=indicators, materials=materials, links=payload.get("links", []))
 
 
+def _persist_turn(db, scope, payload: "ChatRequest", body: dict[str, Any], *, status: str = "completed") -> dict[str, Any]:
+    """把本轮对话写入持久化会话，并补齐新契约字段。
+
+    旧客户端拿到同样的 ``text``；新客户端可用 ``conversation_id`` 继续多轮。
+    会话不写业务事实，长期事实仍从正式仓储读取。
+    """
+
+    from study_companion.jobs.service import new_id, now_iso
+
+    scope_key = f"{scope.role}:{scope.dataset_id or ''}:{scope.student_id or ''}"
+    conversation_id = payload.conversation_id
+    if conversation_id:
+        conversation = db.get(models.Conversation, conversation_id)
+        if conversation is None or conversation.owner_ref != scope.session_id:
+            raise DomainError("NOT_FOUND", "会话不存在或不属于当前身份")
+    else:
+        conversation = models.Conversation(
+            conversation_id=new_id("conv"),
+            owner_ref=scope.session_id,
+            scope_key=scope_key,
+            dataset_id=scope.dataset_id,
+            role=scope.role,
+            title=(payload.message or "")[:40] or "新的对话",
+            context_json={},
+            context_revision=0,
+            created_at=now_iso(),
+            updated_at=now_iso(),
+        )
+        db.add(conversation)
+        db.flush()
+        conversation_id = conversation.conversation_id
+
+    last = db.scalar(
+        select(func.max(models.ChatMessageRow.sequence)).where(
+            models.ChatMessageRow.conversation_id == conversation_id
+        )
+    )
+    sequence = int(last or 0)
+    user_text = payload.message or (payload.messages[-1].content if payload.messages else "")
+    user_message = models.ChatMessageRow(
+        message_id=new_id("msg"),
+        conversation_id=conversation_id,
+        sequence=sequence + 1,
+        role="user",
+        content=user_text,
+        status="completed",
+        created_at=now_iso(),
+    )
+    assistant_message = models.ChatMessageRow(
+        message_id=new_id("msg"),
+        conversation_id=conversation_id,
+        sequence=sequence + 2,
+        role="assistant",
+        content=str(body.get("text", "")),
+        segments_json=body.get("segments"),
+        status=status,
+        payload_json={
+            "tool_trace": body.get("tool_trace", []),
+            "evidence_refs": body.get("evidence_refs", []),
+            "clarification": body.get("clarification"),
+            "stopped_reason": body.get("stopped_reason"),
+        },
+        created_at=now_iso(),
+    )
+    db.add(user_message)
+    db.add(assistant_message)
+    conversation.updated_at = now_iso()
+    db.flush()
+
+    body.setdefault("conversation_id", conversation_id)
+    body.setdefault("message_id", assistant_message.message_id)
+    body.setdefault("status", "completed" if status == "completed" else status)
+    body.setdefault("segments", [])
+    body.setdefault("operation_results", [])
+    return body
+
+
 @router.post("/chat")
 def post_chat(payload: ChatRequest, db: DbSession, scope: Scope, settings: AppSettings) -> dict[str, Any]:
     scope.require("chat_own" if scope.role == "student" else "chat_teacher")
     provider = build_provider(settings)
     # Preserve the established response when no model is configured.
     if provider.name == "unconfigured":
-        turn = provider.generate([message.model_dump() for message in payload.messages])
-        return success({"text": turn.text or "", "tool_calls": []})
+        turn = provider.generate([message.model_dump() for message in payload.messages or []])
+        return success(
+            _persist_turn(
+                db,
+                scope,
+                payload,
+                {"text": turn.text or "", "tool_calls": []},
+                status="failed",
+            )
+        )
 
     target = payload.target
     if payload.student_id:
@@ -244,9 +340,23 @@ def post_chat(payload: ChatRequest, db: DbSession, scope: Scope, settings: AppSe
     if task.status != "ready":
         raise DomainError("TASK_NOT_AVAILABLE", f"{task.label}暂不可用：{task.unavailable_reason}")
     if task.task_type == "out_of_scope":
-        return success({"text": "我目前仅支持学情分析、作答依据和数据质量等学习支持任务。", "tool_trace": [], "stopped_reason": "out_of_scope",
-                        "prompt_version": "task-out-of-scope-v1", "evidence_refs": [],
-                        "task_type": task.task_type, "route_source": routed.source})
+        return success(
+            _persist_turn(
+                db,
+                scope,
+                payload,
+                {
+                    "text": "我目前仅支持学情分析、作答依据和数据质量等学习支持任务。",
+                    "tool_trace": [],
+                    "stopped_reason": "out_of_scope",
+                    "prompt_version": "task-out-of-scope-v1",
+                    "evidence_refs": [],
+                    "task_type": task.task_type,
+                    "route_source": routed.source,
+                },
+                status="out_of_scope",
+            )
+        )
 
     if target is None and task.target != "none":
         if task.target == "student_or_dataset" and scope.role == "teacher":
@@ -278,7 +388,41 @@ def post_chat(payload: ChatRequest, db: DbSession, scope: Scope, settings: AppSe
         message.model_dump() for message in payload.messages if message.role != "system"
     ]
     result = AgentLoop(provider, registry).run(messages, task.label)
-    return success({"text": result.text or "", "tool_trace": [trace.__dict__ for trace in result.tool_trace],
-                    "stopped_reason": result.stopped_reason, "prompt_version": prompt_version,
-                    "evidence_refs": result.state.evidence_refs,
-                    "task_type": task.task_type, "route_source": routed.source})
+    legacy_shape = payload.message is None
+    tool_trace = []
+    for index, trace in enumerate(result.tool_trace):
+        item = {
+            "call_id": getattr(trace, "call_id", f"call-{index}"),
+            "tool_name": getattr(trace, "tool_name", ""),
+            "stage": getattr(trace, "stage", "") or "",
+            "status": getattr(trace, "status", "succeeded"),
+            "message": getattr(trace, "message", "") or "",
+            "evidence_refs": getattr(trace, "evidence_refs", []) or [],
+        }
+        if legacy_shape:
+            # 旧客户端的验收用例依赖工具执行结果；新客户端按 01 §9.5 只拿安全投影。
+            item["result"] = getattr(trace, "result", None)
+        tool_trace.append(item)
+    body = {
+        "text": result.text or "",
+        "tool_trace": tool_trace,
+        "stopped_reason": result.stopped_reason,
+        "prompt_version": prompt_version,
+        "evidence_refs": result.state.evidence_refs,
+        "task_type": task.task_type,
+        "route_source": routed.source,
+        "segments": [
+            {"kind": "explanation", "text": result.text or "", "evidence_refs": result.state.evidence_refs}
+        ]
+        if result.text
+        else [],
+    }
+    return success(
+        _persist_turn(
+            db,
+            scope,
+            payload,
+            body,
+            status="failed" if result.stopped_reason else "completed",
+        )
+    )
