@@ -201,8 +201,9 @@ def build_knowledge(
                     locator = SourceLocator(
                         source_file=getattr(candidate, "file_id", "") or candidate.chapter_id,
                         source_kind="textbook",
-                        page=candidate.page,
-                        quote=candidate.snippet,
+                        file_id=getattr(candidate, "file_id", "") or None,
+                        chapter=candidate.chapter_id,
+                        pdf_page=candidate.page,
                         verification_status="verified",
                     )
                     points[index] = point.model_copy(
@@ -265,8 +266,9 @@ def build_knowledge(
                         SourceLocator(
                             source_file=getattr(candidate, "file_id", "") or candidate.chapter_id,
                             source_kind="textbook",
-                            page=candidate.page,
-                            quote=candidate.snippet,
+                            file_id=getattr(candidate, "file_id", "") or None,
+                            chapter=candidate.chapter_id,
+                            pdf_page=candidate.page,
                             verification_status="verified",
                         )
                     ],
@@ -357,6 +359,44 @@ def build_knowledge(
                 evidence="材料指标归属由课程要求表确定",
             )
         )
+
+    # 映射缺口补充：没有指标归属的题，让模型在已有知识点里找，两轮仍找不到就记缺口。
+    mapping_gap_items: list[dict[str, str]] = []
+    if model_configured and annotations:
+        mapped_ids = {item.source_id for item in annotations}
+        unmapped = [
+            material
+            for material in catalog.materials
+            if material.material_id not in mapped_ids
+        ]
+        if unmapped:
+            try:
+                from study_companion.knowledge.gap_fill import fill_mapping_gaps
+                from study_companion.model_service import ModelService
+
+                gap_service = ModelService()
+                if gap_service.configured:
+                    accepted, gap_notes, mapping_gap_items = fill_mapping_gaps(
+                        service=gap_service,
+                        materials=unmapped,
+                        points=points,
+                        existing_annotations=annotations,
+                    )
+                    limitations.extend(gap_notes)
+                    for item in accepted:
+                        annotations.append(KnowledgeAnnotationDraft(**item))
+                    resolved_ids = {item["source_id"] for item in accepted}
+                    resolved_ids |= {item["material_id"] for item in mapping_gap_items}
+                    issues = [
+                        issue
+                        for issue in issues
+                        if not (
+                            issue.code == "MAPPING_PARTIAL" and issue.field in resolved_ids
+                        )
+                    ]
+                    mapped_materials += len(accepted)
+            except Exception:
+                limitations.append("映射缺口补充异常，未建立新的题目关联")
 
     # 形式检查：自环、源数、重复
     seen: set[tuple[str, tuple[str, ...], str]] = set()
@@ -467,6 +507,8 @@ def build_knowledge(
     indicator_ids = {indicator.indicator_id for indicator in catalog.indicators}
     question_materials = [item for item in catalog.materials if item.material_type == "question"]
     mapping_gaps = {
+        "needs_new_point": [item for item in mapping_gap_items if item.get("status") == "needs_review"],
+        "unmapped": [item for item in mapping_gap_items if item.get("status") == "unmapped"],
         "indicators_without_material": sorted(indicator_ids - mapped_indicators),
         "materials_without_indicator": sorted(
             item.material_id

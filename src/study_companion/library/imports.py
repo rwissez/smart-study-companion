@@ -70,6 +70,7 @@ class StagedFile:
     byte_size: int
     format: str
     sheets: list[StagedSheet] = field(default_factory=list)
+    pdf_role: str | None = None
     status: str = "accepted"
     reason: str | None = None
 
@@ -81,7 +82,7 @@ class StagedFile:
             sha256=self.sha256,
             byte_size=self.byte_size,
             format=self.format,  # type: ignore[arg-type]
-            role=(primary.role if primary else ("standard" if self.format == "pdf" else "unknown")),  # type: ignore[arg-type]
+            role=(primary.role if primary else (self.pdf_role or ("standard" if self.format == "pdf" else "unknown"))),  # type: ignore[arg-type]
             sheet_name=primary.sheet_name if primary else None,
             status=self.status,  # type: ignore[arg-type]
             reason=self.reason,
@@ -472,6 +473,9 @@ def confirm_import(
                 if sheet.sheet_name == sheet_name or (sheet_name is None and len(file.sheets) == 1):
                     sheet.role = role
                     applied = True
+            if not applied and file.format == "pdf" and sheet_name is None:
+                file.pdf_role = role
+                applied = True
         if not applied:
             raise DomainError("NOT_FOUND", "映射引用的文件或工作表不存在")
         for slot, item in by_slot.items():

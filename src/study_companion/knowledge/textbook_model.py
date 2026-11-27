@@ -7,6 +7,7 @@
 from __future__ import annotations
 
 import hashlib
+import os
 import re
 from dataclasses import dataclass, field
 from typing import Any, Literal
@@ -17,7 +18,7 @@ from study_companion.model_service import ModelService, ModelTaskRequest
 
 MAX_CHUNK_PAGES = 4
 MAX_CHUNK_CHARS = 10000
-MAX_CHUNKS_PER_BUILD = 6
+MAX_CHUNKS_PER_BUILD = int(os.getenv("A_TEXTBOOK_CHUNK_LIMIT", "6"))
 MAX_REVIEW_OBJECTS = 12
 ALLOWED_KINDS = {"concept", "procedure", "principle", "fact"}
 KIND_ALIASES = {
@@ -364,7 +365,17 @@ def extract_points_with_model(
         processed += 1
         for point in result.value.points:
             name = point.name.strip()
-            kind = KIND_ALIASES.get(point.kind.strip(), point.kind.strip())
+            raw_kind = point.kind.strip()
+            kind = KIND_ALIASES.get(raw_kind, raw_kind)
+            if kind not in ALLOWED_KINDS:
+                if any(word in raw_kind for word in ("性质", "定理", "法则", "规律", "原理")):
+                    kind = "principle"
+                elif any(word in raw_kind for word in ("方法", "步骤", "运算", "过程", "技能")):
+                    kind = "procedure"
+                elif any(word in raw_kind for word in ("概念", "定义", "名词")):
+                    kind = "concept"
+                elif any(word in raw_kind for word in ("事实", "记号", "约定")):
+                    kind = "fact"
             if not name or kind not in ALLOWED_KINDS:
                 limitations.append(f"教材候选 {name or '未命名'} 的类型不合法，已丢弃")
                 continue

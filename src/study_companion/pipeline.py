@@ -11,6 +11,7 @@
 from __future__ import annotations
 
 import logging
+import os
 from datetime import UTC, datetime
 from typing import Any
 
@@ -636,7 +637,7 @@ def _textbook_candidates(
 
 #: 单次任务最多为几节微课堂调用模型（其余用规则模板），避免批量导入放大成本。
 _LESSON_MODEL_BUDGET: dict[str, int] = {}
-LESSON_MODEL_LIMIT = 6
+LESSON_MODEL_LIMIT = int(os.getenv("C_LESSON_MODEL_LIMIT", "6"))
 
 
 def _take_lesson_model_budget(job_id: str | None) -> bool:
@@ -1101,11 +1102,11 @@ def handle_import_process(ctx: JobContext) -> dict[str, Any]:
             expected_version_id=knowledge_head.version_id if knowledge_head else None,
             expected_generation=knowledge_head.generation if knowledge_head else 0,
         )
-    else:
-        # 未通过的候选对象进入教师审核队列，逐对象可定位；不在发布后才补。
-        from study_companion.knowledge.review_service import ensure_review_item
+    # 未通过的候选对象进入教师审核队列，逐对象可定位；发布与否都要登记。
+    from study_companion.knowledge.review_service import ensure_review_item
 
-        snapshot = knowledge_result.candidate_snapshot
+    snapshot = knowledge_result.candidate_snapshot
+    if True:
         review_objects = (
             ("point", snapshot.points, "kp_id"),
             ("relation", snapshot.relations, "relation_id"),
@@ -1113,7 +1114,7 @@ def handle_import_process(ctx: JobContext) -> dict[str, Any]:
         )
         for object_type, items, id_field in review_objects:
             for item in items:
-                if item.review_info.status == "validated":
+                if item.review_info is None or item.review_info.status == "validated":
                     continue
                 ensure_review_item(
                     db,

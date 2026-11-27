@@ -16,7 +16,7 @@ from pydantic import BaseModel, Field
 from study_companion.model_service import ModelService, ModelTaskRequest
 
 RELATION_TYPES = {"prerequisite", "has_property", "derives_from", "composed_of", "special_case"}
-MAX_CANDIDATES_PER_POINT = 16
+MAX_CANDIDATES_PER_POINT = 8
 
 
 class RelationProposal(BaseModel):
@@ -197,8 +197,8 @@ def infer_relations(
             "points": [
                 {
                     "kp_id": point["kp_id"],
-                    "name": point.get("name", ""),
-                    "definition": (point.get("definition") or "")[:200],
+                    "name": point.get("name", "")[:40],
+                    "definition": (point.get("definition") or "")[:120],
                     "topic_ids": point.get("topic_ids") or [],
                     "indicator_ids": point.get("indicator_ids") or [],
                 }

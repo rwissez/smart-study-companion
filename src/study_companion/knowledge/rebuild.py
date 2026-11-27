@@ -110,26 +110,27 @@ def handle_knowledge_rebuild(ctx: JobContext) -> dict[str, Any]:
             expected_generation=head.generation if head else 0,
         )
         published = True
-    else:
-        from study_companion.knowledge.review_service import ensure_review_item
 
-        review_objects = (
-            ("point", snapshot.points, "kp_id"),
-            ("relation", snapshot.relations, "relation_id"),
-            ("annotation", snapshot.annotations, "annotation_id"),
-        )
-        for object_type, items, id_field in review_objects:
-            for item in items:
-                if item.review_info is not None and item.review_info.status == "validated":
-                    continue
-                ensure_review_item(
-                    db,
-                    dataset_id=dataset_id,
-                    knowledge_version=knowledge_version_id,
-                    object_type=object_type,
-                    object_id=getattr(item, id_field),
-                    reason="重建候选未通过全部校验，需教师确认",
-                )
+    # 无论版本是否整体发布，未通过复核的对象都要逐条进入教师审核队列。
+    from study_companion.knowledge.review_service import ensure_review_item
+
+    review_objects = (
+        ("point", snapshot.points, "kp_id"),
+        ("relation", snapshot.relations, "relation_id"),
+        ("annotation", snapshot.annotations, "annotation_id"),
+    )
+    for object_type, items, id_field in review_objects:
+        for item in items:
+            if item.review_info is None or item.review_info.status == "validated":
+                continue
+            ensure_review_item(
+                db,
+                dataset_id=dataset_id,
+                knowledge_version=knowledge_version_id,
+                object_type=object_type,
+                object_id=getattr(item, id_field),
+                reason="重建候选未通过全部校验，需教师确认",
+            )
     upsert_step(db, ctx.job, "build", label="构建知识点与关系", status="succeeded")
     db.commit()
 
