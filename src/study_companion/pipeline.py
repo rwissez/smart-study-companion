@@ -1487,7 +1487,7 @@ def handle_import_process(ctx: JobContext) -> dict[str, Any]:
                 indicator.indicator_id: indicator.description for indicator in catalog.indicators
             },
             material_titles={
-                material.material_id: material.content[:60] for material in catalog.materials
+                material.material_id: f"练习题 {material.material_id}" if material.material_type == "question" else f"学习材料 {material.material_id}" for material in catalog.materials
             },
         )
         if published["publication_status"] == "published" and student is not None:
@@ -2247,7 +2247,7 @@ def handle_student_update(ctx: JobContext) -> dict[str, Any]:
             indicator.indicator_id: indicator.description for indicator in catalog.indicators
         },
         material_titles={
-            material.material_id: material.content[:60] for material in catalog.materials
+            material.material_id: f"练习题 {material.material_id}" if material.material_type == "question" else f"学习材料 {material.material_id}" for material in catalog.materials
         },
     )
     _carry_over_states(
