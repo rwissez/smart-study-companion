@@ -107,4 +107,32 @@ def build_b_registry(ctx: ServerContext, role: str, task: TaskSpec | None = None
                 {"limit": {"type": "integer"}}, []),
         events_query,
     ))
+    def lesson_query(args: dict[str, Any]):
+        lessons = ctx.extras.get("micro_lessons") or []
+        if not lessons:
+            raise DomainError("NOT_FOUND", "当前会话没有可读的微课堂")
+        return {
+            "student_id": ctx.bound_student_id,
+            "lessons": lessons,
+            "limitations": ["只读摘要，正文组件按学生作答页展示"],
+        }
+
+    add(RegisteredTool(
+        _schema("get_micro_lesson", "读取绑定学生学习方案里的微课堂摘要（只读）", {}, []),
+        lesson_query,
+    ))
+
+    def intervention_query(args: dict[str, Any]):
+        cases = ctx.extras.get("interventions") or []
+        return {
+            "student_id": ctx.bound_student_id,
+            "cases": cases,
+            "limitations": ["只列开放案例；结案理由请到教师介入页处理"],
+        }
+
+    add(RegisteredTool(
+        _schema("get_open_interventions", "读取绑定学生当前的开放教师介入案例（只读）", {}, []),
+        intervention_query,
+    ))
     return ToolRegistry(tools)
+

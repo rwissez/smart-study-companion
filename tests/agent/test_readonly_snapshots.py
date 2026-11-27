@@ -86,3 +86,14 @@ def test_recent_events_tool_respects_limit() -> None:
     result = _call(registry, "get_recent_learning_events", limit=2)
     assert len(result["events"]) == 2
     assert result["student_id"] == "S01"
+
+def test_lesson_and_intervention_tools_read_snapshots() -> None:
+    ctx = _context(
+        micro_lessons=[{"activity_id": "act-2", "title": "去括号", "component_count": 3}],
+        interventions=[{"case_id": "case-1", "reason_code": "no_improvement_after_rounds"}],
+    )
+    registry = build_b_registry(ctx, "teacher")
+    lessons = _call(registry, "get_micro_lesson")
+    assert lessons["lessons"][0]["activity_id"] == "act-2"
+    cases = _call(registry, "get_open_interventions")
+    assert cases["cases"][0]["case_id"] == "case-1"

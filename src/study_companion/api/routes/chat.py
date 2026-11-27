@@ -134,6 +134,33 @@ def _readonly_snapshots(
             }
         )
     snapshots["plans"] = plans
+    lessons: list[dict] = []
+    for plan in plans:
+        for activity in plan.get("activities", []):
+            if activity.get("kind") != "micro_lesson":
+                continue
+            version = next(
+                (
+                    head
+                    for head in heads
+                    if head.node_key == plan.get("node_id")
+                ),
+                None,
+            )
+            if version is None:
+                continue
+            lesson_version = db.get(models.Version, version.version_id)
+            payload = dict((lesson_version.payload_json if lesson_version else {}) or {})
+            lessons.append(
+                {
+                    "activity_id": activity.get("activity_id"),
+                    "plan_version": plan.get("plan_version"),
+                    "title": activity.get("title") or payload.get("title") or "",
+                    "component_count": len(payload.get("components") or []),
+                    "summary": payload.get("summary") or "",
+                }
+            )
+    snapshots["micro_lessons"] = lessons
 
     student_uid = getattr(student, "student_uid", None)
     if student_uid:
@@ -151,6 +178,22 @@ def _readonly_snapshots(
                 "activity_id": row.activity_id,
             }
             for row in rows
+        ]
+    if scope.role == "teacher":
+        cases = db.scalars(
+            select(models.InterventionRow).where(models.InterventionRow.scope_key.like(f"{scope.dataset_id}:%"))
+        ).all()
+        snapshots["interventions"] = [
+            {
+                "case_id": case.case_id,
+                "reason_code": case.reason_code,
+                "opened_at": case.opened_at,
+                "target_key": case.target_key,
+                "status": case.status,
+            }
+            for case in cases
+            if (case.payload_json or {}).get("student_id") in {None, target.id}
+            and case.status == "open"
         ]
     return snapshots
 

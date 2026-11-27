@@ -18,7 +18,7 @@ def test_pending_tasks_do_not_advertise_unregistered_tools() -> None:
     registered_tools = {
         "get_student_analysis", "get_answer_evidence", "get_quality_issues", "get_class_analysis",
         "locate_knowledge", "get_knowledge_detail", "get_knowledge_relations", "list_knowledge_candidates",
-        "get_student_plan", "get_recent_learning_events",
+        "get_student_plan", "get_recent_learning_events", "get_micro_lesson", "get_open_interventions",
     }
     for task in TASKS.values():
         assert set(task.tools) <= registered_tools
