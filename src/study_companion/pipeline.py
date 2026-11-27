@@ -11,6 +11,7 @@
 from __future__ import annotations
 
 import logging
+from datetime import UTC, datetime
 from typing import Any
 
 from sqlalchemy import select
@@ -390,6 +391,18 @@ STRATEGY_PRIORITY = (
     "consolidation",
     "transfer",
 )
+
+
+def current_knowledge_payload(db: Session, dataset_id: str, family_id: str | None) -> dict[str, Any]:
+    """读取当前正式知识版本正文；没有构建过就返回空字典（C 会明确标注缺少依据）。"""
+
+    if not family_id:
+        return {}
+    key = repo.FormalKey(family_id=family_id, dataset_id=dataset_id, kind="knowledge")
+    row = repo.read_formal(db, key)
+    if row is None or not row.payload_json:
+        return {}
+    return dict(row.payload_json)
 
 
 def annotate_strategies(
@@ -801,21 +814,50 @@ def handle_import_process(ctx: JobContext) -> dict[str, Any]:
     db.commit()
 
     plans: list[dict[str, Any]] = []
-    config_c = RecommendationConfig()
     students_by_id = {student.student_id: student for student in prepared.students}
+    from study_companion.library.history import build_history
+    from study_companion.recommendation import planner as c_planner
+
+    now = datetime.now(UTC)
     for student_result in bundle.student_results:
         analysis_version = student_result.analysis_version
+        student = students_by_id.get(student_result.student_id)
+        history = build_history(
+            db,
+            dataset=dataset,
+            student_id=student_result.student_id,
+            student_uid=student.student_uid if student else None,
+            prepared=prepared,
+            now=now,
+        )
+        node_available = next(
+            (
+                node.available_question_ids
+                for node in prepared.nodes
+                if node.node_id == student_result.node_id
+            ),
+            None,
+        )
         try:
-            plan_bundle = annotate_strategies(
-                recommend_rules(student_result, catalog, context, config_c), student_result
+            draft = c_planner.build_plan(
+                c_planner.PlannerInputs(
+                    student_result=student_result,
+                    catalog=catalog,
+                    knowledge_payload=knowledge_payload,
+                    history=history,
+                    now=now,
+                    node_available_ids=node_available,
+                )
             )
         except DomainError as exc:
             if exc.code in {"MATERIAL_NOT_FOUND", "TASK_NOT_AVAILABLE"}:
-                plans.append({"student_id": student_result.student_id, "status": "shortage", "reason": exc.message})
+                plans.append(
+                    {"student_id": student_result.student_id, "status": "shortage", "reason": exc.message}
+                )
                 continue
             raise
-        validation = validate_recommendations(plan_bundle, student_result, catalog, config_c)
-        review = build_review_info(plan_bundle, validation.issues)
+        plan_bundle = draft.bundle
+        review = c_planner.review_plan_rules(plan_bundle)
         student = students_by_id.get(student_result.student_id)
         published = persist_plan(
             db,
@@ -1356,12 +1398,34 @@ def handle_student_update(ctx: JobContext) -> dict[str, Any]:
                         "reason": reason,
                     }
 
-    plan_bundle = annotate_strategies(
-        recommend_rules(affected_students[0], catalog, context, RecommendationConfig()),
-        affected_students[0],
+    from study_companion.library.history import build_history
+    from study_companion.recommendation import planner as c_planner
+
+    now = datetime.now(UTC)
+    history = build_history(
+        db,
+        dataset=dataset,
+        student_id=student_id,
+        student_uid=student.student_uid,
+        prepared=prepared,
+        now=now,
     )
-    validation = validate_recommendations(plan_bundle, affected_students[0], catalog, RecommendationConfig())
-    review = build_review_info(plan_bundle, validation.issues)
+    node_available = next(
+        (node.available_question_ids for node in prepared.nodes if node.node_id == node_id),
+        None,
+    )
+    draft = c_planner.build_plan(
+        c_planner.PlannerInputs(
+            student_result=affected_students[0],
+            catalog=catalog,
+            knowledge_payload=current_knowledge_payload(db, dataset_id, dataset.family_id),
+            history=history,
+            now=now,
+            node_available_ids=node_available,
+        )
+    )
+    plan_bundle = draft.bundle
+    review = c_planner.review_plan_rules(plan_bundle)
     published = persist_plan(
         db,
         plan_bundle,
