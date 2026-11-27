@@ -475,6 +475,35 @@ def _version_row(db: Session, key: "repo.FormalKey") -> models.Version | None:
     return db.get(models.Version, head.version_id)
 
 
+def _attach_error_types(
+    bundle, prepared, catalog, knowledge_payload: dict[str, Any] | None
+) -> None:
+    """按事件与知识图谱给 finding 标注错误类型；证据不足不贴标签。"""
+
+    from study_companion.analysis.error_types import classify, signals_from_events
+
+    materials = {item.material_id: item for item in catalog.materials}
+    events_by_student: dict[str, list[Any]] = {}
+    for event in prepared.selected_events:
+        events_by_student.setdefault(event.student_id, []).append(event)
+    for result in bundle.student_results:
+        signals = signals_from_events(events_by_student.get(result.student_id, []), materials)
+        findings_by_indicator = {
+            item.indicator_id: {
+                "performance": item.performance,
+                "evidence_status": item.evidence_status,
+            }
+            for item in result.findings
+        }
+        for finding in result.findings:
+            finding.error_types = classify(
+                indicator_id=finding.indicator_id,
+                attempts=signals.get(finding.indicator_id, []),
+                findings_by_indicator=findings_by_indicator,
+                knowledge_payload=knowledge_payload,
+            )
+
+
 def _textbook_candidates(db: Session, dataset_id: str, catalog) -> list[Any]:
     """从本数据集导入的教材 PDF 抽取规则候选；没有 PDF 就返回空列表。"""
 
@@ -989,6 +1018,7 @@ def handle_import_process(ctx: JobContext) -> dict[str, Any]:
 
     config = AnalysisConfig(rule_version=RULE_VERSION)
     bundle = analyze_dataset(prepared, catalog, context, config)
+    _attach_error_types(bundle, prepared, catalog, None)
     included = [event.event_id for event in prepared.selected_events]
     result = persist_analysis_bundle(
         db,
@@ -1540,6 +1570,7 @@ def handle_student_update(ctx: JobContext) -> dict[str, Any]:
         dataset_family_id=dataset.family_id,
     )
     bundle = analyze_dataset(prepared, catalog, context, AnalysisConfig(rule_version=RULE_VERSION))
+    _attach_error_types(bundle, prepared, catalog, current_knowledge_payload(db, dataset_id, dataset.family_id))
     affected_students = [item for item in bundle.student_results if item.student_id == student_id and item.node_id == node_id]
     affected_classes = [item for item in bundle.class_results if item.class_id == student.class_id and item.node_id == node_id]
     if not affected_students:

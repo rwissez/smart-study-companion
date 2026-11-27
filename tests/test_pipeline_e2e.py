@@ -98,6 +98,12 @@ def test_import_runs_pipeline_and_publishes_plans(client: TestClient, imported: 
             assert finding["mastery_level"] in {"emerging", "developing", "mastered"}
         else:
             assert finding["mastery_level"] == "unknown"
+        assert set(finding["error_types"]) <= {
+            "foundation_gap",
+            "hint_dependency",
+            "transfer_difficulty",
+            "step_error",
+        }
 
 
 def test_class_profile_keeps_roster_denominator(client: TestClient, imported: dict) -> None:
