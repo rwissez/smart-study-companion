@@ -104,12 +104,17 @@ def list_knowledge_reviews(
     for row in rows[start : start + page_size]:
         if object_type and row.subject_kind != object_type:
             continue
+        context: dict = {}
+        for check in row.checks_json or []:
+            if check.get("code") == "REVIEW_CONTEXT":
+                context = check.get("context") or {}
+                break
         items.append(
             {
                 "review_id": row.review_id,
                 "object_type": row.subject_kind,
-                "object_id": row.subject_key,
-                "candidate_version": "",
+                "object_id": str(row.subject_key).split(":", 1)[-1],
+                "candidate_version": context.get("candidate_version", ""),
                 "review_info": {
                     "status": row.status,
                     "method": row.method,

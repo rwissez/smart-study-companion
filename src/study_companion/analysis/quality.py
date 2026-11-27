@@ -396,8 +396,8 @@ def _report_limitations(
         "待评分、未作答、无记录分开统计，均不计入有效评分；零分是有效数值",
         "评分点与总分一致性只给不一致计数：prepared 未提供可核对记录总数，故不计算比例，避免假精度",
         "Catalog 未包含知识点 primary 映射与题型/难度覆盖字段，映射覆盖只统计指标关联与评分点关联",
-        "Finding 契约当前没有 mastery_level，掌握状态按 performance（旧字段）投影，无法区分初步掌握与需要加强",
-        "BQualityReport 契约未定义 source_counts/grading_quality/evidence_quality/analysis_quality 子结构，相关计数以 counts 键与 coverage 项投影",
+        "Finding 契约当前没有掌握程度字段的完整档位，掌握状态按表现字段投影，暂无法区分初步掌握与需要加强",
+        "质量报告的来源、评分、证据与分析四类计数已分别列出，未使用额外的分层结构，便于逐项核对",
         "质量报告全部计数由程序从真实记录聚合，模型不参与生成任何数字",
     ]
     if unmapped_materials:

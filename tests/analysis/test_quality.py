@@ -413,7 +413,7 @@ def test_scope_and_limitations_are_explicit():
     assert report.scope["class_ids"] == ["C01"]
     assert report.limitations
     assert any("工程初始值" in item for item in report.limitations)
-    assert any("mastery_level" in item for item in report.limitations)
+    assert any("掌握" in item for item in report.limitations)
     assert any("待评分" in item for item in report.limitations)
 
 

@@ -54,4 +54,15 @@ export const queryKeys = {
   conversationMessages: (scope: ScopeKey, conversationId: string) =>
     [...base(scope), "chat", "messages", conversationId] as const,
   exports: (scope: ScopeKey, runId: string) => [...base(scope), "export", runId] as const,
+  exportPreflight: (scope: ScopeKey, runId: string, nodeIds: string, caseIds: string) =>
+    [...base(scope), "export", runId, "preflight", nodeIds, caseIds] as const,
+  exportItem: (scope: ScopeKey, exportId: string) => [...base(scope), "export", "item", exportId] as const,
+  revisions: (scope: ScopeKey, runId: string, studentId: string, nodeId: string) =>
+    [...base(scope), "plan", "revisions", runId, studentId, "node", nodeId] as const,
+  intervention: (scope: ScopeKey, runId: string, studentId: string, caseId: string, nodeId: string) =>
+    [...base(scope), "intervention", runId, studentId, caseId, "node", nodeId] as const,
+  recommendationsQuality: (scope: ScopeKey, runId: string, nodeId: string, classId: string | null) =>
+    [...base(scope), "quality", "recommendations", runId, "node", nodeId, "class", classId ?? "all"] as const,
+  materials: (scope: ScopeKey, catalogVersion: string | null) =>
+    [...base(scope), "material", "search", "catalog", catalogVersion ?? "current"] as const,
 };

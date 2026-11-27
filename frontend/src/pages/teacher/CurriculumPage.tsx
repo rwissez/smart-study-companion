@@ -1,13 +1,14 @@
-import { useMemo, useState } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useEffect, useMemo, useState } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useSearchParams } from "react-router-dom";
 import { errorCode, errorRequestId, toErrorMessage } from "../../api/client";
-import { getCatalog, getKnowledge, getKnowledgeQuality, listKnowledgeReviews } from "../../api/service";
-import type { KnowledgePoint, KnowledgeSnapshotView } from "../../api/types";
+import { getCatalog, getKnowledge, getKnowledgeQuality, getSourcePage, listKnowledgeReviews } from "../../api/service";
+import type { KnowledgePoint, KnowledgeReviewItem, KnowledgeSnapshotView } from "../../api/types";
 import { useSession } from "../../app/session";
 import { queryKeys } from "../../lib/queryKeys";
 import { StatePanel } from "../../components/feedback/StatePanel";
 import { KnowledgeGraph } from "../../components/learning/KnowledgeGraph";
+import { KnowledgeReviewDialog } from "../../components/learning/KnowledgeReviewDialog";
 import { IconSearch } from "../../components/icons";
 
 const TABS = [
@@ -17,11 +18,37 @@ const TABS = [
 
 export function CurriculumPage() {
   const { scopeKey } = useSession();
+  const queryClient = useQueryClient();
   const datasetId = scopeKey.datasetId;
   const [searchParams, setSearchParams] = useSearchParams();
   const tab = searchParams.get("tab") === "reviews" ? "reviews" : "graph";
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [search, setSearch] = useState("");
+  const [reviewItem, setReviewItem] = useState<KnowledgeReviewItem | null>(null);
+  const [reviewNotice, setReviewNotice] = useState<string | null>(null);
+  const [sourceUrl, setSourceUrl] = useState<string | null>(null);
+  const [sourceBusy, setSourceBusy] = useState(false);
+  const [sourceError, setSourceError] = useState<string | null>(null);
+
+  useEffect(() => {
+    return () => {
+      if (sourceUrl) URL.revokeObjectURL(sourceUrl);
+    };
+  }, [sourceUrl]);
+
+  const openSourcePage = async (fileId: string, page: number) => {
+    setSourceBusy(true);
+    setSourceError(null);
+    try {
+      const blob = await getSourcePage(fileId, page);
+      if (sourceUrl) URL.revokeObjectURL(sourceUrl);
+      setSourceUrl(URL.createObjectURL(blob));
+    } catch (reason) {
+      setSourceError(toErrorMessage(reason));
+    } finally {
+      setSourceBusy(false);
+    }
+  };
 
   const catalog = useQuery({
     queryKey: queryKeys.catalog(scopeKey, null),
@@ -220,10 +247,40 @@ export function CurriculumPage() {
                               {locator.pdf_page ? ` · PDF 第 ${locator.pdf_page} 页` : ""}
                               {locator.printed_page ? ` · 正文第 ${locator.printed_page} 页` : ""}
                               {` · ${locator.verification_status}`}
+                              {locator.file_id && locator.pdf_page ? (
+                                <button
+                                  type="button"
+                                  className="btn btnSm btnGhost"
+                                  style={{ marginLeft: 6 }}
+                                  disabled={sourceBusy}
+                                  onClick={() => void openSourcePage(locator.file_id as string, locator.pdf_page as number)}
+                                >
+                                  查看原页
+                                </button>
+                              ) : null}
                             </li>
                           ))}
                         </ul>
                       )}
+                      {sourceError ? <p className="fieldError" role="alert">{sourceError}</p> : null}
+                      {sourceUrl ? (
+                        <div className="stackSm" style={{ marginTop: 8 }}>
+                          <div className="rowBetween">
+                            <span className="small muted">受控来源页（临时链接，关闭后失效）</span>
+                            <button
+                              type="button"
+                              className="btn btnSm"
+                              onClick={() => {
+                                URL.revokeObjectURL(sourceUrl);
+                                setSourceUrl(null);
+                              }}
+                            >
+                              关闭原页
+                            </button>
+                          </div>
+                          <iframe className="sourceFrame" src={sourceUrl} title="受控来源页" />
+                        </div>
+                      ) : null}
                     </div>
                     <div>
                       <h4 className="paneTitle">实际关联</h4>
@@ -269,8 +326,9 @@ export function CurriculumPage() {
         <section className="section" aria-label="知识审核">
           <div className="sectionHead">
             <h2 className="sectionTitle">异常与审核</h2>
-            <span className="sectionHint">审核动作接口尚未接入，当前只读</span>
+            <span className="sectionHint">选中对象后通过 / 拒绝 / 编辑并重审</span>
           </div>
+          {reviewNotice ? <p className="small" role="status">{reviewNotice}</p> : null}
           <div className="row" style={{ marginBottom: 12 }}>
             {Object.entries(qualityCounts).slice(0, 8).map(([key, value]) => (
               <span className="tag" key={key}>{key} {String(value)}</span>
@@ -306,6 +364,7 @@ export function CurriculumPage() {
                     <th scope="col">类型</th>
                     <th scope="col">状态</th>
                     <th scope="col">检查与问题</th>
+                    <th scope="col">操作</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -321,17 +380,37 @@ export function CurriculumPage() {
                             ))
                           : "—"}
                       </td>
+                      <td>
+                        <button type="button" className="btn btnSm" onClick={() => setReviewItem(item)}>
+                          审核
+                        </button>
+                      </td>
                     </tr>
                   ))}
                 </tbody>
               </table>
-              <p className="small muted" style={{ marginTop: 8 }}>
-                审核的 approve / reject / edit 接口尚未在已冻结接口清单中提供，页面不显示不可用的操作按钮。
-              </p>
+              <div className="row" style={{ marginTop: 8 }}>
+                <span className="small muted">通过会发布新的知识版本；拒绝只记录决定；编辑生成新候选。</span>
+              </div>
             </div>
           ) : null}
         </section>
       )}
+
+      <KnowledgeReviewDialog
+        open={reviewItem !== null}
+        datasetId={datasetId}
+        item={reviewItem}
+        onClose={() => setReviewItem(null)}
+        onDone={(message) => {
+          setReviewNotice(message);
+          void queryClient.invalidateQueries({ queryKey: queryKeys.knowledgeReviews(scopeKey) });
+          void queryClient.invalidateQueries({ queryKey: queryKeys.knowledge(scopeKey, null) });
+          void queryClient.invalidateQueries({ queryKey: queryKeys.knowledgeQuality(scopeKey) });
+          void reviews.refetch();
+          void knowledge.refetch();
+        }}
+      />
     </div>
   );
 }

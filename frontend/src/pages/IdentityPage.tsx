@@ -165,7 +165,7 @@ export function IdentityPage() {
                   {datasets.length === 0 ? <option value="">还没有可用数据集</option> : null}
                   {datasets.map((dataset) => (
                     <option key={dataset.dataset_id} value={dataset.dataset_id}>
-                      {dataset.display_name || "数据集"}（{dataset.student_count} 名学生 · {datasetStatusLabel(dataset.status)}）
+                      {dataset.display_name || "数据集"}（{datasetStatusLabel(dataset.status)}）
                     </option>
                   ))}
                 </select>

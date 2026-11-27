@@ -1,13 +1,22 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { errorRequestId, toErrorMessage } from "../../api/client";
+import { useNavigate } from "react-router-dom";
+import { errorCode, errorRequestId, toErrorMessage } from "../../api/client";
 import {
+  confirmProposal,
+  createProposal,
   getCatalog,
   getConversationMessages,
   listConversations,
   sendChat,
 } from "../../api/service";
-import type { ChatMessageRecord, ChatSegment, ConversationSummary } from "../../api/types";
+import type {
+  ChatMessageRecord,
+  ChatSegment,
+  ConfirmationResult,
+  ConversationSummary,
+  ProposalResponse,
+} from "../../api/types";
 import { queryKeys } from "../../lib/queryKeys";
 import { useSession } from "../../app/session";
 import { formatDate } from "../../lib/format";
@@ -59,11 +68,16 @@ function SegmentList({ segments }: { segments: ChatSegment[] }) {
 export function ChatPanel({ role, context, onConfigure, initialConversationId }: Props) {
   const { scopeKey } = useSession();
   const queryClient = useQueryClient();
+  const navigate = useNavigate();
   const [selectedId, setSelectedId] = useState<string | null>(initialConversationId ?? null);
   const [draft, setDraft] = useState("");
   const [busy, setBusy] = useState(false);
   const [composing, setComposing] = useState(false);
   const [error, setError] = useState<{ text: string; requestId: string | null } | null>(null);
+  const [proposal, setProposal] = useState<ProposalResponse | null>(null);
+  const [proposalBusy, setProposalBusy] = useState(false);
+  const [proposalError, setProposalError] = useState<string | null>(null);
+  const [decisionResult, setDecisionResult] = useState<ConfirmationResult | null>(null);
   const logRef = useRef<HTMLDivElement>(null);
 
   const conversations = useQuery<{ items: ConversationSummary[] }>({
@@ -117,6 +131,60 @@ export function ChatPanel({ role, context, onConfigure, initialConversationId }:
     setSelectedId(null);
     setDraft("");
     setError(null);
+    setProposal(null);
+    setDecisionResult(null);
+    setProposalError(null);
+  };
+
+  const requestProposal = async () => {
+    if (!selectedId) {
+      setProposalError("请先发送一条消息建立会话，再生成方案候选。");
+      return;
+    }
+    if (!context?.studentId || !context?.nodeId) {
+      setProposalError("需要先在学生画像里选择学生与观察节点，才能生成方案候选。");
+      return;
+    }
+    setProposalBusy(true);
+    setProposalError(null);
+    setDecisionResult(null);
+    try {
+      const result = await createProposal(selectedId, {
+        studentId: context.studentId,
+        nodeId: context.nodeId,
+        intent: "按当前学情重新生成一版安排",
+      });
+      setProposal(result);
+    } catch (reason) {
+      setProposalError(
+        `${toErrorMessage(reason)}${errorRequestId(reason) ? `（请求编号 ${errorRequestId(reason)}）` : ""}`,
+      );
+    } finally {
+      setProposalBusy(false);
+    }
+  };
+
+  const decideProposal = async (allow: boolean) => {
+    if (!proposal || !selectedId || !context?.nodeId) return;
+    setProposalBusy(true);
+    setProposalError(null);
+    try {
+      const result = await confirmProposal(selectedId, context.nodeId, {
+        confirmationId: proposal.confirmation.confirmation_id,
+        allow,
+      });
+      setDecisionResult(result);
+      setProposal(null);
+      await queryClient.invalidateQueries({ queryKey: [scopeKey.mode, scopeKey.epoch] });
+    } catch (reason) {
+      if (errorCode(reason) === "CONFLICT" || errorCode(reason) === "REVISION_CONFLICT") {
+        setProposalError("确认已过期或方案已更新，请重新生成候选。");
+      } else {
+        setProposalError(`${toErrorMessage(reason)}${errorRequestId(reason) ? `（请求编号 ${errorRequestId(reason)}）` : ""}`);
+      }
+    } finally {
+      setProposalBusy(false);
+    }
   };
 
   const send = async () => {
@@ -197,6 +265,29 @@ export function ChatPanel({ role, context, onConfigure, initialConversationId }:
           </div>
         )}
 
+        {role === "teacher" && !context?.studentId ? (
+          <div className="chatNotice" role="status">
+            教师对话需要先绑定学生：请从学生画像的“就此学生提问”进入，或在地址里带上学生与观察节点。
+          </div>
+        ) : null}
+
+        {role === "teacher" ? (
+          <div className="rowBetween">
+            <span className="small muted">
+              教师可让 Agent 生成方案候选；确认卡会列出影响学生、准备发布的版本与警告，接受后才发布。
+            </span>
+            <button
+              type="button"
+              className="btn btnSm"
+              onClick={() => void requestProposal()}
+              disabled={proposalBusy || !selectedId || !context?.studentId || !context?.nodeId}
+              title={!selectedId ? "先发送一条消息建立会话" : "生成方案候选"}
+            >
+              {proposalBusy ? "生成中…" : "生成方案候选"}
+            </button>
+          </div>
+        ) : null}
+
         <div className="chatLog" ref={logRef} aria-live="polite">
           {messages.isPending && selectedId ? <StatePanel kind="loading" title="正在读取会话消息" /> : null}
           {messages.isError ? (
@@ -234,6 +325,85 @@ export function ChatPanel({ role, context, onConfigure, initialConversationId }:
           {busy ? <p className="small muted">正在等待服务端结果…</p> : null}
         </div>
 
+        {proposalError ? <p className="fieldError" role="alert">{proposalError}</p> : null}
+
+        {proposal ? (
+          <div className="confirmCard" role="group" aria-label="方案候选确认">
+            <div className="rowBetween">
+              <strong>需要确认：发布新的学习方案</strong>
+              <span className="badge badgeWarning">等待确认</span>
+            </div>
+            <dl className="kv">
+              <dt>影响学生</dt><dd>{proposal.confirmation.targets.map((target) => target.student_id).join("、") || context?.studentId}</dd>
+              <dt>候选版本</dt><dd>基于当前正式方案生成的新版本（确认后由服务端分配版本号）</dd>
+              <dt>警告条数</dt><dd className="tabular">{proposal.proposal.warnings.length}</dd>
+              <dt>预计用时</dt><dd className="tabular">{proposal.proposal.estimated_minutes ?? "—"} 分钟</dd>
+              <dt>过期时间</dt><dd>{formatDate(proposal.confirmation.expires_at)}</dd>
+            </dl>
+            <p className="small">{proposal.confirmation.summary}</p>
+            {proposal.proposal.blocked_reasons.length ? (
+              <p className="small fieldError">阻断原因：{proposal.proposal.blocked_reasons.join("；")}</p>
+            ) : null}
+            <div className="row">
+              <button type="button" className="btn btnPrimary" onClick={() => void decideProposal(true)} disabled={proposalBusy}>
+                接受并发布
+              </button>
+              <button type="button" className="btn" onClick={() => void decideProposal(false)} disabled={proposalBusy}>
+                拒绝
+              </button>
+              <span className="xs muted">接受与拒绝都会记录；不能通过普通聊天回复代替确认。</span>
+            </div>
+          </div>
+        ) : null}
+
+        {decisionResult ? (
+          <div className="statePanel" role="status">
+            <span className="stateTitle">
+              {decisionResult.decision === "accepted" ? "已接受并执行发布" : "已拒绝，方案不变"}
+            </span>
+            {decisionResult.operations.length ? (
+              <table className="table">
+                <thead>
+                  <tr><th scope="col">学生</th><th scope="col">状态</th><th scope="col">发布状态</th></tr>
+                </thead>
+                <tbody>
+                  {decisionResult.operations.map((operation) => (
+                    <tr key={operation.student_id}>
+                      <td className="small">{operation.student_id}</td>
+                      <td className="small">
+                        {operation.status === "succeeded" || operation.status === "published"
+                          ? "已完成"
+                          : operation.status === "failed"
+                            ? "失败"
+                            : "处理中"}
+                      </td>
+                      <td className="small">
+                        {operation.publication_status === "published" ? "已发布" : operation.publication_status ?? "—"}
+                        {operation.new_plan_version ? (
+                          <div className="xs muted">新方案版本：{operation.new_plan_version}</div>
+                        ) : null}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            ) : (
+              <span className="small muted">服务端没有返回操作结果。</span>
+            )}
+            {context?.studentId ? (
+              <div className="row">
+                <button
+                  type="button"
+                  className="btn btnSm"
+                  onClick={() => navigate(`/teacher/students/${encodeURIComponent(context.studentId as string)}?tab=plan`)}
+                >
+                  查看该学生的正式方案
+                </button>
+              </div>
+            ) : null}
+          </div>
+        ) : null}
+
         <div className="chatComposer">
           <label className="srOnly" htmlFor="chat-input">输入消息</label>
           <textarea
@@ -242,8 +412,12 @@ export function ChatPanel({ role, context, onConfigure, initialConversationId }:
             style={{ minHeight: 96 }}
             value={draft}
             maxLength={MAX_LENGTH}
-            disabled={busy}
-            placeholder="输入问题，Enter 发送，Shift+Enter 换行"
+            disabled={busy || (role === "teacher" && !context?.studentId)}
+            placeholder={
+              role === "teacher" && !context?.studentId
+                ? "先绑定学生与观察节点，再开始对话"
+                : "输入问题，Enter 发送，Shift+Enter 换行"
+            }
             onChange={(event) => setDraft(event.target.value)}
             onCompositionStart={() => setComposing(true)}
             onCompositionEnd={() => setComposing(false)}
@@ -255,8 +429,16 @@ export function ChatPanel({ role, context, onConfigure, initialConversationId }:
             }}
           />
           <div className="chatToolbar">
-            <span className="xs muted">{draft.length} / {MAX_LENGTH}</span>
-            <button type="button" className="btn btnPrimary" onClick={() => void send()} disabled={busy || !draft.trim()}>
+            <span className="xs muted">
+              {draft.length} / {MAX_LENGTH}
+              {role === "teacher" && !context?.studentId ? " · 发送已禁用：未绑定学生" : ""}
+            </span>
+            <button
+              type="button"
+              className="btn btnPrimary"
+              onClick={() => void send()}
+              disabled={busy || !draft.trim() || (role === "teacher" && !context?.studentId)}
+            >
               {busy ? "发送中…" : "发送"}
             </button>
           </div>

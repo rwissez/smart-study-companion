@@ -124,7 +124,7 @@ export function AppLayout({ role }: { role: "teacher" | "student" }) {
                     <option value="">{datasets.isPending ? "正在读取数据集…" : "选择数据集"}</option>
                     {(datasets.data ?? []).map((dataset) => (
                       <option key={dataset.dataset_id} value={dataset.dataset_id}>
-                        {dataset.display_name || "数据集"}（{dataset.student_count} 人 · {datasetStatusLabel(dataset.status)}）
+                        {dataset.display_name || "数据集"}（{datasetStatusLabel(dataset.status)}）
                       </option>
                     ))}
                   </select>
@@ -170,8 +170,16 @@ export function AppLayout({ role }: { role: "teacher" | "student" }) {
                         style={{ justifyContent: "flex-start", whiteSpace: "normal", textAlign: "left" }}
                         onClick={() => {
                           setAlertsOpen(false);
-                          if (alert.student_id) navigate(`/teacher/students/${encodeURIComponent(alert.student_id)}`);
-                          else navigate("/teacher/curriculum?tab=reviews");
+                          if (alert.kind === "teacher_attention" && alert.student_id) {
+                            const caseId = typeof alert.target_ref.case_id === "string" ? alert.target_ref.case_id : "";
+                            navigate(
+                              `/teacher/interventions/${encodeURIComponent(caseId)}?studentId=${encodeURIComponent(alert.student_id)}`,
+                            );
+                          } else if (alert.student_id) {
+                            navigate(`/teacher/students/${encodeURIComponent(alert.student_id)}`);
+                          } else {
+                            navigate("/teacher/curriculum?tab=reviews");
+                          }
                         }}
                       >
                         {alert.summary}

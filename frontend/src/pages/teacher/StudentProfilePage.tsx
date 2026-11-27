@@ -19,6 +19,7 @@ import { IndicatorRadar } from "../../components/learning/IndicatorRadar";
 import { MetricList } from "../../components/learning/MetricList";
 import { ProgressView } from "../../components/learning/ProgressView";
 import { TaskGroupView } from "../../components/learning/TaskGroupView";
+import { PlanEditor } from "../../components/learning/PlanEditor";
 import { formatDate, formatScore, gradingStatusLabel } from "../../lib/format";
 import { IconArrowLeft } from "../../components/icons";
 
@@ -40,6 +41,7 @@ export function StudentProfilePage() {
   const tab = (searchParams.get("tab") as TabKey | null) ?? "overview";
   const [evidence, setEvidence] = useState<EvidenceRef | null>(null);
   const [recordsPage, setRecordsPage] = useState(1);
+  const [editorOpen, setEditorOpen] = useState(false);
 
   const savedView = useMemo(() => {
     try {
@@ -232,10 +234,18 @@ export function StudentProfilePage() {
                   />
                 ) : null}
                 <div className="row" style={{ marginTop: 12 }}>
-                  <button type="button" className="btn" disabled title="方案编辑器将在后续版本接入">
+                  <button
+                    type="button"
+                    className="btn"
+                    onClick={() => setEditorOpen(true)}
+                    disabled={!plan.data}
+                    title={plan.data ? "打开学习方案编辑器" : "尚未读取到正式方案"}
+                  >
                     编辑学习方案
                   </button>
-                  <span className="small muted">编辑入口占位：方案编辑器（预览 / 确认 / 发布）尚未接入，当前只能查看正式版本。</span>
+                  <span className="small muted">
+                    {plan.data ? "改目标、说明与活动，检查并发布后生成新的正式版本。" : "尚未读取到正式方案，不能编辑。"}
+                  </span>
                 </div>
               </div>
             </section>
@@ -328,6 +338,16 @@ export function StudentProfilePage() {
         refItem={evidence}
         context={{ student_id: studentId, class_id: result?.class_id ?? null }}
         onClose={() => setEvidence(null)}
+      />
+      <PlanEditor
+        open={editorOpen}
+        studentId={studentId}
+        nodeId={result?.node_id ?? nodeId ?? plan.data?.plan.node_id ?? ""}
+        onClose={() => setEditorOpen(false)}
+        onPublished={() => {
+          void plan.refetch();
+          void profile.refetch();
+        }}
       />
     </div>
   );

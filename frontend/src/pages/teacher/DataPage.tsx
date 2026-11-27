@@ -8,14 +8,18 @@ import {
   createImport,
   downloadExport,
   getAnalysisQuality,
+  getExport,
   getExportPreview,
   getKnowledgeQuality,
+  getRecommendationsQuality,
   listDatasets,
   listJobs,
   listQuality,
   listRuns,
+  listStudents,
+  preflightExport,
 } from "../../api/service";
-import type { ImportReceipt, JobDetail, QualityIssue } from "../../api/types";
+import type { ExportItem, ExportPreflight, ImportReceipt, JobDetail, QualityIssue } from "../../api/types";
 import { useSession } from "../../app/session";
 import { queryKeys } from "../../lib/queryKeys";
 import { StatePanel } from "../../components/feedback/StatePanel";
@@ -33,6 +37,7 @@ import {
   knowledgeCountLabel,
   qualityActionLabel,
   qualityCodeLabel,
+  recommendationQualityCountLabel,
   severityLabel,
   tableLabel,
 } from "../../lib/labels";
@@ -75,6 +80,8 @@ export function DataPage() {
   const [exportJobId, setExportJobId] = useState<string | null>(null);
   const [exportBusy, setExportBusy] = useState(false);
   const [exportError, setExportError] = useState<string | null>(null);
+  const [exportDetail, setExportDetail] = useState<ExportItem | null>(null);
+  const [selectedCases, setSelectedCases] = useState<string[]>([]);
   const importKey = useRef<string | null>(null);
   const fileInput = useRef<HTMLInputElement>(null);
 
@@ -119,6 +126,32 @@ export function DataPage() {
     enabled: Boolean(run) && tab === "exports" && canExport,
   });
 
+  const rosterQuery = useQuery({
+    queryKey: queryKeys.roster(scopeKey, null),
+    queryFn: () => listStudents(datasetId as string, { page: 1, pageSize: 200 }),
+    enabled: Boolean(datasetId) && tab === "exports",
+  });
+
+  const preflight = useQuery<ExportPreflight>({
+    queryKey: queryKeys.exportPreflight(
+      scopeKey,
+      run?.run_id ?? "",
+      "all",
+      [...selectedCases].sort().join(","),
+    ),
+    queryFn: () =>
+      preflightExport(run!.run_id, {
+        caseStudentIds: selectedCases.length ? selectedCases : undefined,
+      }),
+    enabled: Boolean(run) && tab === "exports" && canExport,
+  });
+
+  const recommendationsQuality = useQuery({
+    queryKey: queryKeys.recommendationsQuality(scopeKey, run?.run_id ?? "", run?.node_ids[0] ?? "", null),
+    queryFn: () => getRecommendationsQuality(run!.run_id, { nodeId: run!.node_ids[0] }),
+    enabled: Boolean(run) && tab === "quality",
+  });
+
   const dataset = datasets.data?.find((item) => item.dataset_id === datasetId) ?? null;
 
   // 任务完成后运行与导出记录都会变化；切到质量/导出页签时确认一次最新运行。
@@ -131,6 +164,8 @@ export function DataPage() {
     if (job.status !== "succeeded") return;
     void queryClient.invalidateQueries({ queryKey: queryKeys.runs(scopeKey) });
     void queryClient.invalidateQueries({ queryKey: queryKeys.exports(scopeKey, run?.run_id ?? "") });
+    void queryClient.invalidateQueries({ queryKey: queryKeys.exportPreflight(scopeKey, run?.run_id ?? "", "all", [...selectedCases].sort().join(",")) });
+    void queryClient.invalidateQueries({ queryKey: queryKeys.recommendationsQuality(scopeKey, run?.run_id ?? "", run?.node_ids[0] ?? "", null) });
     void queryClient.invalidateQueries({ queryKey: queryKeys.datasets(scopeKey) });
   };
 
@@ -206,11 +241,28 @@ export function DataPage() {
 
   const startExport = async () => {
     if (!run) return;
+    if (!preflight.data?.ready) {
+      setExportError("预检未通过，不能生成正式导出；请先处理缺项。");
+      return;
+    }
     setExportBusy(true);
     setExportError(null);
     try {
       const created = await createExport(run.run_id);
       setExportJobId(created.job_id);
+      void queryClient.invalidateQueries({ queryKey: queryKeys.exports(scopeKey, run.run_id) });
+    } catch (reason) {
+      setExportError(toErrorMessage(reason));
+    } finally {
+      setExportBusy(false);
+    }
+  };
+
+  const loadExportDetail = async (exportId: string) => {
+    setExportBusy(true);
+    setExportError(null);
+    try {
+      setExportDetail(await getExport(exportId));
     } catch (reason) {
       setExportError(toErrorMessage(reason));
     } finally {
@@ -625,7 +677,54 @@ export function DataPage() {
             </div>
             <div>
               <h3 className="paneTitle">学习方案质量</h3>
-              <p className="small muted">学习方案质量报告还没有接入页面，这里不显示模拟百分比。</p>
+              {recommendationsQuality.isPending && run ? <p className="small muted">正在读取…</p> : null}
+              {recommendationsQuality.isError ? (
+                <StatePanel kind="error" title="学习方案质量读取失败" message={toErrorMessage(recommendationsQuality.error)} />
+              ) : null}
+              {recommendationsQuality.data ? (
+                <div className="stackSm">
+                  <div className="row">
+                    {Object.entries(recommendationsQuality.data.counts)
+                      .map(([key, value]) => ({ label: recommendationQualityCountLabel(key), value }))
+                      .filter((item): item is { label: string; value: number } => Boolean(item.label))
+                      .map((item) => (
+                        <span className="tag" key={item.label}>{item.label} {item.value}</span>
+                      ))}
+                  </div>
+                  {recommendationsQuality.data.coverage.length ? (
+                    <table className="table">
+                      <thead>
+                        <tr>
+                          <th scope="col">覆盖率</th>
+                          <th scope="col" className="numeric">分子 / 分母</th>
+                          <th scope="col" className="numeric">比例</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {recommendationsQuality.data.coverage.map((coverage) => (
+                          <tr key={coverage.key}>
+                            <td className="small">
+                              {coverage.label}
+                              {coverage.scope_description ? <div className="xs muted">{coverage.scope_description}</div> : null}
+                            </td>
+                            <td className="numeric">{coverage.numerator} / {coverage.denominator}</td>
+                            <td className="numeric">
+                              {coverage.denominator === 0 || coverage.value === null
+                                ? "无数据"
+                                : `${(coverage.value * 100).toFixed(1)}%`}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  ) : (
+                    <p className="small muted">报告没有返回覆盖率条目。</p>
+                  )}
+                  {recommendationsQuality.data.limitations.length ? (
+                    <p className="small muted">限制：{recommendationsQuality.data.limitations.join("；")}</p>
+                  ) : null}
+                </div>
+              ) : null}
               <h3 className="paneTitle" style={{ marginTop: 16 }}>系统运行</h3>
               <p className="small muted">{systemQualityNote}</p>
             </div>
@@ -650,11 +749,94 @@ export function DataPage() {
             />
           ) : (
             <div className="stackLg">
+              <div className="section">
+                <div className="sectionHead">
+                  <h2 className="sectionTitle">导出预检</h2>
+                  <div className="row">
+                    <button type="button" className="btn btnSm" onClick={() => void preflight.refetch()}>重新预检</button>
+                  </div>
+                </div>
+                <div className="row" style={{ alignItems: "flex-start", gap: 24, flexWrap: "wrap" }}>
+                  <div style={{ minWidth: 260 }}>
+                    <p className="paneTitle">案例学生</p>
+                    <p className="xs muted">不选则按正式学情自动选取；选择后会重新预检。</p>
+                    <div className="stackSm" style={{ maxHeight: 200, overflow: "auto", marginTop: 8 }}>
+                      {(rosterQuery.data?.items ?? []).map((student) => (
+                        <label className="checkRow" key={student.student_id}>
+                          <input
+                            type="checkbox"
+                            checked={selectedCases.includes(student.student_id)}
+                            onChange={(event) =>
+                              setSelectedCases((previous) =>
+                                event.target.checked
+                                  ? [...previous, student.student_id]
+                                  : previous.filter((item) => item !== student.student_id),
+                              )
+                            }
+                          />
+                          {student.student_id}（{student.class_id}）
+                        </label>
+                      ))}
+                      {rosterQuery.isPending ? <span className="small muted">正在读取名册…</span> : null}
+                    </div>
+                  </div>
+                  <div style={{ flex: 1, minWidth: 320 }}>
+                    {preflight.isPending ? <StatePanel kind="loading" title="正在预检导出范围" /> : null}
+                    {preflight.isError ? (
+                      <StatePanel kind="error" title="导出预检失败" message={toErrorMessage(preflight.error)} requestId={errorRequestId(preflight.error)} onRetry={() => void preflight.refetch()} />
+                    ) : null}
+                    {preflight.data ? (
+                      <div className={preflight.data.ready ? "statePanel" : "statePanel stateReady"}>
+                        <div className="rowBetween">
+                          <span className="stateTitle">{preflight.data.ready ? "预检通过，可以生成正式导出" : "预检未通过，不能生成"}</span>
+                          <span className="small muted">
+                            覆盖：学生 {preflight.data.coverage.students} · 班级 {preflight.data.coverage.classes} · 案例 {preflight.data.coverage.cases}
+                          </span>
+                        </div>
+                        {preflight.data.blocking.length ? (
+                          <div className="tableWrap">
+                            <table className="table">
+                              <thead>
+                                <tr><th scope="col">缺项</th><th scope="col">期望</th><th scope="col">补救建议</th></tr>
+                              </thead>
+                              <tbody>
+                                {preflight.data.blocking.map((item, index) => (
+                                  <tr key={`${item.code}-${index}`}>
+                                    <td className="small">{item.code}</td>
+                                    <td className="small">{item.expected}</td>
+                                    <td className="small">{item.remedy}</td>
+                                  </tr>
+                                ))}
+                              </tbody>
+                            </table>
+                          </div>
+                        ) : null}
+                        {preflight.data.warnings.length ? (
+                          <details>
+                            <summary className="small muted" style={{ cursor: "pointer" }}>{preflight.data.warnings.length} 条警告</summary>
+                            <ul>{preflight.data.warnings.map((item, index) => <li key={index} className="small">{item.expected}。补救：{item.remedy}</li>)}</ul>
+                          </details>
+                        ) : null}
+                        {!preflight.data.ready ? <span className="small">处理缺项后再重新预检；页面不会跳过预检直接生成。</span> : null}
+                      </div>
+                    ) : null}
+                  </div>
+                </div>
+              </div>
+
               <div className="row">
-                <button type="button" className="btn btnPrimary" onClick={() => void startExport()} disabled={exportBusy}>
+                <button
+                  type="button"
+                  className="btn btnPrimary"
+                  onClick={() => void startExport()}
+                  disabled={exportBusy || !preflight.data?.ready}
+                  title={preflight.data?.ready ? "生成正式导出" : "预检未通过，不能生成"}
+                >
                   {exportBusy ? "处理中…" : "生成导出"}
                 </button>
-                <span className="small muted">导出包含正式结果、字段字典、证据与案例；不会调用模型。</span>
+                <span className="small muted">
+                  {preflight.data?.ready ? "导出包含正式结果、字段字典、证据与案例；不会调用模型。" : "预检通过后才能生成导出。"}
+                </span>
               </div>
               {exportError ? <p className="fieldError" role="alert">{exportError}</p> : null}
 
@@ -670,6 +852,7 @@ export function DataPage() {
                       handleJobDone(job);
                       if (job.status === "succeeded") {
                         void exportsQuery.refetch();
+                        void preflight.refetch();
                       }
                     }}
                   />
@@ -683,7 +866,7 @@ export function DataPage() {
                   <StatePanel kind="error" title="导出记录读取失败" message={toErrorMessage(exportsQuery.error)} requestId={errorRequestId(exportsQuery.error)} onRetry={() => void exportsQuery.refetch()} />
                 ) : null}
                 {exportsQuery.data && exportsQuery.data.items.length === 0 ? (
-                  <p className="small muted">这次运行还没有导出记录。需要时点击“生成导出”。</p>
+                  <p className="small muted">这次运行还没有导出记录。预检通过后点击“生成导出”。</p>
                 ) : null}
                 {exportsQuery.data && exportsQuery.data.items.length > 0 ? (
                   <div className="tableWrap">
@@ -694,7 +877,7 @@ export function DataPage() {
                           <th scope="col">生成时间</th>
                           <th scope="col" className="numeric">大小</th>
                           <th scope="col">检查结果</th>
-                          <th scope="col">下载</th>
+                          <th scope="col">操作</th>
                         </tr>
                       </thead>
                       <tbody>
@@ -707,20 +890,47 @@ export function DataPage() {
                               <td className="numeric">{formatBytes(item.bytes)}</td>
                               <td className="small">{passed ? "校验通过" : "校验有提示"}</td>
                               <td>
-                                <button
-                                  type="button"
-                                  className="btn btnSm btnGhost"
-                                  disabled={item.status !== "ready" || exportBusy}
-                                  onClick={() => void saveExport(item.export_id)}
-                                >
-                                  下载 ZIP
-                                </button>
+                                <div className="row">
+                                  <button
+                                    type="button"
+                                    className="btn btnSm btnGhost"
+                                    disabled={item.status !== "ready" || exportBusy}
+                                    onClick={() => void saveExport(item.export_id)}
+                                  >
+                                    下载 ZIP
+                                  </button>
+                                  <button type="button" className="btn btnSm" onClick={() => void loadExportDetail(item.export_id)}>
+                                    详情
+                                  </button>
+                                </div>
                               </td>
                             </tr>
                           );
                         })}
                       </tbody>
                     </table>
+                  </div>
+                ) : null}
+                {exportDetail ? (
+                  <div className="statePanel" style={{ marginTop: 12 }}>
+                    <div className="rowBetween">
+                      <span className="stateTitle">导出详情</span>
+                      <button type="button" className="btn btnSm" onClick={() => setExportDetail(null)}>收起</button>
+                    </div>
+                    <dl className="kv">
+                      <dt>状态</dt><dd>{exportStatusLabel(exportDetail.status)}</dd>
+                      <dt>大小</dt><dd>{formatBytes(exportDetail.bytes)}</dd>
+                      <dt>文件数</dt><dd>{String((exportDetail.check_report?.file_count as number | undefined) ?? "—")}</dd>
+                      <dt>检查</dt><dd>{exportDetail.check_report?.passed === true ? "校验通过" : "有提示"}</dd>
+                      <dt>生成时间</dt><dd>{formatDate(exportDetail.created_at)}</dd>
+                    </dl>
+                    {Array.isArray(exportDetail.check_report?.issues) && (exportDetail.check_report?.issues as unknown[]).length ? (
+                      <ul>
+                        {(exportDetail.check_report?.issues as Array<Record<string, unknown>>).map((issue, index) => (
+                          <li key={index} className="small">{String(issue.message ?? "检查提示")}</li>
+                        ))}
+                      </ul>
+                    ) : null}
                   </div>
                 ) : null}
               </div>

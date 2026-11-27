@@ -3,6 +3,8 @@ import { useQuery } from "@tanstack/react-query";
 import { errorRequestId, newIdempotencyKey, toErrorMessage } from "../../api/client";
 import {
   completeActivity,
+  confirmAssistedHint,
+  getAttempt,
   getMaterial,
   requestHint,
   startActivity,
@@ -56,9 +58,10 @@ export function AttemptEditor({ plan, planVersion, activity, onChanged, onBack }
   const [submitError, setSubmitError] = useState<{ text: string; requestId: string | null } | null>(null);
   const [hints, setHints] = useState<Record<number, string>>({});
   const [releasedLevel, setReleasedLevel] = useState(0);
-  const [pendingHint, setPendingHint] = useState<number | null>(null);
+  const [disclosure, setDisclosure] = useState<{ id: string; level: number; message: string } | null>(null);
   const [hintBusy, setHintBusy] = useState(false);
   const [hintError, setHintError] = useState<string | null>(null);
+  const [hintNotice, setHintNotice] = useState<string | null>(null);
   const [confirmUnanswered, setConfirmUnanswered] = useState(false);
   const [materialBusy, setMaterialBusy] = useState(false);
   const [materialDone, setMaterialDone] = useState(activity.state === "completed");
@@ -94,6 +97,7 @@ export function AttemptEditor({ plan, planVersion, activity, onChanged, onBack }
         if (response.attempt) {
           setAttempt(response.attempt);
           setReleasedLevel(response.attempt.hint_max_level ?? 0);
+          const attemptId = response.attempt.attempt_id;
           const scope: DraftScope = {
             mode: scopeKey.mode,
             epoch: scopeKey.epoch,
@@ -101,7 +105,7 @@ export function AttemptEditor({ plan, planVersion, activity, onChanged, onBack }
             studentId: plan.student_id,
             planVersion,
             activityId: activity.activity_id,
-            attemptId: response.attempt.attempt_id,
+            attemptId,
           };
           draftScope.current = scope;
           const draft = readDraft(scope);
@@ -110,6 +114,19 @@ export function AttemptEditor({ plan, planVersion, activity, onChanged, onBack }
             setFinalAnswer(draft.finalAnswer);
             setSteps(draft.solutionSteps);
           }
+          // 刷新后回显已释放提示；服务端只在 GET /attempts/{id} 返回 released_hints。
+          void getAttempt(attemptId)
+            .then((detail) => {
+              if (cancelled) return;
+              const released = detail.released_hints ?? [];
+              if (released.length) {
+                setHints(Object.fromEntries(released.map((item) => [item.level, item.text])));
+                setReleasedLevel(Math.max(...released.map((item) => item.level)));
+              }
+            })
+            .catch(() => {
+              // 提示回显失败不影响作答本身。
+            });
         }
         setPhase("ready");
       })
@@ -196,26 +213,79 @@ export function AttemptEditor({ plan, planVersion, activity, onChanged, onBack }
     }
   };
 
+  const applyHint = (level: number, text: string) => {
+    setHints((previous) => ({ ...previous, [level]: text }));
+    setReleasedLevel((previous) => Math.max(previous, level));
+    setAttempt((previous) =>
+      previous
+        ? {
+            ...previous,
+            hint_max_level: Math.max(previous.hint_max_level ?? 0, level),
+            assistance_status: "assisted",
+          }
+        : previous,
+    );
+    onChanged();
+  };
+
   const requestNextHint = async (level: number) => {
     if (!attempt) return;
     setHintBusy(true);
     setHintError(null);
+    setHintNotice(null);
     try {
+      // 先按普通请求发送；独立模式会返回 requires_confirmation，而不是错误。
       const response = await requestHint(
         attempt.attempt_id,
-        level,
-        true,
+        { level, allowAssisted: false },
         newIdempotencyKey(`hint-${level}`),
       );
-      setHints((previous) => ({ ...previous, [level]: response.hint }));
-      setReleasedLevel((previous) => Math.max(previous, level));
-      setAttempt((previous) => (previous ? { ...previous, hint_max_level: Math.max(previous.hint_max_level ?? 0, level), assistance_status: "assisted" } : previous));
-      onChanged();
+      if (response.requires_confirmation && response.disclosure_id) {
+        setDisclosure({
+          id: response.disclosure_id,
+          level,
+          message: response.message ?? "这道题要求先独立完成。使用提示会把本次作答记为受助，需要你确认。",
+        });
+        return;
+      }
+      if (response.hint) {
+        applyHint(level, response.hint);
+        if (!attempt.hint_max_level) {
+          setHintNotice("提示已释放；本次作答会记为受助，不再作为独立完成的证据。");
+        }
+      } else {
+        setHintError("服务端没有返回提示内容。");
+      }
     } catch (reason) {
       setHintError(toErrorMessage(reason));
     } finally {
       setHintBusy(false);
-      setPendingHint(null);
+    }
+  };
+
+  const decideDisclosure = async (allow: boolean) => {
+    if (!attempt || !disclosure) return;
+    setHintBusy(true);
+    setHintError(null);
+    try {
+      const response = await confirmAssistedHint(attempt.attempt_id, {
+        disclosureId: disclosure.id,
+        allow,
+      });
+      if (allow && response.released && response.hint) {
+        applyHint(disclosure.level, response.hint);
+        setHintNotice("已接受帮助，提示已释放；本次作答会记为受助。");
+      } else if (allow) {
+        setHintError("已接受帮助，但服务端没有返回提示内容。");
+      } else {
+        setHintNotice("你选择保持独立完成，本次没有释放提示。");
+      }
+      setDisclosure(null);
+    } catch (reason) {
+      setHintError(toErrorMessage(reason));
+      setDisclosure(null);
+    } finally {
+      setHintBusy(false);
     }
   };
 
@@ -522,7 +592,7 @@ export function AttemptEditor({ plan, planVersion, activity, onChanged, onBack }
                 className="btn btnSm"
                 style={{ marginTop: 8 }}
                 disabled={hintBusy}
-                onClick={() => setPendingHint(releasedLevel + 1)}
+                onClick={() => void requestNextHint(releasedLevel + 1)}
               >
                 <IconClock size={16} />
                 {hintBusy ? "请求中…" : `获取第 ${releasedLevel + 1} 级提示`}
@@ -532,6 +602,7 @@ export function AttemptEditor({ plan, planVersion, activity, onChanged, onBack }
             ) : (
               <p className="small muted" style={{ marginTop: 8 }}>提示已全部释放。</p>
             )}
+            {hintNotice ? <p className="small" role="status">{hintNotice}</p> : null}
             {hintError ? <p className="fieldError" role="alert">{hintError}</p> : null}
           </div>
           <div className="small muted">
@@ -542,16 +613,18 @@ export function AttemptEditor({ plan, planVersion, activity, onChanged, onBack }
       </div>
 
       <ConfirmDialog
-        open={pendingHint !== null}
-        title="获取帮助前确认"
-        confirmLabel="继续获取帮助"
-        cancelLabel="先自己再试试"
-        onConfirm={() => { if (pendingHint !== null) void requestNextHint(pendingHint); }}
-        onCancel={() => setPendingHint(null)}
+        open={disclosure !== null}
+        title="使用提示需要你确认"
+        confirmLabel="接受帮助并查看提示"
+        cancelLabel="保持独立完成"
+        onConfirm={() => void decideDisclosure(true)}
+        onCancel={() => void decideDisclosure(false)}
         busy={hintBusy}
       >
-        <p>获取帮助后，本次作答不再作为独立完成的证据。继续获取帮助？</p>
-        <p className="small muted">选择“先自己再试试”不会发送提示请求，也不会改变当前作答。</p>
+        <p>{disclosure?.message ?? "使用提示会把本次作答记为受助，需要你确认。"}</p>
+        <p className="small muted">
+          选择“保持独立完成”不会释放提示，也不会把本次作答记为受助；服务端会记录你选择不接收帮助。
+        </p>
       </ConfirmDialog>
 
       <ConfirmDialog

@@ -9,6 +9,7 @@ import { StudentProfilePage } from "../pages/teacher/StudentProfilePage";
 import { CurriculumPage } from "../pages/teacher/CurriculumPage";
 import { DataPage } from "../pages/teacher/DataPage";
 import { TeacherChatPage } from "../pages/teacher/ChatPage";
+import { InterventionPage } from "../pages/teacher/InterventionPage";
 import { StudentProfilePage as StudentOwnProfilePage } from "../pages/student/ProfilePage";
 import { StudentPlanPage } from "../pages/student/PlanPage";
 import { ActivityPage } from "../pages/student/ActivityPage";
@@ -75,6 +76,7 @@ export function AppRouter() {
         <Route index element={<Navigate to="classes" replace />} />
         <Route path="classes" element={<ClassesPage />} />
         <Route path="students/:studentId" element={<StudentProfilePage />} />
+        <Route path="interventions/:caseId" element={<InterventionPage />} />
         <Route path="curriculum" element={<CurriculumPage />} />
         <Route path="data" element={<DataPage />} />
         <Route path="chat" element={<TeacherChatPage />} />

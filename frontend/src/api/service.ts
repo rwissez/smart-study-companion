@@ -12,15 +12,20 @@ import type {
   ClassResultView,
   ClassSummary,
   CompleteActivityResponse,
+  ConfirmationResult,
   ConversationSummary,
+  CQualityReport,
   DatasetSummary,
   DemoRoster,
   EvidenceDetail,
   EvidenceRef,
   ExportCreateResponse,
+  ExportItem,
+  ExportPreflight,
   ExportPreview,
   HintResponse,
   ImportReceipt,
+  InterventionView,
   JobDetail,
   JobEventPage,
   KnowledgeQualityReport,
@@ -34,7 +39,12 @@ import type {
   Page,
   PlanView,
   ProgressComparison,
+  ProposalResponse,
+  PublishResult,
   QualityIssue,
+  RevisionChanges,
+  RevisionPreview,
+  RevisionSummary,
   RosterStudent,
   RunSummary,
   SessionInfo,
@@ -274,6 +284,13 @@ export async function getKnowledgeQuality(datasetId: string): Promise<KnowledgeQ
   return request<KnowledgeQualityReport>(`/datasets/${segment(datasetId)}/knowledge/quality`);
 }
 
+/** 受控单页 PDF：必须带 Bearer 头取 Blob，调用方建 object URL 并在用后 revoke。 */
+export async function getSourcePage(fileId: string, page: number): Promise<Blob> {
+  if (isDemo) throw new Error("演示模式没有受控来源页。");
+  const result = await requestBlob(`/sources/${segment(fileId)}/pages/${page}`);
+  return result.blob;
+}
+
 // ------------------------------------------------------------------- 数据管理
 
 export async function listQuality(datasetId: string): Promise<Page<QualityIssue>> {
@@ -397,6 +414,30 @@ export async function getMaterial(
   );
 }
 
+export async function searchMaterials(
+  datasetId: string,
+  options: {
+    catalogVersion?: string | null;
+    indicatorId?: string | null;
+    questionType?: string | null;
+    q?: string | null;
+    page?: number;
+    pageSize?: number;
+  } = {},
+): Promise<Page<MaterialView>> {
+  if (isDemo) return { items: [], total: 0, page: 1, page_size: options.pageSize ?? 20 };
+  return request<Page<MaterialView>>(
+    `/datasets/${segment(datasetId)}/materials/search${query({
+      catalog_version: options.catalogVersion,
+      indicator_id: options.indicatorId,
+      question_type: options.questionType,
+      q: options.q,
+      page: options.page ?? 1,
+      page_size: options.pageSize ?? 20,
+    })}`,
+  );
+}
+
 export async function startActivity(
   planVersion: string,
   activityId: string,
@@ -436,15 +477,29 @@ export async function submitAttempt(
 
 export async function requestHint(
   attemptId: string,
-  level: number,
-  allowAssisted: boolean,
+  payload: { level: number; allowAssisted?: boolean; disclosureId?: string | null },
   idempotencyKey: string,
 ): Promise<HintResponse> {
-  if (isDemo) return demo.requestHint(attemptId, level, allowAssisted);
+  if (isDemo) return demo.requestHint(attemptId, payload.level, payload.allowAssisted ?? false);
   return request<HintResponse>(`/attempts/${segment(attemptId)}/hints`, {
     method: "POST",
-    body: JSON.stringify({ level, allow_assisted: allowAssisted }),
+    body: JSON.stringify({
+      level: payload.level,
+      allow_assisted: payload.allowAssisted ?? false,
+      disclosure_id: payload.disclosureId ?? null,
+    }),
     idempotencyKey,
+  });
+}
+
+export async function confirmAssistedHint(
+  attemptId: string,
+  payload: { disclosureId: string; allow: boolean },
+): Promise<{ released: boolean; disclosure_id: string; hint?: string | null }> {
+  if (isDemo) return { released: payload.allow, disclosure_id: payload.disclosureId, hint: payload.allow ? "演示提示" : null };
+  return request(`/attempts/${segment(attemptId)}/assisted-confirm`, {
+    method: "POST",
+    body: JSON.stringify({ disclosure_id: payload.disclosureId, allow: payload.allow }),
   });
 }
 
@@ -559,4 +614,183 @@ export async function downloadExport(exportId: string): Promise<{ blob: Blob; fi
 /** 供任务页带 warnings 展示；当前只有质检查询需要保留包络。 */
 export async function qualityWithWarnings(path: string): Promise<ApiResult<unknown>> {
   return requestEnvelope(path);
+}
+
+// --------------------------------------------------------------- 教师方案编辑
+
+export async function previewRevision(
+  runId: string,
+  studentId: string,
+  payload: { nodeId: string; basePlanVersion: string; reason: string; changes: RevisionChanges },
+): Promise<RevisionPreview> {
+  if (isDemo) throw new Error("演示模式不会调用真实方案预览。");
+  return request<RevisionPreview>(
+    `/runs/${segment(runId)}/students/${segment(studentId)}/recommendation-revisions/preview`,
+    {
+      method: "POST",
+      body: JSON.stringify({
+        node_id: payload.nodeId,
+        base_plan_version: payload.basePlanVersion,
+        reason: payload.reason,
+        changes: payload.changes,
+      }),
+    },
+  );
+}
+
+export async function publishRevision(
+  runId: string,
+  studentId: string,
+  previewId: string,
+  nodeId: string,
+  warningDigest: string,
+): Promise<PublishResult> {
+  if (isDemo) throw new Error("演示模式不会发布真实方案。");
+  return request<PublishResult>(
+    `/runs/${segment(runId)}/students/${segment(studentId)}/recommendation-revisions/${segment(previewId)}/publish${query({ node_id: nodeId })}`,
+    { method: "POST", body: JSON.stringify({ warning_digest: warningDigest }) },
+  );
+}
+
+export async function listRevisions(
+  runId: string,
+  studentId: string,
+  nodeId: string,
+): Promise<Page<RevisionSummary>> {
+  if (isDemo) return { items: [], total: 0, page: 1, page_size: 20 };
+  return request<Page<RevisionSummary>>(
+    `/runs/${segment(runId)}/students/${segment(studentId)}/recommendation-revisions${query({ node_id: nodeId, page: 1, page_size: 20 })}`,
+  );
+}
+
+// ------------------------------------------------------------------- 知识审核
+
+export async function decideKnowledgeReview(
+  datasetId: string,
+  reviewId: string,
+  payload: {
+    baseCandidateVersion: string;
+    decision: "approve" | "reject" | "edit";
+    changes?: Record<string, unknown> | null;
+    reason: string;
+  },
+): Promise<{ review_id: string; review_status: string; knowledge_version?: string | null }> {
+  if (isDemo) throw new Error("演示模式不会提交真实审核。");
+  return request(
+    `/datasets/${segment(datasetId)}/knowledge/reviews/${segment(reviewId)}`,
+    {
+      method: "POST",
+      body: JSON.stringify({
+        base_candidate_version: payload.baseCandidateVersion,
+        decision: payload.decision,
+        changes: payload.changes ?? null,
+        reason: payload.reason,
+      }),
+    },
+  );
+}
+
+// ------------------------------------------------------------------- 教师介入
+
+export async function getIntervention(
+  runId: string,
+  studentId: string,
+  caseId: string,
+  nodeId: string,
+): Promise<InterventionView> {
+  if (isDemo) throw new Error("演示模式没有真实介入案例。");
+  return request<InterventionView>(
+    `/runs/${segment(runId)}/students/${segment(studentId)}/interventions/${segment(caseId)}${query({ node_id: nodeId })}`,
+  );
+}
+
+export async function resolveIntervention(
+  runId: string,
+  studentId: string,
+  caseId: string,
+  payload: { nodeId: string; expectedLastCutoff: number; reason: string },
+  idempotencyKey: string,
+): Promise<InterventionView> {
+  if (isDemo) throw new Error("演示模式不会处理真实介入案例。");
+  return request<InterventionView>(
+    `/runs/${segment(runId)}/students/${segment(studentId)}/interventions/${segment(caseId)}/resolve`,
+    {
+      method: "POST",
+      body: JSON.stringify({
+        node_id: payload.nodeId,
+        expected_last_cutoff: payload.expectedLastCutoff,
+        reason: payload.reason,
+      }),
+      idempotencyKey,
+    },
+  );
+}
+
+// ------------------------------------------------------------- 学习方案质量报告
+
+export async function getRecommendationsQuality(
+  runId: string,
+  options: { nodeId: string; classId?: string | null; dateFrom?: string | null; dateTo?: string | null },
+): Promise<CQualityReport> {
+  if (isDemo) throw new Error("演示模式没有真实质量报告。");
+  return request<CQualityReport>(
+    `/runs/${segment(runId)}/quality/recommendations${query({
+      node_id: options.nodeId,
+      class_id: options.classId,
+      date_from: options.dateFrom,
+      date_to: options.dateTo,
+    })}`,
+  );
+}
+
+// --------------------------------------------------------------------- 导出预检
+
+export async function preflightExport(
+  runId: string,
+  options: { nodeIds?: string[]; caseStudentIds?: string[] } = {},
+): Promise<ExportPreflight> {
+  if (isDemo) return { ready: false, blocking: [], warnings: [], coverage: { students: 0, classes: 0, cases: 0 } };
+  return request<ExportPreflight>(
+    `/runs/${segment(runId)}/exports/preflight${query({
+      node_ids: options.nodeIds?.join(",") ?? null,
+      case_student_ids: options.caseStudentIds?.join(",") ?? null,
+    })}`,
+  );
+}
+
+export async function getExport(exportId: string): Promise<ExportItem> {
+  if (isDemo) throw new Error("演示模式没有真实导出记录。");
+  return request<ExportItem>(`/exports/${segment(exportId)}`);
+}
+
+// ---------------------------------------------------------------- Agent 候选确认
+
+export async function createProposal(
+  conversationId: string,
+  payload: { studentId: string; nodeId: string; intent: string },
+): Promise<ProposalResponse> {
+  if (isDemo) throw new Error("演示模式没有真实方案候选。");
+  return request<ProposalResponse>(`/conversations/${segment(conversationId)}/proposals`, {
+    method: "POST",
+    body: JSON.stringify({
+      student_id: payload.studentId,
+      node_id: payload.nodeId,
+      intent: payload.intent,
+    }),
+  });
+}
+
+export async function confirmProposal(
+  conversationId: string,
+  nodeId: string,
+  payload: { confirmationId: string; allow: boolean },
+): Promise<ConfirmationResult> {
+  if (isDemo) throw new Error("演示模式不会执行真实确认。");
+  return request<ConfirmationResult>(
+    `/conversations/${segment(conversationId)}/confirm${query({ node_id: nodeId })}`,
+    {
+      method: "POST",
+      body: JSON.stringify({ confirmation_id: payload.confirmationId, allow: payload.allow }),
+    },
+  );
 }

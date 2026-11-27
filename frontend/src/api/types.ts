@@ -666,6 +666,7 @@ export interface AttemptResponse {
   feedback: unknown;
   group_status: GroupStatus | null;
   update_job_id: string | null;
+  released_hints?: ReleasedHint[];
 }
 
 export interface SubmitResponse {
@@ -677,9 +678,23 @@ export interface SubmitResponse {
 }
 
 export interface HintResponse {
-  event_id: string;
+  event_id: string | null;
   level: number;
-  hint: string;
+  hint: string | null;
+  requires_confirmation?: boolean;
+  disclosure_id?: string | null;
+  message?: string;
+}
+
+export interface ReleasedHint {
+  level: number;
+  text: string;
+}
+
+export interface AssistedConfirmResponse {
+  released: boolean;
+  disclosure_id: string;
+  hint?: string | null;
 }
 
 export interface StartActivityResponse {
@@ -905,4 +920,171 @@ export interface ExportCreateResponse {
   job_id: string;
   status: string;
 }
+
+// --------------------------------------------------------------- 方案编辑 / 审核
+
+export interface RevisionChanges {
+  goal?: string;
+  reason?: string;
+  activities?: PlanActivity[];
+  adjustment_conditions?: AdjustmentCondition[];
+  student_intro?: string;
+}
+
+export interface RevisionWarning {
+  code: string;
+  message: string;
+  severity: string;
+  field?: string | null;
+  activity_id?: string | null;
+  evidence_refs?: EvidenceRef[];
+}
+
+export interface RevisionPreview {
+  preview_id: string;
+  draft_hash: string;
+  warning_digest: string;
+  warnings: RevisionWarning[];
+  expires_at: string;
+}
+
+export interface RevisionSummary {
+  revision_id: string;
+  revision: number;
+  plan_version: string;
+  parent_plan_version: string | null;
+  reason: string;
+  created_at: string;
+  review_status: string;
+  publication_status: string;
+  author_role: string;
+}
+
+export interface PublishResult {
+  revision_id: string;
+  plan_version: string;
+  review_status: string;
+  publication_status: string;
+  publication_basis?: string;
+  warnings?: RevisionWarning[];
+}
+
+// ------------------------------------------------------------------- 教师介入
+
+export interface InterventionView {
+  case_id: string;
+  scope: Record<string, unknown>;
+  target_key: string;
+  reason_code: string;
+  status: "open" | "resolved";
+  evidence_refs: EvidenceRef[];
+  trial_ids: string[];
+  observed_effects: string[];
+  unresolved_question: string;
+  suggested_actions: string[];
+  opened_at: string;
+  last_cutoff: number;
+  resolved_at: string | null;
+  student_id: string;
+  handling_history: Array<{
+    handled_at: string;
+    action: string;
+    reason: string;
+    actor_ref: string | null;
+  }>;
+}
+
+// ------------------------------------------------------------------- C 质量报告
+
+export interface QualityCoverage {
+  key: string;
+  label: string;
+  numerator: number;
+  denominator: number;
+  value: number | null;
+  scope_description?: string;
+  limitations?: string[];
+}
+
+export interface CQualityReport {
+  scope: Record<string, unknown>;
+  window: Record<string, string>;
+  generated_at: string;
+  rule_version: string;
+  counts: Record<string, number>;
+  coverage: QualityCoverage[];
+  issues: {
+    items?: Array<Record<string, unknown>>;
+    total?: number;
+    page?: number;
+    page_size?: number;
+  };
+  limitations: string[];
+}
+
+// --------------------------------------------------------------------- 导出预检
+
+export interface ExportFinding {
+  code: string;
+  object_key: string;
+  expected: string;
+  remedy: string;
+}
+
+export interface ExportPreflight {
+  ready: boolean;
+  blocking: ExportFinding[];
+  warnings: ExportFinding[];
+  coverage: { students: number; classes: number; cases: number };
+}
+
+// ------------------------------------------------------------------ Agent 确认
+
+export interface ProposalView {
+  proposal_id: string;
+  student_id: string;
+  base_plan_version: string;
+  draft_hash: string;
+  changes_summary: Array<{ kind?: string; summary?: string }>;
+  warnings: RevisionWarning[];
+  blocked_reasons: string[];
+  estimated_minutes: number | null;
+  expires_at: string;
+  status: string;
+}
+
+export interface ConfirmationTarget {
+  student_id: string;
+  proposal_id: string;
+  base_plan_version: string;
+  draft_hash: string;
+  changes_summary: Array<{ kind?: string; summary?: string }>;
+}
+
+export interface ConfirmationView {
+  confirmation_id: string;
+  summary: string;
+  targets: ConfirmationTarget[];
+  expires_at: string;
+}
+
+export interface ProposalResponse {
+  proposal: ProposalView;
+  confirmation: ConfirmationView;
+  status: string;
+}
+
+export interface ConfirmationOperation {
+  student_id: string;
+  status: string;
+  new_plan_version?: string | null;
+  publication_status?: string | null;
+  previous_plan_version?: string | null;
+}
+
+export interface ConfirmationResult {
+  decision: "accepted" | "rejected";
+  operations: ConfirmationOperation[];
+}
+
 

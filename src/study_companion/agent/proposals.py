@@ -1,4 +1,4 @@
-﻿"""Agent 候选方案与确认（05 §7、04 §9.3）。
+"""Agent 候选方案与确认（05 §7、04 §9.3）。
 
 这里的"Agent 修改"在无模型时是可复现的确定性动作：按教师显式意图重跑 C 规划器，
 生成**候选**（Proposal），再由教师确认后走``agent_revision`` 发布路径。模型只影响
@@ -196,12 +196,22 @@ def decide_confirmation(
     if not allow:
         confirmation.status = "rejected"
         confirmation.decision_at = repo.now_iso()
+        rejected: list[dict[str, Any]] = []
         for target in confirmation.targets_json or []:
             proposal = db.get(models.Proposal, (target.get("proposal_id"), 1))
             if proposal is not None:
                 proposal.state = "rejected"
+                rejected.append(
+                    {
+                        "student_id": (proposal.snapshot_json or {}).get("student_id", ""),
+                        "status": "rejected",
+                        "new_plan_version": None,
+                        "previous_plan_version": proposal.base_plan_version,
+                        "publication_status": "unpublished",
+                    }
+                )
         db.flush()
-        return {"decision": "rejected", "operations": []}
+        return {"decision": "rejected", "operations": rejected}
 
     operations: list[dict[str, Any]] = []
     for target in confirmation.targets_json or []:

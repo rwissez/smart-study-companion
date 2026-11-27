@@ -225,3 +225,28 @@ export function unitLabel(unit: string | null | undefined): string {
   }
 }
 
+export function recommendationQualityCountLabel(key: string): string | null {
+  const labels: Record<string, string> = {
+    plans_generated: "生成方案",
+    plans_published: "已发布方案",
+    plans_human_confirmed: "教师确认发布",
+    plans_needs_review: "方案待审核",
+    plans_kept_applicable: "复查后仍适用",
+    material_shortage: "材料不足",
+    strategy_trials: "策略试验",
+    interventions_opened: "新开介入",
+    interventions_resolved: "已结案介入",
+    interventions_open_at_end: "期末未结案介入",
+    activities_paused: "暂停活动",
+    rule_degraded: "规则降级",
+    jobs_failed: "失败任务",
+  };
+  return labels[key] ?? null;
+}
+
+export function issueCodeLabel(code: string): string {
+  if (!code) return "质量提示";
+  return "质量检查项";
+}
+
+
