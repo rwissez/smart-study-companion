@@ -488,34 +488,15 @@ def _complete_activity(
     completed = ledger.activity_completed_ids(db, student_uid, version.version_id)
     group_done = bool(required) and set(required) <= completed
     if group_done:
-        ledger.append(
+        ledger.finalize_group_completion(
             db,
-            family_id=dataset.family_id,
-            dataset_id=dataset.id,
-            run_id=run_id,
-            student_uid=student_uid,
-            node_id=version.node_key,
+            dataset=dataset,
             plan_version=version.version_id,
+            node_id=version.node_key,
             group_id=activity.group_id,
-            event_type="group_completed",
-            source="system",
-            payload={"group_id": activity.group_id, "completed_activity_ids": sorted(completed & set(required))},
-            occurred_at=ledger.now_iso(),
-        )
-        from study_companion.jobs import enqueue_outbox
-
-        enqueue_outbox(
-            db,
-            kind="student_update",
-            scope={
-                "dataset_id": dataset.id,
-                "dataset_family_id": dataset.family_id,
-                "student_id": version.target_key,
-                "node_id": version.node_key,
-                "plan_version": version.version_id,
-                "group_id": activity.group_id,
-            },
-            payload={"reason": "group_completed"},
+            student_uid=student_uid,
+            student_id=version.target_key,
+            run_id=run_id,
         )
     db.flush()
     return {"group_completed": group_done, "state": state.state}

@@ -1,4 +1,4 @@
-﻿"""微课堂读取与完成（04 §6、§9.1）。
+"""微课堂读取与完成（04 §6、§9.1）。
 
 * 只返回已发布、已审核的安全正文；
 * 完成只记"接触"，不产生分数、不推断掌握；
@@ -146,5 +146,18 @@ def complete_micro_lesson(
             payload={"completion_status": "completed", "attempt_id": None},
             occurred_at=ledger.now_iso(),
         )
+        ledger.finalize_group_completion(
+            db,
+            dataset=dataset,
+            plan_version=payload.plan_version,
+            node_id=version.node_key,
+            group_id=activity.group_id,
+            student_uid=student_uid,
+            student_id=student_id,
+            run_id=repo.active_run_id(db, dataset.id, version.node_key),
+        )
+        from study_companion.jobs.worker import ensure_worker_started
+
+        ensure_worker_started()
     db.flush()
     return success({"event_id": event.event_id, "activity_id": activity_id, "state": "completed"})

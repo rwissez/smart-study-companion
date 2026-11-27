@@ -410,6 +410,109 @@ def annotate_strategies(
     return bundle.model_copy(update={"recommendations": recommendations, "task_groups": groups})
 
 
+def _indicator_scores(result: StudentResult) -> dict[str, float | None]:
+    scores: dict[str, float | None] = {}
+    for metric in result.metrics:
+        if metric.name == "valid_score_ratio":
+            scores[metric.scope.indicator_id or ""] = metric.value
+    return scores
+
+
+def evaluate_applicability(
+    old_plan: RecommendationBundle,
+    old_result: StudentResult,
+    new_result: StudentResult,
+) -> tuple[bool, str, list[str]]:
+    """判断旧方案在新学情下是否仍然适用（04 §7、06 §3.3）。
+
+    只有"新的可比证据显示原目标明显变差或出现新的具体错误"才重新规划；
+    没有变化、略有改善、或证据仍不足时保留原方案，并如实记录复查结论。
+    """
+
+    targets = {
+        group.goal_target_key or ""
+        for group in old_plan.task_groups
+        if group.goal_target_key
+    } | {rec.indicator_id for rec in old_plan.recommendations}
+    targets.discard("")
+    old_scores = _indicator_scores(old_result)
+    new_scores = _indicator_scores(new_result)
+    new_findings = {finding.finding_id: finding for finding in new_result.findings}
+
+    limitations: list[str] = []
+    for indicator_id in sorted(targets):
+        before = old_scores.get(indicator_id)
+        after = new_scores.get(indicator_id)
+        if before is not None and after is not None and after < before - 0.05:
+            return (
+                False,
+                f"指标 {indicator_id} 的可比得分下降（{before:.2f} → {after:.2f}），需要重新规划",
+                limitations,
+            )
+    for finding in new_result.findings:
+        if finding.indicator_id not in targets:
+            continue
+        if finding.evidence_status == "sufficient" and finding.error_types:
+            return (
+                False,
+                f"指标 {finding.indicator_id} 出现新的具体错误证据，需要重新规划",
+                limitations,
+            )
+    if old_plan.analysis_version and old_plan.analysis_version != new_result.analysis_version:
+        limitations.append(
+            f"原方案基于 {old_plan.analysis_version}，本次复查基于 {new_result.analysis_version}；原依赖不改写"
+        )
+    return True, "新学情未改变原方案的教学目标与顺序，保持原安排", limitations
+
+
+def _record_applicability(
+    db: Session,
+    *,
+    key: repo.FormalKey,
+    plan_version: str,
+    analysis_version: str,
+    knowledge_version: str | None,
+    catalog_version: str | None,
+    result: str,
+    event_cutoff: int,
+    activity_ids: list[str],
+    limitations: list[str],
+    job_id: str | None,
+) -> models.PlanApplicability:
+    digest = repo.digest({"plan": plan_version, "analysis": analysis_version, "result": result})
+
+    def _version_id(candidate: str | None, fallback: str) -> str:
+        if candidate and db.get(models.Version, candidate) is not None:
+            return candidate
+        return fallback
+
+    catalog_key = repo.FormalKey(
+        family_id=key.family_id, dataset_id=key.dataset_id, kind="catalog"
+    )
+    catalog_row = repo.read_formal(db, catalog_key)
+    knowledge_id = _version_id(knowledge_version, plan_version)
+    catalog_id = catalog_row.version_id if catalog_row is not None else plan_version
+    row = models.PlanApplicability(
+        applicability_id=repo.new_id("appl"),
+        plan_version=plan_version,
+        target_analysis_version=analysis_version,
+        target_knowledge_version=knowledge_id,
+        target_catalog_version=catalog_id,
+        policy_hash=C_RULE_VERSION,
+        event_cutoff=event_cutoff,
+        activity_digest=digest,
+        checked_at=repo.now_iso(),
+        result=result,
+        activity_ids_json=activity_ids,
+        evidence_refs_json=[],
+        limitations_json=limitations,
+        job_id=job_id,
+    )
+    db.add(row)
+    db.flush()
+    return row
+
+
 def persist_plan(
     db: Session,
     bundle: RecommendationBundle,
@@ -555,6 +658,38 @@ def handle_import_process(ctx: JobContext) -> dict[str, Any]:
     prepared = load_prepared_dataset(db, dataset_id)
 
     upsert_step(db, ctx.job, "load", label="读取快照与目录", status="succeeded")
+    db.commit()
+
+    # 目录本身也登记为正式版本，供适用性/导出引用精确目录版本。
+    catalog_key = repo.FormalKey(family_id=family_id, dataset_id=dataset_id, kind="catalog")
+    catalog_payload = {
+        "catalog_version": catalog_version,
+        "dataset_id": dataset_id,
+        "topics": len(catalog.topics),
+        "indicators": len(catalog.indicators),
+        "materials": len(catalog.materials),
+    }
+    catalog_head = repo.read_head(db, catalog_key)
+    catalog_row = repo.create_version(
+        db,
+        kind="catalog",
+        key=catalog_key,
+        payload=catalog_payload,
+        rule_version=RULE_VERSION,
+        input_digest=repo.digest(catalog_payload),
+        job_id=ctx.job.id,
+        origin_kind="system",
+    )
+    repo.publish(
+        db,
+        key=catalog_key,
+        version=catalog_row,
+        path="system_auto",
+        basis="automatic_review",
+        job_id=ctx.job.id,
+        expected_version_id=catalog_head.version_id if catalog_head else None,
+        expected_generation=catalog_head.generation if catalog_head else 0,
+    )
     db.commit()
 
     # A：先构建并发布正式知识体系，B/C 只读正式版本
@@ -1134,6 +1269,54 @@ def handle_student_update(ctx: JobContext) -> dict[str, Any]:
     )
     old_head = repo.read_head(db, old_key)
     old_plan_version = old_head.version_id if old_head else None
+
+    # 先判断旧方案是否仍适用：没有实质变化就保留原方案，只记录复查结论。
+    if old_plan_version:
+        old_plan_row = db.get(models.Version, old_plan_version)
+        if old_plan_row is not None and old_plan_row.payload_json:
+            old_plan = RecommendationBundle.model_validate(old_plan_row.payload_json)
+            old_analysis_row = (
+                db.get(models.Version, old_plan.analysis_version)
+                if old_plan.analysis_version
+                else None
+            )
+            if old_analysis_row is not None and old_analysis_row.payload_json:
+                old_result = StudentResult.model_validate(old_analysis_row.payload_json)
+                applicable, reason, limits = evaluate_applicability(
+                    old_plan, old_result, affected_students[0]
+                )
+                if applicable:
+                    _record_applicability(
+                        db,
+                        key=old_key,
+                        plan_version=old_plan_version,
+                        analysis_version=analysis_version,
+                        knowledge_version=context.knowledge_version,
+                        catalog_version=catalog.version,
+                        result="applicable",
+                        event_cutoff=len(included),
+                        activity_ids=[
+                            activity.activity_id
+                            for rec in old_plan.recommendations
+                            for activity in rec.activities
+                        ],
+                        limitations=limits,
+                        job_id=ctx.job.id,
+                    )
+                    upsert_step(
+                        db, ctx.job, "plan_student", label="复查学习方案", status="succeeded"
+                    )
+                    db.commit()
+                    return {
+                        "student_id": student_id,
+                        "node_id": node_id,
+                        "analysis_version": analysis_version,
+                        "plan_version": old_plan_version,
+                        "review_status": "validated",
+                        "publication_status": "published",
+                        "applicability": "applicable",
+                        "reason": reason,
+                    }
 
     plan_bundle = annotate_strategies(
         recommend_rules(affected_students[0], catalog, context, RecommendationConfig()),

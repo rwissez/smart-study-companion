@@ -191,11 +191,78 @@ def group_required_activities(db: Session, plan_version: str, group_id: str) -> 
 
 
 def activity_completed_ids(db: Session, student_uid: str, plan_version: str) -> set[str]:
+    """某一方案版本内已完成的**活动身份**集合。
+
+    活动身份跨方案版本延续（同一 ``activity_id`` 可能先出现在父方案），因此状态
+    按 ``activity_id`` 查，方案范围由 ``plan_activities`` 决定，不能只看
+    ``origin_plan_version``，否则子方案里的老活动永远算"未完成"。
+    """
+
+    activity_ids = db.scalars(
+        select(models.PlanActivity.activity_id).where(
+            models.PlanActivity.plan_version == plan_version
+        )
+    ).all()
+    if not activity_ids:
+        return set()
     rows = db.scalars(
         select(models.ActivityStateRow.activity_id).where(
             models.ActivityStateRow.student_uid == student_uid,
-            models.ActivityStateRow.origin_plan_version == plan_version,
+            models.ActivityStateRow.activity_id.in_(list(activity_ids)),
             models.ActivityStateRow.state == "completed",
         )
     ).all()
     return set(rows)
+
+
+def finalize_group_completion(
+    db: Session,
+    *,
+    dataset: models.Dataset,
+    plan_version: str,
+    node_id: str,
+    group_id: str,
+    student_uid: str,
+    student_id: str,
+    run_id: str | None,
+) -> bool:
+    """组内必需活动全部完成时，写唯一 ``group_completed`` 并入队局部更新。"""
+
+    required = group_required_activities(db, plan_version, group_id)
+    completed = activity_completed_ids(db, student_uid, plan_version)
+    if not required or not set(required) <= completed:
+        return False
+    from study_companion.jobs import enqueue_outbox
+
+    append(
+        db,
+        family_id=dataset.family_id or "",
+        dataset_id=dataset.id,
+        run_id=run_id,
+        student_uid=student_uid,
+        node_id=node_id,
+        plan_version=plan_version,
+        group_id=group_id,
+        event_type="group_completed",
+        source="system",
+        payload={
+            "group_id": group_id,
+            "completed_activity_ids": sorted(completed & set(required)),
+        },
+        occurred_at=now_iso(),
+    )
+    enqueue_outbox(
+        db,
+        kind="student_update",
+        scope={
+            "dataset_id": dataset.id,
+            "dataset_family_id": dataset.family_id,
+            "student_id": student_id,
+            "node_id": node_id,
+            "plan_version": plan_version,
+            "group_id": group_id,
+        },
+        payload={"reason": "group_completed"},
+    )
+    db.flush()
+    return True
