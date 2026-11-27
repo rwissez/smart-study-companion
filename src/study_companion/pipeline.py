@@ -893,6 +893,52 @@ def new_run_id() -> str:
     return repo.new_id("run")
 
 
+@register("export_build")
+def handle_export_build(ctx: JobContext) -> dict[str, Any]:
+    """打包冻结的正式成果并回读校验；不在打包过程中重算任何业务结论。"""
+
+    from pathlib import Path
+
+    from study_companion.config import get_settings
+    from study_companion.exports import service as export_service
+
+    db = ctx.session
+    export_id = ctx.scope.get("export_id") or ctx.payload.get("export_id")
+    if not export_id:
+        raise DomainError("VALIDATION_ERROR", "导出任务缺少 export_id")
+    export = db.get(models.Export, export_id)
+    if export is None:
+        raise DomainError("NOT_FOUND", "导出记录不存在")
+    upsert_step(db, ctx.job, "freeze", label="读取冻结选择", status="succeeded")
+    db.commit()
+
+    upsert_step(db, ctx.job, "serialize", label="序列化正式成果", status="running")
+    db.commit()
+    settings = get_settings()
+    result = export_service.build_archive(db, export, Path(settings.output_root))
+    export.storage_key = result["storage_key"]
+    export.archive_hash = result["archive_hash"]
+    export.bytes = result["bytes"]
+    export.manifest_json = result["manifest"]
+    export.check_report_json = {
+        **result["check_report"],
+        "preflight": "passed",
+        "payload": "passed" if result["check_report"]["passed"] else "failed",
+    }
+    export.status = "ready"
+    export.updated_at = repo.now_iso()
+    upsert_step(db, ctx.job, "serialize", label="序列化正式成果", status="succeeded")
+    db.flush()
+    return {
+        "export_id": export.export_id,
+        "snapshot_id": export.snapshot_id,
+        "status": "ready",
+        "files": result["check_report"]["file_count"],
+        "archive_hash": result["archive_hash"],
+        "bytes": result["bytes"],
+    }
+
+
 # --------------------------------------------------------------------------- #
 # 学习事件驱动的局部更新
 # --------------------------------------------------------------------------- #

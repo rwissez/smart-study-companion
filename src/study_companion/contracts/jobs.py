@@ -1,22 +1,27 @@
-"""统一任务契约（01 §9.1、§9.5；06 §4.5）。"""
+﻿"""统一任务契约（01 §9.1、§9.5；06 §4.5）。"""
 
 from __future__ import annotations
 
 from typing import Any
 
-from pydantic import Field
+from pydantic import ConfigDict, Field
 
 from study_companion.contracts.base import Contract, JobStatus
 from study_companion.contracts.common import EvidenceRef
 
 
 class JobScope(Contract):
+    # 任务作用域是开放结构：不同 kind 会带自己的定位键（如 export_id、plan_version），
+    # 允许附加键以免每加一种任务都要改共享契约。
+    model_config = ConfigDict(extra="allow")
+
     dataset_id: str | None = None
     dataset_family_id: str | None = None
     family_id: str | None = None
     student_id: str | None = None
     class_id: str | None = None
     run_id: str | None = None
+    export_id: str | None = None
 
 
 class JobEvent(Contract):

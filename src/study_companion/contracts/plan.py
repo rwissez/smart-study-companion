@@ -141,6 +141,9 @@ class RecommendationBundle(Contract):
     publication_basis: PublicationBasis | None = None
     publish_path: PublishPath | None = None
     limitations: list[str] = Field(default_factory=list)
+    #: 该方案版本的审核记录；正式读取用它展示 human_confirmed / validated。
+    review_info: ReviewInfo | None = None
+    draft_hash: str = ""
 
 
 class Snapshot(Contract):
