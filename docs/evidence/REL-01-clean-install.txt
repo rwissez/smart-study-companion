@@ -1,0 +1,9 @@
+clean dir: C:\Users\LEGION\AppData\Local\Temp\zhanzhi-clean-nd5fic6d\repo
+head: e85a0d7
+uv sync --locked --python 3.12
+uv run alembic upgrade head
+health: ok schema=1.1
+import: confirmed dataset=ds-8c8b82e7ff8b4cd8a916
+job: succeeded steps=['succeeded', 'succeeded', 'succeeded', 'succeeded']
+profile: 200 metrics=8
+datasets: 200
