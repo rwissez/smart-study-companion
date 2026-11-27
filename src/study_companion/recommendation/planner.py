@@ -925,7 +925,7 @@ def _plan_for_no_observation(inputs: PlannerInputs) -> PlannerResult:
                 previously_attempted=candidate.parts.get("H", 1.0) < 1.0,
                 activity_kind="question",
                 state="not_started",
-                title=material.content[:60],
+                title=(f"练习题 {material.material_id}" if material.material_type == "question" else f"学习材料 {material.material_id}"),
                 expected_outcome=(
                     "独立完成并留下可核验的作答过程"
                     if independent
@@ -1171,7 +1171,7 @@ def build_plan(inputs: PlannerInputs) -> PlannerResult:
                     previously_attempted=candidate.parts.get("H", 1.0) < 1.0,
                     activity_kind="question",
                     state="not_started",
-                    title=material.content[:60],
+                    title=(f"练习题 {material.material_id}" if material.material_type == "question" else f"学习材料 {material.material_id}"),
                     expected_outcome=expected_outcome,
                     estimate_minutes=candidate.estimated_minutes,
                     exposure_mode="independent" if is_independent else "practice",
