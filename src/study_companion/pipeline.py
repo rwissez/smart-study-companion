@@ -2179,7 +2179,12 @@ def handle_student_update(ctx: JobContext) -> dict[str, Any]:
                 )
 
     # 先判断旧方案是否仍适用：没有实质变化就保留原方案，只记录复查结论。
-    if old_plan_version and old_plan is not None:
+    if (
+        old_plan_version
+        and old_plan is not None
+        and old_plan.task_groups
+        and old_plan.recommendations
+    ):
         old_analysis_row = (
             db.get(models.Version, old_plan.analysis_version)
             if old_plan.analysis_version
