@@ -37,3 +37,9 @@ test-results/
 # Operating system files
 .DS_Store
 Thumbs.db
+
+# Local handoff package (not part of the product repo)
+/湛知_DSH最终开发交接包/
+/湛知_DSH最终开发交接包.zip
+/_local/
+

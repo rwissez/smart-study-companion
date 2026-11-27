@@ -1,0 +1,28 @@
+/* 湛知 07 / v1.0 / approved role colors; shared source of truth */
+:root {
+  --color-background:#FFFFFF; --color-text-primary:#202124; --color-text-secondary:#656B70;
+  --color-text-muted:#92979D; --color-border:#E5E7EB; --color-hover:#F5F6F7;
+  --color-disabled-bg:#F0F1F2; --color-disabled-text:#A0A4A8;
+  --color-success:#287D52; --color-warning:#9A6B23; --color-error:#B54747; --color-unknown:#747B83;
+  --color-primary:#234C42; --color-primary-hover:#183B32; --color-primary-active:#123029;
+  --color-secondary:#628C7D; --color-selected-bg:#F0F5F2; --color-selected-border:#A9C1B6;
+  --color-chart-fill:#234C4214; --color-on-primary:#FFFFFF;
+  --font-ui:"Microsoft YaHei UI","PingFang SC","Noto Sans CJK SC",Arial,sans-serif;
+  --font-math:"Cambria Math","STIX Two Math",serif;
+  --font-xs:12px; --font-sm:13px; --font-body:14px; --font-student:16px;
+  --font-section:18px; --font-page:28px; --font-metric:32px;
+  --space-1:4px; --space-2:8px; --space-3:12px; --space-4:16px; --space-5:20px;
+  --space-6:24px; --space-8:32px; --space-10:40px; --space-12:48px;
+  --radius-sm:4px; --radius-md:6px; --radius-lg:8px; --border-width:1px;
+  --sidebar-width:208px; --header-height:64px; --control-height:38px; --table-row-height:48px;
+  --content-max:1480px; --reading-max:860px; --dialog-shadow:0 12px 40px #20212424;
+  --overlay:#20212455; --motion-fast:120ms; --motion-normal:180ms;
+}
+[data-role="teacher"] {
+  --color-primary:#234C42; --color-primary-hover:#183B32; --color-primary-active:#123029;
+  --color-secondary:#628C7D; --color-selected-bg:#F0F5F2; --color-selected-border:#A9C1B6; --color-chart-fill:#234C4214;
+}
+[data-role="student"] {
+  --color-primary:#326B82; --color-primary-hover:#245469; --color-primary-active:#1B4354;
+  --color-secondary:#719CAD; --color-selected-bg:#EFF5F7; --color-selected-border:#B0C9D3; --color-chart-fill:#326B8214;
+}
