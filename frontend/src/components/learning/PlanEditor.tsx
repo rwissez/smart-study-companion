@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { errorCode, errorRequestId, toErrorMessage } from "../../api/client";
 import {
@@ -72,6 +73,7 @@ function optimizeSourceLabel(source: string | null): string {
 /** 教师学习方案编辑：改文字 / 调活动，检查并发布走 preview → 确认 → publish。 */
 export function PlanEditor({ open, studentId, nodeId, onClose, onPublished }: Props) {
   const { scopeKey } = useSession();
+  const navigate = useNavigate();
   const datasetId = scopeKey.datasetId;
   const queryClient = useQueryClient();
   const [goal, setGoal] = useState("");
@@ -451,11 +453,18 @@ export function PlanEditor({ open, studentId, nodeId, onClose, onPublished }: Pr
             <div className="editorGrid">
             <div className="stack">
               <div className="sectionHead">
-                <h3 className="sectionTitle">按意图优化</h3>
+                <h3 className="sectionTitle">高级：生成只读建议</h3>
               </div>
               <p className="small muted">
-                写下想怎么改，系统只在当前方案与正式候选里给只读建议；不会直接改方案，也不会发布。
+                自然语言修改建议在 AI 对话里说，由 Agent 生成候选后再回到这里预览。此处的建议只读，不会直接改方案，也不会发布。
               </p>
+              <button
+                type="button"
+                className="btn btnSm"
+                onClick={() => navigate(`/teacher/chat?student=${encodeURIComponent(studentId)}&node=${encodeURIComponent(nodeId)}`)}
+              >
+                让 Agent 按你的要求调整
+              </button>
               <label className="field">
                 <span className="fieldLabel">教师修改意图</span>
                 <textarea
