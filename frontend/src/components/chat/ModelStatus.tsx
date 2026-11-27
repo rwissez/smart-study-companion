@@ -4,12 +4,16 @@ import { getModelSettings } from "../../api/service";
 import { queryKeys } from "../../lib/queryKeys";
 import { useSession } from "../../app/session";
 import type { ModelSettings } from "../../api/types";
+import { IconAlert, IconCheck } from "../icons";
 
 interface Props {
   onConfigure?: () => void;
 }
 
-/** 未配置时给出真实原因与下一步，不伪造回答，也不把空文本当模型成果。 */
+/**
+ * 右上角的小状态标记：已配置显示勾，未配置显示感叹号并可打开
+ * 模型设置/外发授权弹窗。不占用回答正文的横向空间。
+ */
 export function ModelStatus({ onConfigure }: Props) {
   const { scopeKey } = useSession();
   const settings = useQuery<ModelSettings>({
@@ -17,34 +21,50 @@ export function ModelStatus({ onConfigure }: Props) {
     queryFn: getModelSettings,
   });
 
-  if (settings.isPending) return <p className="small muted">正在读取模型配置状态…</p>;
+  if (settings.isPending) {
+    return (
+      <span className="modelMark" role="status" aria-label="正在读取模型配置状态">
+        …
+      </span>
+    );
+  }
   if (settings.isError) {
     return (
-      <div className="chatNotice" role="status">
-        模型配置状态读取失败：{toErrorMessage(settings.error)}
-      </div>
+      <button
+        type="button"
+        className="modelMark modelMarkWarn"
+        onClick={onConfigure}
+        title={`模型配置状态读取失败：${toErrorMessage(settings.error)}`}
+        aria-label="模型配置状态读取失败，打开模型设置"
+      >
+        <IconAlert size={14} />
+        <span>状态未知</span>
+      </button>
     );
   }
   const data = settings.data;
   if (data?.configured) {
     return (
-      <div className="chatNotice" role="status">
-        模型服务已配置（{data.provider ?? "未标注提供方"} · {data.model_id ?? "未标注模型"}）
-        {data.has_api_key ? " · 已保存密钥，不会回显" : ""}
-      </div>
+      <span
+        className="modelMark modelMarkOk"
+        role="status"
+        title={`模型服务已配置：${data.provider ?? "未标注提供方"} · ${data.model_id ?? "未标注模型"}${data.has_api_key ? " · 已保存密钥，不回显" : ""}`}
+      >
+        <IconCheck size={14} />
+        <span>模型已配置</span>
+      </span>
     );
   }
   return (
-    <div className="chatNotice" role="status">
-      <div className="rowBetween">
-        <strong>模型服务尚未配置</strong>
-        {onConfigure ? (
-          <button type="button" className="btn btnSm" onClick={onConfigure}>配置模型</button>
-        ) : null}
-      </div>
-      <p className="small" style={{ marginTop: 6 }}>
-        对话接口已就绪，但服务端没有可用的模型配置；现在不会返回任何模型回答。教师配置模型后可以重新尝试。
-      </p>
-    </div>
+    <button
+      type="button"
+      className="modelMark modelMarkWarn"
+      onClick={onConfigure}
+      title="模型未配置：点击打开模型设置与外发授权"
+      aria-label="模型未配置，打开模型设置与外发授权"
+    >
+      <IconAlert size={14} />
+      <span>模型未配置</span>
+    </button>
   );
 }

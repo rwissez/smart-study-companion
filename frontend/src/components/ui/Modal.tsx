@@ -18,6 +18,10 @@ const FOCUSABLE =
 export function Modal({ open, title, onClose, children, footer, wide, description }: Props) {
   const dialogRef = useRef<HTMLDivElement>(null);
   const titleId = useId();
+  // 回调按引用保存：父组件每次渲染都会生成新的内联 onClose，若把它放进 effect
+  // 依赖，每次输入一个字符都会重跑 effect，把焦点抢回第一个按钮。
+  const onCloseRef = useRef(onClose);
+  onCloseRef.current = onClose;
 
   useEffect(() => {
     if (!open) return;
@@ -29,7 +33,7 @@ export function Modal({ open, title, onClose, children, footer, wide, descriptio
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key === "Escape") {
         event.stopPropagation();
-        onClose();
+        onCloseRef.current();
         return;
       }
       if (event.key !== "Tab" || !dialog) return;
@@ -53,7 +57,7 @@ export function Modal({ open, title, onClose, children, footer, wide, descriptio
       document.removeEventListener("keydown", onKeyDown);
       previous?.focus?.();
     };
-  }, [open, onClose]);
+  }, [open]);
 
   if (!open) return null;
 

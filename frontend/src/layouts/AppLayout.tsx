@@ -1,7 +1,7 @@
-import { useState } from "react";
-import { NavLink, Outlet, useNavigate } from "react-router-dom";
+import { useEffect, useState } from "react";
+import { NavLink, Outlet, useLocation, useNavigate } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
-import { useSession } from "../app/session";
+import { LAST_PATH_STORAGE_KEY, useSession } from "../app/session";
 import { listAlerts, listDatasets } from "../api/service";
 import type { AlertItem } from "../api/types";
 import { queryKeys } from "../lib/queryKeys";
@@ -34,11 +34,22 @@ const STUDENT_NAV = [
 export function AppLayout({ role }: { role: "teacher" | "student" }) {
   const { session, signOut, switchDataset, scopeKey } = useSession();
   const navigate = useNavigate();
+  const location = useLocation();
   const [pendingDataset, setPendingDataset] = useState<string | null>(null);
   const [datasetError, setDatasetError] = useState<string | null>(null);
   const [alertsOpen, setAlertsOpen] = useState(false);
   const [switching, setSwitching] = useState(false);
   const datasetId = session?.scope.dataset_id ?? null;
+
+  // 页面上下文（路径、页签、节点等）本来就在 URL 里；另存一份最近路径，
+  // 供刷新后从根路径回到同一页面。身份或数据集切换时由会话层清理。
+  useEffect(() => {
+    try {
+      window.sessionStorage.setItem(LAST_PATH_STORAGE_KEY, `${location.pathname}${location.search}`);
+    } catch {
+      // 存储不可用时只影响根路径恢复。
+    }
+  }, [location.pathname, location.search]);
 
   const datasets = useQuery({
     queryKey: queryKeys.datasets(scopeKey),

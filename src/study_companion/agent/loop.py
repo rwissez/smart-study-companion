@@ -2,6 +2,11 @@
 
 The model may choose among a server-provided allow-list of read-only tools,
 but cannot change scope, calculate official metrics, or publish recommendations.
+
+The loop can optionally report *real* progress to a caller: model-round
+boundaries reported by this loop, and tool starts/finishes reported around the
+actual registry call. It never invents reasoning text; a delta is only forwarded
+when the provider itself streams answer text.
 """
 
 from __future__ import annotations
@@ -17,6 +22,9 @@ from study_companion.agent.task import AgentResult, AgentTaskState, ToolTrace
 from study_companion.agent.types import ToolCall
 from study_companion.contracts import DomainError
 
+ProgressEvent = Callable[[dict[str, Any]], None]
+TextDelta = Callable[[str], None]
+
 
 @dataclass(frozen=True)
 class RegisteredTool:
@@ -30,6 +38,14 @@ class ToolRegistry:
 
     def schemas(self) -> list[ToolSchema]:
         return [item.schema for item in self._tools.values()]
+
+    def label(self, name: str) -> str:
+        """Human-readable tool label from the registered schema description."""
+        tool = self._tools.get(name)
+        if tool is None:
+            return name
+        description = tool.schema.get("function", {}).get("description", "")
+        return description or name
 
     def call(self, call: ToolCall) -> Any:
         tool = self._tools.get(call.name)
@@ -110,22 +126,78 @@ class AgentLoop:
         self.registry = registry
         self.config = config or AgentLoopConfig()
 
-    def run(self, messages: list[Message], goal: str) -> AgentResult:
+    def run(
+        self,
+        messages: list[Message],
+        goal: str,
+        *,
+        on_event: ProgressEvent | None = None,
+        on_delta: TextDelta | None = None,
+    ) -> AgentResult:
         state = AgentTaskState(goal=goal)
         trace: list[ToolTrace] = []
         total_calls = 0
         current = list(messages)
+        streamer = getattr(self.provider, "generate_stream", None)
 
-        for _round in range(self.config.max_rounds):
-            turn = self.provider.generate(current, tools=self.registry.schemas())
+        def emit(event: dict[str, Any]) -> None:
+            if on_event is None:
+                return
+            try:
+                on_event(event)
+            except Exception:  # progress reporting must never break the agent
+                return
+
+        for round_index in range(1, self.config.max_rounds + 1):
+            emit({"type": "model_round", "round": round_index, "status": "running"})
+            streamed: list[str] = []
+
+            def forward_delta(chunk: str, _sink: list[str] = streamed) -> None:
+                if not chunk:
+                    return
+                _sink.append(chunk)
+                if on_delta is not None:
+                    on_delta(chunk)
+
+            if on_delta is not None and callable(streamer):
+                turn = streamer(
+                    current,
+                    tools=self.registry.schemas(),
+                    on_text=forward_delta,
+                )
+            else:
+                turn = self.provider.generate(current, tools=self.registry.schemas())
+
+            emit({
+                "type": "model_round",
+                "round": round_index,
+                "status": "succeeded",
+                "has_text": bool(turn.text),
+                "tool_call_count": len(turn.tool_calls),
+            })
+
             if not turn.tool_calls:
                 return AgentResult(turn.text, state, trace, "model_finished")
+
+            if streamed:
+                # The round turned out to be a tool-selection turn. Text emitted
+                # before the tool call is not the final answer; ask the caller to
+                # drop that provisional preview instead of showing it twice.
+                emit({"type": "discard_delta", "round": round_index})
+
             if total_calls + len(turn.tool_calls) > self.config.max_tool_calls:
                 return AgentResult(turn.text, state, trace, "tool_call_limit")
 
             current.append(_assistant_message(turn))
             for call in turn.tool_calls:
                 total_calls += 1
+                emit({
+                    "type": "tool",
+                    "call_id": call.call_id,
+                    "tool_name": call.name,
+                    "label": self.registry.label(call.name),
+                    "status": "running",
+                })
                 try:
                     result = _json_value(self.registry.call(call))
                     if isinstance(result, dict):
@@ -147,6 +219,15 @@ class AgentLoop:
                     trace.append(ToolTrace(call.call_id, call.name, call.arguments,
                                            status, data, error, evidence_refs))
                     current.append(_tool_message(call.call_id, tool_payload))
+                    emit({
+                        "type": "tool",
+                        "call_id": call.call_id,
+                        "tool_name": call.name,
+                        "label": self.registry.label(call.name),
+                        "status": "succeeded" if status != "failed" else "failed",
+                        "message": (error or {}).get("message", "") if isinstance(error, dict) else "",
+                        "evidence_count": len(evidence_refs),
+                    })
                     if status == "failed" and isinstance(error, dict) and error.get("code") in {
                         "SCOPE_DENIED", "TOOL_NOT_ALLOWED", "FORBIDDEN", "CONTEXT_MISMATCH"
                     }:
@@ -158,6 +239,16 @@ class AgentLoop:
                                            "failed", error=error))
                     tool_payload = {"status": "failed", "data": None,
                                     "error": error, "evidence_refs": []}
+                    emit({
+                        "type": "tool",
+                        "call_id": call.call_id,
+                        "tool_name": call.name,
+                        "label": self.registry.label(call.name),
+                        "status": "failed",
+                        "message": str(exc),
+                        "error_code": exc.code,
+                        "evidence_count": 0,
+                    })
                     # Scope and policy failures are terminal; ordinary missing
                     # evidence may be observed and trigger another model turn.
                     current.append(_tool_message(call.call_id, tool_payload))
@@ -165,4 +256,5 @@ class AgentLoop:
                         return AgentResult(None, state, trace, "tool_policy_failure")
                     continue
 
+        emit({"type": "limit", "reason": "round_limit"})
         return AgentResult(None, state, trace, "round_limit")

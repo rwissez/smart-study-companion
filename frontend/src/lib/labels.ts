@@ -57,6 +57,8 @@ export function jobKindLabel(kind: string | null | undefined): string {
       return "导入与分析";
     case "student_update":
       return "学情更新";
+    case "lesson_regenerate":
+      return "微课堂重生成";
     case "export":
       return "成果导出";
     default:

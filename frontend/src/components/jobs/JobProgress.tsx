@@ -8,7 +8,11 @@ import { StatePanel } from "../feedback/StatePanel";
 
 interface Props {
   jobId: string;
+  /** 触发这次任务的操作，例如“重新分析”“重新生成微课堂”。 */
+  origin?: string;
   onJob?: (job: JobDetail) => void;
+  /** 服务端不允许自动重试时，提供一个重新发起任务的入口。 */
+  onRetrySubmit?: () => void;
 }
 
 const TERMINAL = new Set(["succeeded", "failed", "cancelled"]);
@@ -31,7 +35,7 @@ const STEP_TONE: Record<string, string> = {
  * 任务进度：先读当前状态，再按 after_sequence 增量读事件并按 sequence 去重。
  * 只画服务端给过的步骤总量，未知总量不画百分比；终态停止轮询。
  */
-export function JobProgress({ jobId, onJob }: Props) {
+export function JobProgress({ jobId, origin, onJob, onRetrySubmit }: Props) {
   const [job, setJob] = useState<JobDetail | null>(null);
   const [events, setEvents] = useState<JobEvent[]>([]);
   const [error, setError] = useState<unknown>(null);
@@ -139,6 +143,12 @@ export function JobProgress({ jobId, onJob }: Props) {
   const doneSteps = job.steps.filter((step) => step.status === "succeeded" || step.status === "skipped").length;
   const knownTotal = job.steps.length;
   const showProgress = knownTotal > 0 && running;
+  const scope = job.scope ?? {};
+  const scopeStudent = typeof scope.student_id === "string" ? scope.student_id : null;
+  const scopeNode = typeof scope.node_id === "string" ? scope.node_id : null;
+  const sourceParts = [origin ?? jobKindLabel(job.kind)];
+  if (scopeStudent) sourceParts.push(`学生 ${scopeStudent}`);
+  if (scopeNode) sourceParts.push(`节点 ${scopeNode}`);
 
   return (
     <div className="stack">
@@ -152,6 +162,7 @@ export function JobProgress({ jobId, onJob }: Props) {
             <span>更新：{formatDate(job.updated_at)}</span>
             {publicationLabel(job.publication_status) ? <span>{publicationLabel(job.publication_status)}</span> : null}
           </div>
+          <p className="xs muted jobSource">来源：{sourceParts.join(" · ")}</p>
         </div>
         <div className="row">
           {running ? (
@@ -165,6 +176,11 @@ export function JobProgress({ jobId, onJob }: Props) {
             </button>
           ) : job.status === "failed" && job.retry.retry_block_reason ? (
             <span className="xs muted">不可重试：{job.retry.retry_block_reason}</span>
+          ) : null}
+          {job.status === "failed" && onRetrySubmit && !job.retry.can_retry ? (
+            <button type="button" className="btn btnSm" onClick={onRetrySubmit} disabled={busy}>
+              重新提交
+            </button>
           ) : null}
         </div>
       </div>

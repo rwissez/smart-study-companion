@@ -1,4 +1,4 @@
-import { newIdempotencyKey, request, requestBlob, requestEnvelope, type ApiResult } from "./client";
+import { ApiError, getAuthToken, newIdempotencyKey, request, requestBlob, requestEnvelope, API_BASE_URL, type ApiResult } from "./client";
 import * as demo from "./demo/demoService";
 import type {
   AlertItem,
@@ -552,6 +552,140 @@ export async function sendChat(payload: {
 }): Promise<ChatReply> {
   if (isDemo) return demo.sendChat();
   return request<ChatReply>("/chat", { method: "POST", body: JSON.stringify(payload) });
+}
+
+export interface ChatProgressStep {
+  kind: "status" | "model" | "tool" | "limit";
+  status: "running" | "succeeded" | "failed";
+  label: string;
+  message?: string;
+  tool_name?: string | null;
+  call_id?: string | null;
+}
+
+export interface ChatStreamEvent {
+  event: "step" | "delta" | "discard" | "done" | "error";
+  data: Record<string, unknown>;
+}
+
+interface SseFrame {
+  event: string;
+  data: string;
+}
+
+function parseSseFrames(buffer: string): { frames: SseFrame[]; rest: string } {
+  const normalized = buffer.replace(/\r\n/g, "\n");
+  const parts = normalized.split("\n\n");
+  const rest = parts.pop() ?? "";
+  const frames: SseFrame[] = [];
+  for (const part of parts) {
+    let event = "message";
+    const dataLines: string[] = [];
+    for (const line of part.split("\n")) {
+      if (line.startsWith("event:")) event = line.slice(6).trim();
+      else if (line.startsWith("data:")) dataLines.push(line.slice(5).trimStart());
+    }
+    if (dataLines.length) frames.push({ event, data: dataLines.join("\n") });
+  }
+  return { frames, rest };
+}
+
+async function assertStreamResponse(response: Response): Promise<void> {
+  if (response.ok) return;
+  const text = await response.text();
+  let body: { error?: { code?: string; message?: string; details?: Array<{ field?: string; reason?: string }> }; request_id?: string } | null = null;
+  try {
+    body = text ? JSON.parse(text) : null;
+  } catch {
+    body = null;
+  }
+  throw new ApiError(
+    body?.error?.code ?? `HTTP_${response.status}`,
+    body?.error?.message ?? "流式对话请求失败。",
+    response.status,
+    body?.request_id ?? response.headers.get("X-Request-ID"),
+    body?.error?.details ?? [],
+  );
+}
+
+/**
+ * POST /chat/stream 的 SSE 读取。使用 fetch 流而不是 EventSource：需要带
+ * Authorization 头并发送请求体。事件里的工具进度来自 AgentLoop 真实执行。
+ */
+export async function* streamChat(
+  payload: {
+    message: string;
+    conversation_id?: string | null;
+    run_id?: string | null;
+    node_id?: string | null;
+    student_id?: string | null;
+  },
+  signal?: AbortSignal,
+): AsyncGenerator<ChatStreamEvent> {
+  if (isDemo) {
+    const reply = await demo.sendChat();
+    yield { event: "delta", data: { text: reply.text, mode: "chunked" } };
+    yield { event: "done", data: { ...reply, stream_mode: "chunked" } };
+    return;
+  }
+  const headers = new Headers({ "Content-Type": "application/json", Accept: "text/event-stream" });
+  const token = getAuthToken();
+  if (token) headers.set("Authorization", `Bearer ${token}`);
+  let response: Response;
+  try {
+    response = await fetch(`${API_BASE_URL}/chat/stream`, {
+      method: "POST",
+      headers,
+      body: JSON.stringify(payload),
+      signal,
+    });
+  } catch (error) {
+    if (error instanceof DOMException && error.name === "AbortError") throw error;
+    throw new ApiError("NETWORK_ERROR", "无法连接流式对话服务，请确认后端已启动。", 0);
+  }
+  await assertStreamResponse(response);
+  if (!response.body) throw new ApiError("INVALID_RESPONSE", "服务没有返回可读取的流。", response.status);
+  const reader = response.body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = "";
+  try {
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      buffer += decoder.decode(value, { stream: true });
+      const parsed = parseSseFrames(buffer);
+      buffer = parsed.rest;
+      for (const frame of parsed.frames) {
+        let data: Record<string, unknown> = {};
+        try {
+          data = frame.data ? (JSON.parse(frame.data) as Record<string, unknown>) : {};
+        } catch {
+          data = { message: frame.data };
+        }
+        if (
+          frame.event === "step" ||
+          frame.event === "delta" ||
+          frame.event === "discard" ||
+          frame.event === "done" ||
+          frame.event === "error"
+        ) {
+          yield { event: frame.event, data };
+        }
+      }
+    }
+    const tail = parseSseFrames(`${buffer}\n\n`).frames;
+    for (const frame of tail) {
+      if (frame.event === "done" || frame.event === "error") {
+        try {
+          yield { event: frame.event, data: JSON.parse(frame.data) as Record<string, unknown> };
+        } catch {
+          // 不完整的尾帧直接忽略，等待事件自身报错。
+        }
+      }
+    }
+  } finally {
+    reader.releaseLock();
+  }
 }
 
 export async function listConversations(): Promise<Page<ConversationSummary>> {

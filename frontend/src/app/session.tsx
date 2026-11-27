@@ -19,10 +19,59 @@ interface SessionContextValue {
 
 const SessionContext = createContext<SessionContextValue | null>(null);
 
+/** 刷新恢复用的同一标签页会话；不是长期登录，关闭标签页即清除。 */
+export const SESSION_STORAGE_KEY = "zz-session-v1";
+export const LAST_PATH_STORAGE_KEY = "zz-last-path-v1";
+
+function isExpired(value: string): boolean {
+  const expires = new Date(value);
+  if (Number.isNaN(expires.getTime())) return true;
+  return expires.getTime() <= Date.now();
+}
+
+function readStoredSession(): SessionInfo | null {
+  if (typeof window === "undefined") return null;
+  try {
+    const raw = window.sessionStorage.getItem(SESSION_STORAGE_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as SessionInfo;
+    if (!parsed?.session_token || !parsed?.scope || isExpired(parsed.expires_at)) {
+      window.sessionStorage.removeItem(SESSION_STORAGE_KEY);
+      return null;
+    }
+    return parsed;
+  } catch {
+    window.sessionStorage.removeItem(SESSION_STORAGE_KEY);
+    return null;
+  }
+}
+
+function writeStoredSession(info: SessionInfo): void {
+  try {
+    window.sessionStorage.setItem(SESSION_STORAGE_KEY, JSON.stringify(info));
+  } catch {
+    // 存储不可用不影响当前会话，只影响刷新恢复。
+  }
+}
+
+function clearStoredSession(): void {
+  try {
+    window.sessionStorage.removeItem(SESSION_STORAGE_KEY);
+    window.sessionStorage.removeItem(LAST_PATH_STORAGE_KEY);
+  } catch {
+    // ignore
+  }
+}
+
+// 令牌仍然只放在内存和本标签页 sessionStorage：模块求值时先恢复，避免首屏请求
+// 在 Provider effect 之前带着空令牌发出。
+const initialSession = readStoredSession();
+if (initialSession) setAuthToken(initialSession.session_token);
+
 export function SessionProvider({ children }: { children: ReactNode }) {
   const queryClient = useQueryClient();
   const navigate = useNavigate();
-  const [session, setSession] = useState<SessionInfo | null>(null);
+  const [session, setSession] = useState<SessionInfo | null>(initialSession);
   const [signingIn, setSigningIn] = useState(false);
   const [epoch, setEpoch] = useState(1);
   const epochRef = useRef(1);
@@ -35,6 +84,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
   }, [queryClient]);
 
   const signOut = useCallback(() => {
+    clearStoredSession();
     invalidateAll();
     setAuthToken(null);
     setSession(null);
@@ -53,6 +103,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
         invalidateAll();
         setAuthToken(info.session_token);
         setSession(info);
+        writeStoredSession(info);
         return info;
       } finally {
         setSigningIn(false);

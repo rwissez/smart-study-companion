@@ -23,15 +23,7 @@ export function TeacherChatPage() {
   const run = runs.data?.find((item) => item.status === "succeeded") ?? runs.data?.[0] ?? null;
 
   return (
-    <div className="stackLg">
-      <div className="pageHeader">
-        <div>
-          <h1 className="pageTitle">AI 对话</h1>
-          <p className="pageSub">
-            {studentId ? `当前对象：学生 ${studentId}` : "按教师身份与当前数据集对话"}
-          </p>
-        </div>
-      </div>
+    <div className="chatPage">
       <ChatPanel
         role="teacher"
         context={{

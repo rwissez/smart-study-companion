@@ -25,9 +25,14 @@ export function MicroLessonPanel({ plan, planVersion, activity, onChanged, onBac
   const [error, setError] = useState<{ text: string; requestId: string | null } | null>(null);
   const [completed, setCompleted] = useState(activity.state === "completed");
 
+  const contentVersion = activity.content_version ?? "unknown";
   const lesson = useQuery<MicroLessonView>({
-    queryKey: [...queryKeys.plan(scopeKey, plan.student_id, plan.node_id, planVersion), "lesson", activity.activity_id],
+    // content_version 参与缓存键：教师重生成微课堂后即使 plan_version 不变，
+    // 学生再次打开也会按最新正文版本重新读取，不显示旧内容。
+    queryKey: [...queryKeys.plan(scopeKey, plan.student_id, plan.node_id, planVersion), "lesson", activity.activity_id, contentVersion],
     queryFn: () => getMicroLesson(plan.run_id, plan.student_id, activity.activity_id, planVersion),
+    staleTime: 0,
+    refetchOnMount: "always",
   });
 
   const canComplete = lesson.data ? validateLesson(lesson.data).ok : false;

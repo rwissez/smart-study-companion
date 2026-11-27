@@ -1,9 +1,10 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { errorRequestId, toErrorMessage } from "../../api/client";
 import { getModelSettings, saveModelSettings, testModelSettings } from "../../api/service";
 import { queryKeys } from "../../lib/queryKeys";
 import { useSession } from "../../app/session";
+import type { ModelSettings } from "../../api/types";
 import { Modal } from "../ui/Modal";
 
 interface Props {
@@ -14,6 +15,7 @@ interface Props {
 /**
  * 模型设置：密钥输入框只用于本次提交，提交后立即清空前端变量；
  * “已保存密钥”只显示 has_api_key 状态，不回显任何密钥内容。
+ * 外发授权也放在这里，聊天页右上角的未配置标记可直达。
  */
 export function ModelSettingsDialog({ open, onClose }: Props) {
   const { scopeKey } = useSession();
@@ -23,10 +25,30 @@ export function ModelSettingsDialog({ open, onClose }: Props) {
   const [modelId, setModelId] = useState("");
   const [apiKey, setApiKey] = useState("");
   const [clearKey, setClearKey] = useState(false);
+  const [allowExternal, setAllowExternal] = useState(false);
+  const [configured, setConfigured] = useState<ModelSettings | null>(null);
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<{ text: string; requestId: string | null } | null>(null);
   const [testResult, setTestResult] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    setMessage(null);
+    setError(null);
+    setTestResult(null);
+    getModelSettings()
+      .then((value) => {
+        setConfigured(value);
+        setProvider(value.provider ?? "");
+        setUrl(value.url ?? "");
+        setModelId(value.model_id ?? "");
+        setAllowExternal(value.allow_external_model_input);
+      })
+      .catch((reason) => {
+        setError({ text: toErrorMessage(reason), requestId: errorRequestId(reason) });
+      });
+  }, [open]);
 
   const resetFeedback = () => {
     setMessage(null);
@@ -38,17 +60,18 @@ export function ModelSettingsDialog({ open, onClose }: Props) {
     setBusy(true);
     resetFeedback();
     try {
-      await saveModelSettings({
+      const latest = await saveModelSettings({
         provider: provider || undefined,
         url: url || undefined,
         model_id: modelId || undefined,
         api_key: apiKey || undefined,
         clear_api_key: clearKey || undefined,
+        allow_external_model_input: allowExternal,
       });
       setApiKey("");
       setClearKey(false);
+      setConfigured(latest);
       setMessage("已保存。密钥不会回显，也不会写进浏览器缓存。");
-      const latest = await getModelSettings();
       queryClient.setQueryData(queryKeys.modelSettings(scopeKey), latest);
     } catch (reason) {
       setError({ text: toErrorMessage(reason), requestId: errorRequestId(reason) });
@@ -77,7 +100,7 @@ export function ModelSettingsDialog({ open, onClose }: Props) {
   return (
     <Modal
       open={open}
-      title="模型设置"
+      title="模型设置与外发授权"
       description="教师本地配置；密钥只提交给本机后端，不在聊天正文与日志中出现。"
       onClose={onClose}
       footer={
@@ -91,6 +114,9 @@ export function ModelSettingsDialog({ open, onClose }: Props) {
       }
     >
       <div className="stack">
+        <p className={`badge ${configured?.configured ? "badgeSuccess" : "badgeWarning"}`} role="status">
+          {configured?.configured ? "当前已配置模型" : "当前未配置模型，聊天只会返回规则摘要或明确失败"}
+        </p>
         <label className="field">
           <span className="fieldLabel">提供方（可选）</span>
           <input className="input" value={provider} onChange={(event) => setProvider(event.target.value)} placeholder="例如 openai_compatible" />
@@ -119,6 +145,20 @@ export function ModelSettingsDialog({ open, onClose }: Props) {
           <input type="checkbox" checked={clearKey} onChange={(event) => setClearKey(event.target.checked)} />
           清除已保存的密钥
         </label>
+        <div className="field">
+          <span className="fieldLabel">外发授权</span>
+          <label className="checkRow">
+            <input
+              type="checkbox"
+              checked={allowExternal}
+              onChange={(event) => setAllowExternal(event.target.checked)}
+            />
+            允许把赛方内容发送到远端模型
+          </label>
+          <span className="fieldHint">
+            本地模型（127.0.0.1 / localhost）不需要这个授权；关闭后远端模型调用会被拒绝。
+          </span>
+        </div>
         {message ? <p className="small" role="status">{message}</p> : null}
         {testResult ? <p className="small" role="status">{testResult}</p> : null}
         {error ? (

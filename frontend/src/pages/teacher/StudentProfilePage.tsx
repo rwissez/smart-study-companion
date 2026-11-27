@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Link, useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { errorCode, errorRequestId, toErrorMessage } from "../../api/client";
@@ -12,7 +12,7 @@ import {
   regenerateStudentLessons,
   rerunStudentAnalysis,
 } from "../../api/service";
-import type { AnswerRecordListItem, EvidenceRef, PlanView, StudentResultView } from "../../api/types";
+import type { AnswerRecordListItem, EvidenceRef, JobDetail, PlanView, StudentResultView } from "../../api/types";
 import { useSession } from "../../app/session";
 import { queryKeys } from "../../lib/queryKeys";
 import { EvidenceDrawer } from "../../components/evidence/EvidenceDrawer";
@@ -24,6 +24,7 @@ import { ProgressView } from "../../components/learning/ProgressView";
 import { TaskGroupView } from "../../components/learning/TaskGroupView";
 import { PlanEditor } from "../../components/learning/PlanEditor";
 import { PlanReviewDialog } from "../../components/learning/PlanReviewDialog";
+import { JobProgress } from "../../components/jobs/JobProgress";
 import { formatDate, formatScore, gradingStatusLabel } from "../../lib/format";
 import { IconArrowLeft } from "../../components/icons";
 
@@ -49,7 +50,10 @@ export function StudentProfilePage() {
   const [reviewOpen, setReviewOpen] = useState(searchParams.get("review") === "1");
   const [rerunBusy, setRerunBusy] = useState(false);
   const [lessonBusy, setLessonBusy] = useState(false);
-  const [rerunNotice, setRerunNotice] = useState("");
+  const [task, setTask] = useState<{ jobId: string; origin: string; kind: "analysis" | "lesson" } | null>(null);
+  const [taskError, setTaskError] = useState<string | null>(null);
+  const handledTaskRef = useRef<string | null>(null);
+  const lastTaskKindRef = useRef<"analysis" | "lesson">("analysis");
 
   const savedView = useMemo(() => {
     try {
@@ -94,6 +98,40 @@ export function StudentProfilePage() {
   const pendingReviewCount = (pendingReviews.data?.items ?? []).filter((item) => item.student_id === studentId).length;
 
   const result = profile.data?.result;
+  const activeNodeId = result?.node_id ?? nodeId ?? plan.data?.plan.node_id ?? "";
+
+  const submitTask = async (kind: "analysis" | "lesson") => {
+    if (!datasetId) return;
+    lastTaskKindRef.current = kind;
+    setTaskError(null);
+    const setBusy = kind === "analysis" ? setRerunBusy : setLessonBusy;
+    setBusy(true);
+    try {
+      const job =
+        kind === "analysis"
+          ? await rerunStudentAnalysis(datasetId, studentId, activeNodeId || null)
+          : await regenerateStudentLessons(datasetId, studentId, activeNodeId || null);
+      handledTaskRef.current = null;
+      setTask({
+        jobId: job.job_id,
+        origin: kind === "analysis" ? "重新分析" : "重新生成微课堂",
+        kind,
+      });
+    } catch (reason) {
+      setTaskError(toErrorMessage(reason));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const handleTaskJob = (job: JobDetail) => {
+    if (job.status !== "succeeded" || handledTaskRef.current === job.job_id) return;
+    handledTaskRef.current = job.job_id;
+    void profile.refetch();
+    void plan.refetch();
+    void pendingReviews.refetch();
+  };
+
   const records = useQuery({
     queryKey: queryKeys.answerRecords(scopeKey, result?.run_id ?? "", studentId, result?.node_id ?? nodeId ?? "", recordsPage),
     queryFn: () => getAnswerRecords(result!.run_id, studentId, { nodeId: result!.node_id, page: recordsPage, pageSize: 20 }),
@@ -153,23 +191,7 @@ export function StudentProfilePage() {
             type="button"
             className="btn"
             disabled={rerunBusy}
-            onClick={async () => {
-              if (!datasetId) return;
-              setRerunBusy(true);
-              setRerunNotice("");
-              try {
-                const job = await rerunStudentAnalysis(
-                  datasetId,
-                  studentId,
-                  result?.node_id ?? nodeId ?? null,
-                );
-                setRerunNotice(`已提交重新分析任务 ${job.job_id}，完成后刷新本页查看新结果。`);
-              } catch (reason) {
-                setRerunNotice(toErrorMessage(reason));
-              } finally {
-                setRerunBusy(false);
-              }
-            }}
+            onClick={() => void submitTask("analysis")}
           >
             {rerunBusy ? "提交中…" : "重新分析"}
           </button>
@@ -177,23 +199,7 @@ export function StudentProfilePage() {
             type="button"
             className="btn"
             disabled={lessonBusy}
-            onClick={async () => {
-              if (!datasetId) return;
-              setLessonBusy(true);
-              setRerunNotice("");
-              try {
-                const job = await regenerateStudentLessons(
-                  datasetId,
-                  studentId,
-                  result?.node_id ?? nodeId ?? null,
-                );
-                setRerunNotice(`已提交微课堂重生成任务 ${job.job_id}，完成后刷新本页查看。`);
-              } catch (reason) {
-                setRerunNotice(toErrorMessage(reason));
-              } finally {
-                setLessonBusy(false);
-              }
-            }}
+            onClick={() => void submitTask("lesson")}
           >
             {lessonBusy ? "提交中…" : "重新生成微课堂"}
           </button>
@@ -218,9 +224,44 @@ export function StudentProfilePage() {
         />
       ) : null}
 
+      {task || taskError ? (
+        <section className="section" aria-label="任务进度">
+          <div className="rowBetween">
+            <h2 className="sectionTitle">任务进度</h2>
+            <button
+              type="button"
+              className="btn btnSm btnGhost"
+              onClick={() => { setTask(null); setTaskError(null); }}
+            >
+              收起
+            </button>
+          </div>
+          {task ? (
+            <JobProgress
+              key={task.jobId}
+              jobId={task.jobId}
+              origin={task.origin}
+              onJob={handleTaskJob}
+              onRetrySubmit={() => void submitTask(task.kind)}
+            />
+          ) : null}
+          {taskError ? (
+            <StatePanel
+              kind="error"
+              title="任务提交失败"
+              message={taskError}
+              action={
+                <button type="button" className="btn btnSm" onClick={() => void submitTask(lastTaskKindRef.current)}>
+                  重试
+                </button>
+              }
+            />
+          ) : null}
+        </section>
+      ) : null}
+
       {result ? (
         <>
-          {rerunNotice ? <p className="small muted" role="status">{rerunNotice}</p> : null}
           <div className="tabs" role="tablist" aria-label="学生画像页签">
             {TABS.map((item) => (
               <button

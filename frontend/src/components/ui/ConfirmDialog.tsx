@@ -28,6 +28,10 @@ export function ConfirmDialog({
 }: Props) {
   const cancelRef = useRef<HTMLButtonElement>(null);
   const panelRef = useRef<HTMLDivElement>(null);
+  // 与 Modal 同理：父组件传入的内联 onCancel 每次渲染都是新引用，不能作为
+  // effect 依赖，否则确认卡里的理由输入框每输入一个字符就丢一次焦点。
+  const onCancelRef = useRef(onCancel);
+  onCancelRef.current = onCancel;
 
   useEffect(() => {
     if (!open) return;
@@ -36,7 +40,7 @@ export function ConfirmDialog({
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key === "Escape") {
         event.stopPropagation();
-        onCancel();
+        onCancelRef.current();
       }
     };
     document.addEventListener("keydown", onKeyDown);
@@ -44,7 +48,7 @@ export function ConfirmDialog({
       document.removeEventListener("keydown", onKeyDown);
       previous?.focus?.();
     };
-  }, [open, onCancel]);
+  }, [open]);
 
   if (!open) return null;
 

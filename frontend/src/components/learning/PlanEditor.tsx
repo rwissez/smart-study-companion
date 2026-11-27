@@ -116,9 +116,19 @@ export function PlanEditor({ open, studentId, nodeId, onClose, onPublished }: Pr
   };
 
   useEffect(() => {
+    // 每次重新打开都从当前正式版本开始；上一次的成功面板不能带到下一次编辑。
+    if (open) setPublished(null);
+  }, [open]);
+
+  useEffect(() => {
     if (open && plan.data) resetDraft(plan.data);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, plan.data?.plan_version]);
+
+  const invalidatePreview = () => {
+    setPreview(null);
+    setAckWarnings(false);
+  };
 
   const stateOf = (activity: PlanActivity): ActivityState => mergeActivityState(activity, derived);
   const isLocked = (activity: PlanActivity): boolean => {
@@ -130,7 +140,7 @@ export function PlanEditor({ open, studentId, nodeId, onClose, onPublished }: Pr
     setActivities(next);
     setActivityDirty(true);
     setDirty(true);
-    setPreview(null);
+    invalidatePreview();
   };
 
   const move = (index: number, direction: -1 | 1) => {
@@ -301,19 +311,31 @@ export function PlanEditor({ open, studentId, nodeId, onClose, onPublished }: Pr
         wide
         footer={
           published ? (
-            <button type="button" className="btn btnPrimary" onClick={onClose}>关闭并刷新</button>
+            <>
+              <button type="button" className="btn" onClick={onClose}>关闭并刷新</button>
+              <button
+                type="button"
+                className="btn btnPrimary"
+                onClick={() => {
+                  setPublished(null);
+                  if (plan.data) resetDraft(plan.data);
+                }}
+              >
+                继续编辑新版本
+              </button>
+            </>
           ) : preview ? (
             <>
-              <button type="button" className="btn" onClick={() => setPreview(null)} disabled={busy}>返回修改</button>
+              <button type="button" className="btn" onClick={() => invalidatePreview()} disabled={busy}>返回修改</button>
               <button type="button" className="btn btnPrimary" onClick={() => void doPublish()} disabled={busy}>
-                {busy ? "发布中…" : "确认发布"}
+                {busy ? "发布中…" : "确认发布（第二步）"}
               </button>
             </>
           ) : (
             <>
               <button type="button" className="btn" onClick={close} disabled={busy}>取消</button>
               <button type="button" className="btn btnPrimary" onClick={() => void requestPreview()} disabled={busy || !plan.data}>
-                {busy ? "检查中…" : "检查并发布"}
+                {busy ? "检查中…" : "检查草稿（第一步）"}
               </button>
             </>
           )
@@ -342,7 +364,12 @@ export function PlanEditor({ open, studentId, nodeId, onClose, onPublished }: Pr
         ) : null}
 
         {plan.data && !published ? (
-          <div className="editorGrid">
+          <div className="stack">
+            <p className={`stepsHint${preview ? " stepsHintActive" : ""}`} role="status">
+              ① 修改草稿 → ② 检查草稿（只生成预览，不会发布） → ③ 确认发布
+              {preview ? " · 当前：检查已通过，等待确认发布" : ""}
+            </p>
+            <div className="editorGrid">
             <div className="stack">
               <h3 className="paneTitle">方案文字</h3>
               <label className="field">
@@ -351,7 +378,7 @@ export function PlanEditor({ open, studentId, nodeId, onClose, onPublished }: Pr
                   className="textarea"
                   style={{ minHeight: 90 }}
                   value={goal}
-                  onChange={(event) => { setGoal(event.target.value); setDirty(true); setPreview(null); }}
+                  onChange={(event) => { setGoal(event.target.value); setDirty(true); invalidatePreview(); }}
                 />
               </label>
               <label className="field">
@@ -360,7 +387,7 @@ export function PlanEditor({ open, studentId, nodeId, onClose, onPublished }: Pr
                   className="textarea"
                   style={{ minHeight: 90 }}
                   value={reasonText}
-                  onChange={(event) => { setReasonText(event.target.value); setDirty(true); setPreview(null); }}
+                  onChange={(event) => { setReasonText(event.target.value); setDirty(true); invalidatePreview(); }}
                 />
               </label>
               <label className="field">
@@ -369,7 +396,7 @@ export function PlanEditor({ open, studentId, nodeId, onClose, onPublished }: Pr
                   className="textarea"
                   style={{ minHeight: 90 }}
                   value={intro}
-                  onChange={(event) => { setIntro(event.target.value); setDirty(true); setPreview(null); }}
+                  onChange={(event) => { setIntro(event.target.value); setDirty(true); invalidatePreview(); }}
                 />
               </label>
               <label className="field">
@@ -378,7 +405,7 @@ export function PlanEditor({ open, studentId, nodeId, onClose, onPublished }: Pr
                   className="input"
                   value={revisionReason}
                   maxLength={500}
-                  onChange={(event) => setRevisionReason(event.target.value)}
+                  onChange={(event) => { setRevisionReason(event.target.value); invalidatePreview(); }}
                   placeholder="例如：学生反馈开场白太长，压缩后重新安排"
                 />
               </label>
@@ -530,6 +557,7 @@ export function PlanEditor({ open, studentId, nodeId, onClose, onPublished }: Pr
               <p className="xs muted">已完成或进行中的活动锁定，不能删除或移动；历史版本只读。</p>
               <p className="xs muted"><IconArrowRight size={14} /> 关闭时若有未保存修改会先确认。</p>
             </aside>
+            </div>
           </div>
         ) : null}
       </Modal>

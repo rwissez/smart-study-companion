@@ -1,7 +1,7 @@
 import type { ReactNode } from "react";
 import { Link, Navigate, Route, Routes } from "react-router-dom";
 import { dataSource } from "../api/service";
-import { useSession } from "./session";
+import { LAST_PATH_STORAGE_KEY, useSession } from "./session";
 import { AppLayout } from "../layouts/AppLayout";
 import { IdentityPage } from "../pages/IdentityPage";
 import { ClassesPage } from "../pages/teacher/ClassesPage";
@@ -57,12 +57,26 @@ function ConfigError() {
   );
 }
 
+function HomeRedirect() {
+  const { session } = useSession();
+  if (!session) return <Navigate to="/identity" replace />;
+  const home = session.scope.role === "teacher" ? "/teacher/classes" : "/student/profile";
+  let last: string | null = null;
+  try {
+    last = window.sessionStorage.getItem(LAST_PATH_STORAGE_KEY);
+  } catch {
+    last = null;
+  }
+  const prefix = session.scope.role === "teacher" ? "/teacher" : "/student";
+  return <Navigate to={last && last.startsWith(prefix) ? last : home} replace />;
+}
+
 export function AppRouter() {
   if (dataSource === "invalid") return <ConfigError />;
 
   return (
     <Routes>
-      <Route path="/" element={<Navigate to="/identity" replace />} />
+      <Route path="/" element={<HomeRedirect />} />
       <Route path="/identity" element={<IdentityPage />} />
 
       <Route

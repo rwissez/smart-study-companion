@@ -56,7 +56,7 @@ export class NetworkError extends Error {
 let authToken: string | null = null;
 let unauthorizedHandler: (() => void) | null = null;
 
-/** token 只保存在内存，刷新页面即失效并回到身份入口。 */
+/** token 只保存在内存和本标签页 sessionStorage；刷新页面由 SessionProvider 恢复同一会话。 */
 export function setAuthToken(token: string | null) {
   authToken = token;
 }

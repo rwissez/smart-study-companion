@@ -579,7 +579,11 @@ export function DataPage() {
                       }}
                     >
                       <span>{jobKindLabel(job.kind)} · {jobStatusLabel(job.status)}</span>
-                      <span className="treeItemMeta">{formatDate(job.created_at)} · {jobStageLabel(job.stage)}</span>
+                      <span className="treeItemMeta">
+                        {job.scope?.student_id ? `学生 ${String(job.scope.student_id)} · ` : ""}
+                        {job.scope?.node_id ? `节点 ${String(job.scope.node_id)} · ` : ""}
+                        {formatDate(job.created_at)} · {jobStageLabel(job.stage)}
+                      </span>
                     </button>
                   ))}
                 </div>

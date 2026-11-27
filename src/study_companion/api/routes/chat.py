@@ -6,9 +6,15 @@ fails with ``MODEL_NOT_CONFIGURED`` (503) rather than returning invented text.
 
 from __future__ import annotations
 
+import json
+import logging
+import queue
+import threading
+import time
 from typing import Any
 
 from fastapi import APIRouter
+from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from sqlalchemy import func, select
@@ -25,6 +31,7 @@ from study_companion.db import models
 from study_companion.tools.b_analysis import ServerContext
 
 router = APIRouter(tags=["chat"])
+logger = logging.getLogger(__name__)
 
 
 class ChatMessage(BaseModel):
@@ -365,13 +372,16 @@ def _persist_turn(db, scope, payload: "ChatRequest", body: dict[str, Any], *, st
         if conversation is None or conversation.owner_ref != scope.session_id:
             raise DomainError("NOT_FOUND", "会话不存在或不属于当前身份")
     else:
+        title_text = payload.message or (
+            payload.messages[-1].content if payload.messages else ""
+        )
         conversation = models.Conversation(
             conversation_id=new_id("conv"),
             owner_ref=scope.session_id,
             scope_key=scope_key,
             dataset_id=scope.dataset_id,
             role=scope.role,
-            title=(payload.message or "")[:40] or "新的对话",
+            title=title_text[:40] or "新的对话",
             context_json={},
             context_revision=0,
             created_at=now_iso(),
@@ -748,10 +758,206 @@ def _resolve_binding(db, scope, payload: "ChatRequest") -> "ChatRequest":
 
 @router.post("/chat")
 def post_chat(payload: ChatRequest, db: DbSession, scope: Scope, settings: AppSettings) -> dict[str, Any]:
+    """兼容入口：一次返回完整回答。
+
+    前端新聊天页优先使用 ``POST /chat/stream``；这里保留同样的鉴权、绑定、
+    工具与持久化语义，旧客户端不受影响。
+    """
+
     scope.require("chat_own" if scope.role == "student" else "chat_teacher")
+    payload = _resolve_binding(db, scope, payload)
+    body = _execute_chat(db, scope, payload, settings)
+    # 依赖清理阶段的提交发生在响应发出之后；历史列表可能紧接着被刷新，必须先落库。
+    db.commit()
+    return success(body)
+
+
+def _sse_frame(event: str, data: dict[str, Any]) -> str:
+    return f"event: {event}\ndata: {json.dumps(data, ensure_ascii=False)}\n\n"
+
+
+def _step_event(event: dict[str, Any]) -> dict[str, Any] | None:
+    """把 AgentLoop 的真实事件翻译成前端可展示的步骤，不添加推理文本。"""
+
+    kind = event.get("type")
+    if kind == "model_round":
+        round_index = event.get("round")
+        if event.get("status") == "running":
+            return {
+                "kind": "model",
+                "status": "running",
+                "label": "正在请求模型" if round_index == 1 else f"模型继续处理（第 {round_index} 轮）",
+            }
+        return {
+            "kind": "model",
+            "status": "succeeded",
+            "label": "模型已返回结果" if round_index == 1 else f"第 {round_index} 轮模型结果已返回",
+        }
+    if kind == "tool":
+        status = event.get("status")
+        label = event.get("label") or event.get("tool_name") or "受控工具"
+        message = event.get("message") or ""
+        if status == "running":
+            return {
+                "kind": "tool",
+                "call_id": event.get("call_id"),
+                "tool_name": event.get("tool_name"),
+                "status": "running",
+                "label": f"正在调用：{label}",
+            }
+        if status == "failed":
+            return {
+                "kind": "tool",
+                "call_id": event.get("call_id"),
+                "tool_name": event.get("tool_name"),
+                "status": "failed",
+                "label": f"调用失败：{label}",
+                "message": message or event.get("error_code") or "工具执行失败",
+            }
+        evidence_count = int(event.get("evidence_count") or 0)
+        return {
+            "kind": "tool",
+            "call_id": event.get("call_id"),
+            "tool_name": event.get("tool_name"),
+            "status": "succeeded",
+            "label": f"已完成：{label}",
+            "message": f"返回 {evidence_count} 条依据" if evidence_count else "",
+        }
+    if kind == "limit":
+        return {
+            "kind": "limit",
+            "status": "failed",
+            "label": "达到工具调用或轮次上限，回答可能不完整",
+        }
+    return None
+
+
+@router.post("/chat/stream")
+def post_chat_stream(payload: ChatRequest, db: DbSession, scope: Scope, settings: AppSettings):
+    """SSE 流式对话：真实工具进度 + 逐段回答。
+
+    真实 provider 支持原生流时逐字转发；不支持时按最终文本分块推送，并在每个
+    ``delta.mode`` 与 ``done.stream_mode`` 中明确标注“非模型原生流”。
+    工具进度只来自 AgentLoop 的真实事件，不伪造思考过程。
+    """
+
+    scope.require("chat_own" if scope.role == "student" else "chat_teacher")
+    # 绑定与权限在返回流之前完成，越权仍得到正常的 4xx JSON 错误。
+    payload = _resolve_binding(db, scope, payload)
+
+    events: queue.Queue[tuple[str, Any]] = queue.Queue()
+    state: dict[str, Any] = {"streamed": False, "stream_mode": "chunked"}
+
+    def emit_step(step: dict[str, Any]) -> None:
+        events.put(("step", step))
+
+    def emit_delta(chunk: str) -> None:
+        if not chunk:
+            return
+        state["streamed"] = True
+        state["stream_mode"] = "native"
+        events.put(("delta", {"text": chunk, "mode": "native"}))
+
+    def on_loop_event(event: dict[str, Any]) -> None:
+        if event.get("type") == "discard_delta":
+            events.put(("discard", {"round": event.get("round")}))
+            return
+        step = _step_event(event)
+        if step is not None:
+            emit_step(step)
+
+    def emit_chunked(text: str) -> None:
+        """不冒充原生流：明确按段落/固定长度分块推送同一份最终文本。"""
+
+        chunk_size = 48
+        for start in range(0, len(text), chunk_size):
+            events.put(("delta", {"text": text[start : start + chunk_size], "mode": "chunked"}))
+            time.sleep(0.008)
+
+    def worker() -> None:
+        from study_companion.db.session import session_scope
+
+        try:
+            with session_scope() as worker_db:
+                body = _execute_chat(
+                    worker_db,
+                    scope,
+                    payload,
+                    settings,
+                    on_event=on_loop_event,
+                    on_delta=emit_delta,
+                )
+                worker_db.commit()
+            final_text = str(body.get("text") or "")
+            if not state["streamed"] and final_text:
+                emit_chunked(final_text)
+            events.put(
+                (
+                    "done",
+                    {
+                        **body,
+                        "stream_mode": "native" if state["streamed"] else "chunked",
+                        "native_stream": bool(state["streamed"]),
+                    },
+                )
+            )
+        except DomainError as exc:
+            events.put(
+                (
+                    "error",
+                    {
+                        "code": exc.code,
+                        "message": str(exc),
+                        "details": getattr(exc, "details", None) or [],
+                    },
+                )
+            )
+        except Exception:  # pragma: no cover - defensive boundary for a background thread
+            logger.exception("chat stream failed")
+            events.put(
+                (
+                    "error",
+                    {"code": "INTERNAL_ERROR", "message": "服务内部错误，未能完成本次回答。"},
+                )
+            )
+        finally:
+            events.put(("__end__", None))
+
+    emit_step({"kind": "status", "status": "running", "label": "正在读取当前对象、数据权限与正式版本"})
+    thread = threading.Thread(target=worker, name="chat-stream", daemon=True)
+    thread.start()
+
+    def generate():
+        while True:
+            event, data = events.get()
+            if event == "__end__":
+                break
+            yield _sse_frame(event, data or {})
+
+    return StreamingResponse(
+        generate(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache, no-transform",
+            "Connection": "keep-alive",
+            "X-Accel-Buffering": "no",
+        },
+    )
+
+
+def _execute_chat(
+    db: DbSession,
+    scope,
+    payload: "ChatRequest",
+    settings: AppSettings,
+    *,
+    on_event=None,
+    on_delta=None,
+) -> dict[str, Any]:
+    """执行一轮对话并返回响应体；HTTP 包装与 SSE 包装共用这一条路径。"""
+
     from study_companion.model_settings import effective_settings
 
-    payload = _resolve_binding(db, scope, payload)
     chat_settings = effective_settings(settings)
     from study_companion.model_service import assert_external_model_allowed
 
@@ -764,18 +970,22 @@ def post_chat(payload: ChatRequest, db: DbSession, scope: Scope, settings: AppSe
             target = ChatTarget(type="student", id=payload.student_id)
         elif target is None and scope.role == "student":
             target = ChatTarget(type="student", id=scope.student_id)
+        if on_event is not None:
+            on_event({"type": "tool", "tool_name": "rule_summary", "label": "读取正式学情规则摘要", "status": "running"})
         fallback = _rule_fallback(db, scope, target, payload.node_id)
         if fallback is not None:
-            return success(_persist_turn(db, scope, payload, fallback, status="partial"))
+            if on_event is not None:
+                on_event({"type": "tool", "tool_name": "rule_summary", "label": "正式学情规则摘要", "status": "succeeded", "evidence_count": len(fallback.get("evidence_refs") or [])})
+            return _persist_turn(db, scope, payload, fallback, status="partial")
+        if on_event is not None:
+            on_event({"type": "tool", "tool_name": "rule_summary", "label": "正式学情规则摘要", "status": "failed", "message": "当前上下文不足以生成规则摘要"})
         turn = provider.generate([message.model_dump() for message in payload.messages or []])
-        return success(
-            _persist_turn(
-                db,
-                scope,
-                payload,
-                {"text": turn.text or "", "tool_calls": []},
-                status="failed",
-            )
+        return _persist_turn(
+            db,
+            scope,
+            payload,
+            {"text": turn.text or "", "tool_calls": []},
+            status="failed",
         )
 
     target = payload.target
@@ -805,23 +1015,31 @@ def post_chat(payload: ChatRequest, db: DbSession, scope: Scope, settings: AppSe
         raise DomainError("FORBIDDEN", "当前角色不能执行该任务")
     if task.status != "ready":
         raise DomainError("TASK_NOT_AVAILABLE", f"{task.label}暂不可用：{task.unavailable_reason}")
+    if on_event is not None:
+        on_event(
+            {
+                "type": "tool",
+                "tool_name": "task_route",
+                "label": f"识别为：{task.label}",
+                "status": "succeeded",
+                "message": "规则路由" if routed.source == "rule" else "",
+            }
+        )
     if task.task_type == "out_of_scope":
-        return success(
-            _persist_turn(
-                db,
-                scope,
-                payload,
-                {
-                    "text": "我目前仅支持学情分析、作答依据和数据质量等学习支持任务。",
-                    "tool_trace": [],
-                    "stopped_reason": "out_of_scope",
-                    "prompt_version": "task-out-of-scope-v1",
-                    "evidence_refs": [],
-                    "task_type": task.task_type,
-                    "route_source": routed.source,
-                },
-                status="out_of_scope",
-            )
+        return _persist_turn(
+            db,
+            scope,
+            payload,
+            {
+                "text": "我目前仅支持学情分析、作答依据和数据质量等学习支持任务。",
+                "tool_trace": [],
+                "stopped_reason": "out_of_scope",
+                "prompt_version": "task-out-of-scope-v1",
+                "evidence_refs": [],
+                "task_type": task.task_type,
+                "route_source": routed.source,
+            },
+            status="out_of_scope",
         )
 
     if target is None and task.target != "none":
@@ -853,7 +1071,9 @@ def post_chat(payload: ChatRequest, db: DbSession, scope: Scope, settings: AppSe
     messages = [{"role": "system", "content": system}] + [
         message.model_dump() for message in payload.messages if message.role != "system"
     ]
-    result = AgentLoop(provider, registry).run(messages, task.label)
+    result = AgentLoop(provider, registry).run(
+        messages, task.label, on_event=on_event, on_delta=on_delta
+    )
     legacy_shape = payload.message is None
     tool_trace = []
     for index, trace in enumerate(result.tool_trace):
@@ -902,17 +1122,15 @@ def post_chat(payload: ChatRequest, db: DbSession, scope: Scope, settings: AppSe
         if result.text
         else [],
     }
-    return success(
-        _persist_turn(
-            db,
-            scope,
-            payload,
-            body,
-            status=(
-                "completed"
-                if result.stopped_reason in {None, "", "model_finished"}
-                else "failed"
-            ),
-            trace_source=result.tool_trace,
-        )
+    return _persist_turn(
+        db,
+        scope,
+        payload,
+        body,
+        status=(
+            "completed"
+            if result.stopped_reason in {None, "", "model_finished"}
+            else "failed"
+        ),
+        trace_source=result.tool_trace,
     )
