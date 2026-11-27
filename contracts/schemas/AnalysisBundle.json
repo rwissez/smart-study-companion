@@ -14,14 +14,148 @@
           "minimum": 1,
           "title": "Min Valid Distinct Items",
           "type": "integer"
+        },
+        "recent_weight": {
+          "default": 0.6,
+          "maximum": 1.0,
+          "minimum": 0.0,
+          "title": "Recent Weight",
+          "type": "number"
+        },
+        "rule_version": {
+          "default": "b-rules-1",
+          "title": "Rule Version",
+          "type": "string"
         }
       },
       "title": "AnalysisConfig",
       "type": "object"
     },
+    "AnalysisInputRef": {
+      "additionalProperties": false,
+      "properties": {
+        "catalog_version": {
+          "title": "Catalog Version",
+          "type": "string"
+        },
+        "config_hash": {
+          "title": "Config Hash",
+          "type": "string"
+        },
+        "created_at": {
+          "default": "",
+          "title": "Created At",
+          "type": "string"
+        },
+        "dataset_id": {
+          "title": "Dataset Id",
+          "type": "string"
+        },
+        "event_cutoff": {
+          "minimum": 0,
+          "title": "Event Cutoff",
+          "type": "integer"
+        },
+        "included_event_ids": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Included Event Ids",
+          "type": "array"
+        },
+        "knowledge_version": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Knowledge Version"
+        },
+        "rule_version": {
+          "title": "Rule Version",
+          "type": "string"
+        }
+      },
+      "required": [
+        "dataset_id",
+        "catalog_version",
+        "rule_version",
+        "config_hash",
+        "event_cutoff"
+      ],
+      "title": "AnalysisInputRef",
+      "type": "object"
+    },
+    "AttentionStudent": {
+      "additionalProperties": false,
+      "properties": {
+        "evidence_refs": {
+          "items": {
+            "$ref": "#/$defs/EvidenceRef"
+          },
+          "title": "Evidence Refs",
+          "type": "array"
+        },
+        "finding_ids": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Finding Ids",
+          "type": "array"
+        },
+        "limitations": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Limitations",
+          "type": "array"
+        },
+        "reason": {
+          "title": "Reason",
+          "type": "string"
+        },
+        "student_id": {
+          "title": "Student Id",
+          "type": "string"
+        }
+      },
+      "required": [
+        "student_id",
+        "reason"
+      ],
+      "title": "AttentionStudent",
+      "type": "object"
+    },
     "ClassResult": {
       "additionalProperties": false,
       "properties": {
+        "analysis_input": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/AnalysisInputRef"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "analysis_version": {
+          "default": "",
+          "title": "Analysis Version",
+          "type": "string"
+        },
+        "attention_students": {
+          "items": {
+            "$ref": "#/$defs/AttentionStudent"
+          },
+          "title": "Attention Students",
+          "type": "array"
+        },
         "catalog_version": {
           "title": "Catalog Version",
           "type": "string"
@@ -29,6 +163,25 @@
         "class_id": {
           "title": "Class Id",
           "type": "string"
+        },
+        "common_findings": {
+          "items": {
+            "$ref": "#/$defs/Finding"
+          },
+          "title": "Common Findings",
+          "type": "array"
+        },
+        "dataset_family_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Dataset Family Id"
         },
         "dataset_id": {
           "title": "Dataset Id",
@@ -48,6 +201,14 @@
           "title": "Limitations",
           "type": "array"
         },
+        "member_analysis_versions": {
+          "items": {
+            "additionalProperties": true,
+            "type": "object"
+          },
+          "title": "Member Analysis Versions",
+          "type": "array"
+        },
         "metrics": {
           "items": {
             "$ref": "#/$defs/Metric"
@@ -63,6 +224,23 @@
           "title": "Observed Student Count",
           "type": "integer"
         },
+        "performance_distribution": {
+          "items": {
+            "$ref": "#/$defs/DistributionBucket"
+          },
+          "title": "Performance Distribution",
+          "type": "array"
+        },
+        "publication_status": {
+          "default": "unpublished",
+          "enum": [
+            "unpublished",
+            "published",
+            "superseded"
+          ],
+          "title": "Publication Status",
+          "type": "string"
+        },
         "roster_count": {
           "title": "Roster Count",
           "type": "integer"
@@ -70,6 +248,18 @@
         "run_id": {
           "title": "Run Id",
           "type": "string"
+        },
+        "summary": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Summary"
         }
       },
       "required": [
@@ -87,9 +277,120 @@
       "title": "ClassResult",
       "type": "object"
     },
-    "EvidenceRef": {
+    "DiagnosticDetail": {
       "additionalProperties": false,
       "properties": {
+        "evidence_refs": {
+          "items": {
+            "$ref": "#/$defs/EvidenceRef"
+          },
+          "title": "Evidence Refs",
+          "type": "array"
+        },
+        "limitations": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Limitations",
+          "type": "array"
+        },
+        "summary": {
+          "title": "Summary",
+          "type": "string"
+        }
+      },
+      "required": [
+        "summary"
+      ],
+      "title": "DiagnosticDetail",
+      "type": "object"
+    },
+    "DistributionBucket": {
+      "additionalProperties": false,
+      "properties": {
+        "count": {
+          "minimum": 0,
+          "title": "Count",
+          "type": "integer"
+        },
+        "evidence_status": {
+          "enum": [
+            "sufficient",
+            "insufficient",
+            "conflicting"
+          ],
+          "title": "Evidence Status",
+          "type": "string"
+        },
+        "indicator_id": {
+          "title": "Indicator Id",
+          "type": "string"
+        },
+        "kp_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Kp Id"
+        },
+        "performance": {
+          "enum": [
+            "observed_strength",
+            "needs_practice",
+            "undetermined"
+          ],
+          "title": "Performance",
+          "type": "string"
+        },
+        "roster_count": {
+          "minimum": 0,
+          "title": "Roster Count",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "indicator_id",
+        "performance",
+        "evidence_status",
+        "count",
+        "roster_count"
+      ],
+      "title": "DistributionBucket",
+      "type": "object"
+    },
+    "EvidenceRef": {
+      "additionalProperties": false,
+      "description": "统一证据引用。定位字段由服务端补足并校验，不接受任意对象路径。",
+      "properties": {
+        "analysis_version": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Analysis Version"
+        },
+        "attempt_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Attempt Id"
+        },
         "catalog_version": {
           "anyOf": [
             {
@@ -102,6 +403,35 @@
           "default": null,
           "title": "Catalog Version"
         },
+        "curriculum_type": {
+          "anyOf": [
+            {
+              "enum": [
+                "topic",
+                "indicator",
+                "source"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Curriculum Type"
+        },
+        "dataset_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Dataset Id"
+        },
         "id": {
           "title": "Id",
           "type": "string"
@@ -111,10 +441,58 @@
             "record",
             "metric",
             "material",
-            "curriculum"
+            "curriculum",
+            "knowledge_point",
+            "relation",
+            "annotation",
+            "rubric_point",
+            "learning_event",
+            "attempt",
+            "grade",
+            "finding",
+            "progress",
+            "recommendation",
+            "source_page",
+            "lesson"
           ],
           "title": "Kind",
           "type": "string"
+        },
+        "knowledge_version": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Knowledge Version"
+        },
+        "material_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Material Id"
+        },
+        "plan_version": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Plan Version"
         },
         "run_id": {
           "anyOf": [
@@ -143,6 +521,27 @@
           "title": "Description",
           "type": "string"
         },
+        "diagnostic_details": {
+          "items": {
+            "$ref": "#/$defs/DiagnosticDetail"
+          },
+          "title": "Diagnostic Details",
+          "type": "array"
+        },
+        "error_types": {
+          "items": {
+            "enum": [
+              "foundation_gap",
+              "step_error",
+              "hint_dependency",
+              "transfer_difficulty",
+              "other_supported"
+            ],
+            "type": "string"
+          },
+          "title": "Error Types",
+          "type": "array"
+        },
         "evidence_refs": {
           "items": {
             "$ref": "#/$defs/EvidenceRef"
@@ -163,9 +562,32 @@
           "title": "Finding Id",
           "type": "string"
         },
+        "generation_method": {
+          "default": "rule",
+          "enum": [
+            "rule",
+            "model",
+            "hybrid",
+            "human"
+          ],
+          "title": "Generation Method",
+          "type": "string"
+        },
         "indicator_id": {
           "title": "Indicator Id",
           "type": "string"
+        },
+        "kp_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Kp Id"
         },
         "limitations": {
           "items": {
@@ -182,6 +604,25 @@
           ],
           "title": "Performance",
           "type": "string"
+        },
+        "rubric_focus": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Rubric Focus",
+          "type": "array"
+        },
+        "topic_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Topic Id"
         }
       },
       "required": [
@@ -198,6 +639,18 @@
     "Metric": {
       "additionalProperties": false,
       "properties": {
+        "calculation_version": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Calculation Version"
+        },
         "denominator": {
           "anyOf": [
             {
@@ -215,6 +668,23 @@
           },
           "title": "Evidence Refs",
           "type": "array"
+        },
+        "evidence_status": {
+          "anyOf": [
+            {
+              "enum": [
+                "sufficient",
+                "insufficient",
+                "conflicting"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Evidence Status"
         },
         "excluded_event_count": {
           "default": 0,
@@ -286,6 +756,7 @@
     },
     "MetricScope": {
       "additionalProperties": false,
+      "description": "恰好一个 student_id 或 class_id；粒度以最具体字段识别。",
       "properties": {
         "class_id": {
           "anyOf": [
@@ -311,6 +782,18 @@
           "default": null,
           "title": "Indicator Id"
         },
+        "kp_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Kp Id"
+        },
         "node_id": {
           "title": "Node Id",
           "type": "string"
@@ -326,6 +809,18 @@
           ],
           "default": null,
           "title": "Student Id"
+        },
+        "topic_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Topic Id"
         }
       },
       "required": [
@@ -334,9 +829,187 @@
       "title": "MetricScope",
       "type": "object"
     },
+    "ProgressComparison": {
+      "additionalProperties": false,
+      "properties": {
+        "baseline_analysis_version": {
+          "title": "Baseline Analysis Version",
+          "type": "string"
+        },
+        "baseline_value": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Baseline Value"
+        },
+        "classification": {
+          "enum": [
+            "improved",
+            "partially_improved",
+            "unchanged_or_declined",
+            "insufficient"
+          ],
+          "title": "Classification",
+          "type": "string"
+        },
+        "comparable": {
+          "title": "Comparable",
+          "type": "boolean"
+        },
+        "comparison_id": {
+          "title": "Comparison Id",
+          "type": "string"
+        },
+        "current_analysis_version": {
+          "title": "Current Analysis Version",
+          "type": "string"
+        },
+        "current_value": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Current Value"
+        },
+        "description": {
+          "default": "",
+          "title": "Description",
+          "type": "string"
+        },
+        "evidence_refs": {
+          "items": {
+            "$ref": "#/$defs/EvidenceRef"
+          },
+          "title": "Evidence Refs",
+          "type": "array"
+        },
+        "limitations": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Limitations",
+          "type": "array"
+        },
+        "scope": {
+          "$ref": "#/$defs/MetricScope"
+        },
+        "student_id": {
+          "title": "Student Id",
+          "type": "string"
+        }
+      },
+      "required": [
+        "comparison_id",
+        "student_id",
+        "baseline_analysis_version",
+        "current_analysis_version",
+        "scope",
+        "classification",
+        "comparable"
+      ],
+      "title": "ProgressComparison",
+      "type": "object"
+    },
+    "StrategySignal": {
+      "additionalProperties": false,
+      "properties": {
+        "evidence_refs": {
+          "items": {
+            "$ref": "#/$defs/EvidenceRef"
+          },
+          "title": "Evidence Refs",
+          "type": "array"
+        },
+        "finding_ids": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Finding Ids",
+          "type": "array"
+        },
+        "indicator_id": {
+          "title": "Indicator Id",
+          "type": "string"
+        },
+        "kp_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Kp Id"
+        },
+        "limitations": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Limitations",
+          "type": "array"
+        },
+        "signal_id": {
+          "title": "Signal Id",
+          "type": "string"
+        },
+        "signal_type": {
+          "enum": [
+            "evidence_gap",
+            "prerequisite_gap",
+            "concrete_error",
+            "unstable_performance",
+            "transfer_ready",
+            "teacher_attention"
+          ],
+          "title": "Signal Type",
+          "type": "string"
+        },
+        "student_id": {
+          "title": "Student Id",
+          "type": "string"
+        }
+      },
+      "required": [
+        "signal_id",
+        "student_id",
+        "indicator_id",
+        "signal_type"
+      ],
+      "title": "StrategySignal",
+      "type": "object"
+    },
     "StudentResult": {
       "additionalProperties": false,
       "properties": {
+        "analysis_input": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/AnalysisInputRef"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "analysis_version": {
+          "default": "",
+          "title": "Analysis Version",
+          "type": "string"
+        },
         "catalog_version": {
           "title": "Catalog Version",
           "type": "string"
@@ -344,6 +1017,18 @@
         "class_id": {
           "title": "Class Id",
           "type": "string"
+        },
+        "dataset_family_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Dataset Family Id"
         },
         "dataset_id": {
           "title": "Dataset Id",
@@ -374,13 +1059,58 @@
           "title": "Node Id",
           "type": "string"
         },
+        "progress": {
+          "items": {
+            "$ref": "#/$defs/ProgressComparison"
+          },
+          "title": "Progress",
+          "type": "array"
+        },
+        "publication_status": {
+          "default": "unpublished",
+          "enum": [
+            "unpublished",
+            "published",
+            "superseded"
+          ],
+          "title": "Publication Status",
+          "type": "string"
+        },
         "run_id": {
           "title": "Run Id",
           "type": "string"
         },
+        "scope_kind": {
+          "default": "assessment",
+          "enum": [
+            "assessment",
+            "learning_current"
+          ],
+          "title": "Scope Kind",
+          "type": "string"
+        },
+        "strategy_signals": {
+          "items": {
+            "$ref": "#/$defs/StrategySignal"
+          },
+          "title": "Strategy Signals",
+          "type": "array"
+        },
         "student_id": {
           "title": "Student Id",
           "type": "string"
+        },
+        "summary": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Summary"
         }
       },
       "required": [
@@ -417,6 +1147,18 @@
     "dataset_id": {
       "title": "Dataset Id",
       "type": "string"
+    },
+    "knowledge_version": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Knowledge Version"
     },
     "quality_summary": {
       "additionalProperties": {

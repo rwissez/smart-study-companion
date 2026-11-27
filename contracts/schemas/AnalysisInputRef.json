@@ -1,0 +1,59 @@
+{
+  "additionalProperties": false,
+  "properties": {
+    "catalog_version": {
+      "title": "Catalog Version",
+      "type": "string"
+    },
+    "config_hash": {
+      "title": "Config Hash",
+      "type": "string"
+    },
+    "created_at": {
+      "default": "",
+      "title": "Created At",
+      "type": "string"
+    },
+    "dataset_id": {
+      "title": "Dataset Id",
+      "type": "string"
+    },
+    "event_cutoff": {
+      "minimum": 0,
+      "title": "Event Cutoff",
+      "type": "integer"
+    },
+    "included_event_ids": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Included Event Ids",
+      "type": "array"
+    },
+    "knowledge_version": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Knowledge Version"
+    },
+    "rule_version": {
+      "title": "Rule Version",
+      "type": "string"
+    }
+  },
+  "required": [
+    "dataset_id",
+    "catalog_version",
+    "rule_version",
+    "config_hash",
+    "event_cutoff"
+  ],
+  "title": "AnalysisInputRef",
+  "type": "object"
+}

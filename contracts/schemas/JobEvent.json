@@ -1,0 +1,35 @@
+{
+  "additionalProperties": false,
+  "properties": {
+    "message": {
+      "default": "",
+      "title": "Message",
+      "type": "string"
+    },
+    "occurred_at": {
+      "default": "",
+      "title": "Occurred At",
+      "type": "string"
+    },
+    "sequence": {
+      "minimum": 1,
+      "title": "Sequence",
+      "type": "integer"
+    },
+    "stage": {
+      "title": "Stage",
+      "type": "string"
+    },
+    "status": {
+      "title": "Status",
+      "type": "string"
+    }
+  },
+  "required": [
+    "sequence",
+    "stage",
+    "status"
+  ],
+  "title": "JobEvent",
+  "type": "object"
+}

@@ -1,0 +1,191 @@
+{
+  "$defs": {
+    "ImportFile": {
+      "additionalProperties": false,
+      "properties": {
+        "byte_size": {
+          "minimum": 0,
+          "title": "Byte Size",
+          "type": "integer"
+        },
+        "file_id": {
+          "title": "File Id",
+          "type": "string"
+        },
+        "format": {
+          "enum": [
+            "csv",
+            "xlsx",
+            "pdf"
+          ],
+          "title": "Format",
+          "type": "string"
+        },
+        "original_name": {
+          "title": "Original Name",
+          "type": "string"
+        },
+        "reason": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Reason"
+        },
+        "role": {
+          "enum": [
+            "requirements",
+            "materials",
+            "students",
+            "nodes",
+            "records",
+            "dictionary",
+            "standard",
+            "textbook",
+            "unknown"
+          ],
+          "title": "Role",
+          "type": "string"
+        },
+        "sha256": {
+          "title": "Sha256",
+          "type": "string"
+        },
+        "sheet_name": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Sheet Name"
+        },
+        "status": {
+          "enum": [
+            "accepted",
+            "duplicate",
+            "needs_confirmation",
+            "rejected"
+          ],
+          "title": "Status",
+          "type": "string"
+        }
+      },
+      "required": [
+        "file_id",
+        "original_name",
+        "sha256",
+        "byte_size",
+        "format",
+        "role",
+        "status"
+      ],
+      "title": "ImportFile",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "classification_status": {
+      "enum": [
+        "confirmed",
+        "needs_confirmation"
+      ],
+      "title": "Classification Status",
+      "type": "string"
+    },
+    "dataset_family_id": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Dataset Family Id"
+    },
+    "dataset_id": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Dataset Id"
+    },
+    "files": {
+      "items": {
+        "$ref": "#/$defs/ImportFile"
+      },
+      "title": "Files",
+      "type": "array"
+    },
+    "import_id": {
+      "title": "Import Id",
+      "type": "string"
+    },
+    "input_status": {
+      "enum": [
+        "incomplete",
+        "ready",
+        "blocked"
+      ],
+      "title": "Input Status",
+      "type": "string"
+    },
+    "job_id": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Job Id"
+    },
+    "missing_inputs": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Missing Inputs",
+      "type": "array"
+    },
+    "quality_summary": {
+      "additionalProperties": {
+        "type": "integer"
+      },
+      "title": "Quality Summary",
+      "type": "object"
+    },
+    "warnings": {
+      "items": {
+        "additionalProperties": true,
+        "type": "object"
+      },
+      "title": "Warnings",
+      "type": "array"
+    }
+  },
+  "required": [
+    "import_id",
+    "classification_status",
+    "input_status"
+  ],
+  "title": "ImportReceipt",
+  "type": "object"
+}

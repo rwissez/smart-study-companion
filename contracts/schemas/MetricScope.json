@@ -1,5 +1,6 @@
 {
   "additionalProperties": false,
+  "description": "恰好一个 student_id 或 class_id；粒度以最具体字段识别。",
   "properties": {
     "class_id": {
       "anyOf": [
@@ -25,6 +26,18 @@
       "default": null,
       "title": "Indicator Id"
     },
+    "kp_id": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Kp Id"
+    },
     "node_id": {
       "title": "Node Id",
       "type": "string"
@@ -40,6 +53,18 @@
       ],
       "default": null,
       "title": "Student Id"
+    },
+    "topic_id": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Topic Id"
     }
   },
   "required": [

@@ -1,6 +1,33 @@
 {
   "additionalProperties": false,
   "properties": {
+    "assessment_date": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Assessment Date"
+    },
+    "available_question_ids": {
+      "anyOf": [
+        {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Available Question Ids"
+    },
     "label": {
       "anyOf": [
         {
@@ -16,6 +43,22 @@
     "node_id": {
       "title": "Node Id",
       "type": "string"
+    },
+    "scope_kind": {
+      "default": "assessment",
+      "enum": [
+        "assessment",
+        "learning_current"
+      ],
+      "title": "Scope Kind",
+      "type": "string"
+    },
+    "topic_ids": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Topic Ids",
+      "type": "array"
     }
   },
   "required": [

@@ -1,0 +1,52 @@
+{
+  "additionalProperties": false,
+  "properties": {
+    "formal_annotations": {
+      "default": 0,
+      "title": "Formal Annotations",
+      "type": "integer"
+    },
+    "formal_points": {
+      "default": 0,
+      "title": "Formal Points",
+      "type": "integer"
+    },
+    "formal_relations": {
+      "default": 0,
+      "title": "Formal Relations",
+      "type": "integer"
+    },
+    "recovered_pages": {
+      "default": 0,
+      "title": "Recovered Pages",
+      "type": "integer"
+    },
+    "relevant_pages": {
+      "default": 0,
+      "title": "Relevant Pages",
+      "type": "integer"
+    },
+    "source_files": {
+      "default": 0,
+      "title": "Source Files",
+      "type": "integer"
+    },
+    "total_pages": {
+      "default": 0,
+      "title": "Total Pages",
+      "type": "integer"
+    },
+    "unresolved_items": {
+      "default": 0,
+      "title": "Unresolved Items",
+      "type": "integer"
+    },
+    "usable_relevant_pages": {
+      "default": 0,
+      "title": "Usable Relevant Pages",
+      "type": "integer"
+    }
+  },
+  "title": "KnowledgeCounts",
+  "type": "object"
+}

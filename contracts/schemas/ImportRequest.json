@@ -1,0 +1,43 @@
+{
+  "additionalProperties": false,
+  "properties": {
+    "dataset_family_id": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Dataset Family Id"
+    },
+    "expected_parent_dataset_id": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Expected Parent Dataset Id"
+    },
+    "intent": {
+      "enum": [
+        "new_family",
+        "append_to_family",
+        "auto_detect"
+      ],
+      "title": "Intent",
+      "type": "string"
+    }
+  },
+  "required": [
+    "intent"
+  ],
+  "title": "ImportRequest",
+  "type": "object"
+}

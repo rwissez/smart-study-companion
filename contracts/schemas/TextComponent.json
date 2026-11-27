@@ -1,0 +1,42 @@
+{
+  "additionalProperties": false,
+  "properties": {
+    "heading": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Heading"
+    },
+    "id": {
+      "title": "Id",
+      "type": "string"
+    },
+    "paragraphs": {
+      "items": {
+        "type": "string"
+      },
+      "maxItems": 4,
+      "minItems": 1,
+      "title": "Paragraphs",
+      "type": "array"
+    },
+    "type": {
+      "const": "text",
+      "title": "Type",
+      "type": "string"
+    }
+  },
+  "required": [
+    "type",
+    "id",
+    "paragraphs"
+  ],
+  "title": "TextComponent",
+  "type": "object"
+}

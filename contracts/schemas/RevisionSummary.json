@@ -1,0 +1,74 @@
+{
+  "additionalProperties": false,
+  "properties": {
+    "author_role": {
+      "default": "teacher",
+      "title": "Author Role",
+      "type": "string"
+    },
+    "created_at": {
+      "default": "",
+      "title": "Created At",
+      "type": "string"
+    },
+    "parent_plan_version": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Parent Plan Version"
+    },
+    "plan_version": {
+      "default": "",
+      "title": "Plan Version",
+      "type": "string"
+    },
+    "publication_status": {
+      "default": "unpublished",
+      "enum": [
+        "unpublished",
+        "published",
+        "superseded"
+      ],
+      "title": "Publication Status",
+      "type": "string"
+    },
+    "reason": {
+      "default": "",
+      "title": "Reason",
+      "type": "string"
+    },
+    "review_status": {
+      "default": "draft",
+      "enum": [
+        "draft",
+        "validated",
+        "needs_review",
+        "rejected",
+        "human_confirmed"
+      ],
+      "title": "Review Status",
+      "type": "string"
+    },
+    "revision": {
+      "minimum": 1,
+      "title": "Revision",
+      "type": "integer"
+    },
+    "revision_id": {
+      "title": "Revision Id",
+      "type": "string"
+    }
+  },
+  "required": [
+    "revision_id",
+    "revision"
+  ],
+  "title": "RevisionSummary",
+  "type": "object"
+}

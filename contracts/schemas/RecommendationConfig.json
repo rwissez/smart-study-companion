@@ -6,6 +6,24 @@
       "minimum": 1,
       "title": "Max Activities",
       "type": "integer"
+    },
+    "max_recommendations": {
+      "default": 2,
+      "minimum": 1,
+      "title": "Max Recommendations",
+      "type": "integer"
+    },
+    "max_student_activities": {
+      "default": 8,
+      "minimum": 1,
+      "title": "Max Student Activities",
+      "type": "integer"
+    },
+    "round_minutes": {
+      "default": 20,
+      "minimum": 1,
+      "title": "Round Minutes",
+      "type": "integer"
     }
   },
   "title": "RecommendationConfig",

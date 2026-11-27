@@ -1,0 +1,42 @@
+{
+  "additionalProperties": false,
+  "properties": {
+    "file_id": {
+      "title": "File Id",
+      "type": "string"
+    },
+    "role": {
+      "enum": [
+        "requirements",
+        "materials",
+        "students",
+        "nodes",
+        "records",
+        "dictionary",
+        "standard",
+        "textbook",
+        "unknown"
+      ],
+      "title": "Role",
+      "type": "string"
+    },
+    "sheet_name": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Sheet Name"
+    }
+  },
+  "required": [
+    "file_id",
+    "role"
+  ],
+  "title": "FileMapping",
+  "type": "object"
+}

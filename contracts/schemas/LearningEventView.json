@@ -1,0 +1,135 @@
+{
+  "additionalProperties": false,
+  "properties": {
+    "activity_id": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Activity Id"
+    },
+    "attempt_id": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Attempt Id"
+    },
+    "event_id": {
+      "title": "Event Id",
+      "type": "string"
+    },
+    "event_type": {
+      "enum": [
+        "activity_started",
+        "study_material_completed",
+        "answer_submitted",
+        "grading_completed",
+        "hint_requested",
+        "assisted_mode_confirmed",
+        "agent_help_used",
+        "activity_completed",
+        "micro_lesson_opened",
+        "micro_lesson_completed",
+        "group_completed",
+        "teacher_review",
+        "teacher_note",
+        "effectiveness_assessed"
+      ],
+      "title": "Event Type",
+      "type": "string"
+    },
+    "group_id": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Group Id"
+    },
+    "material_id": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Material Id"
+    },
+    "node_id": {
+      "title": "Node Id",
+      "type": "string"
+    },
+    "occurred_at": {
+      "title": "Occurred At",
+      "type": "string"
+    },
+    "payload": {
+      "additionalProperties": true,
+      "title": "Payload",
+      "type": "object"
+    },
+    "plan_version": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Plan Version"
+    },
+    "sequence": {
+      "title": "Sequence",
+      "type": "integer"
+    },
+    "source": {
+      "enum": [
+        "student",
+        "teacher",
+        "system"
+      ],
+      "title": "Source",
+      "type": "string"
+    },
+    "student_id": {
+      "title": "Student Id",
+      "type": "string"
+    },
+    "summary": {
+      "default": "",
+      "title": "Summary",
+      "type": "string"
+    }
+  },
+  "required": [
+    "event_id",
+    "event_type",
+    "source",
+    "occurred_at",
+    "sequence",
+    "student_id",
+    "node_id"
+  ],
+  "title": "LearningEventView",
+  "type": "object"
+}

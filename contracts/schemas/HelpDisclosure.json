@@ -1,0 +1,114 @@
+{
+  "additionalProperties": false,
+  "properties": {
+    "attempt_id": {
+      "title": "Attempt Id",
+      "type": "string"
+    },
+    "channel": {
+      "enum": [
+        "hint",
+        "agent"
+      ],
+      "title": "Channel",
+      "type": "string"
+    },
+    "content_digest": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Content Digest"
+    },
+    "disclosure_id": {
+      "title": "Disclosure Id",
+      "type": "string"
+    },
+    "event_id": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Event Id"
+    },
+    "intent_at": {
+      "title": "Intent At",
+      "type": "string"
+    },
+    "message_key": {
+      "title": "Message Key",
+      "type": "string"
+    },
+    "protection_digest": {
+      "title": "Protection Digest",
+      "type": "string"
+    },
+    "release_order": {
+      "minimum": 1,
+      "title": "Release Order",
+      "type": "integer"
+    },
+    "released_at": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Released At"
+    },
+    "reply_ref": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Reply Ref"
+    },
+    "state": {
+      "enum": [
+        "intent",
+        "confirmed",
+        "unknown",
+        "not_sent"
+      ],
+      "title": "State",
+      "type": "string"
+    },
+    "submission_no": {
+      "minimum": 0,
+      "title": "Submission No",
+      "type": "integer"
+    }
+  },
+  "required": [
+    "disclosure_id",
+    "attempt_id",
+    "channel",
+    "message_key",
+    "release_order",
+    "submission_no",
+    "protection_digest",
+    "state",
+    "intent_at"
+  ],
+  "title": "HelpDisclosure",
+  "type": "object"
+}

@@ -1,0 +1,82 @@
+{
+  "additionalProperties": false,
+  "properties": {
+    "annotations": {
+      "items": {
+        "additionalProperties": true,
+        "type": "object"
+      },
+      "title": "Annotations",
+      "type": "array"
+    },
+    "catalog_version": {
+      "title": "Catalog Version",
+      "type": "string"
+    },
+    "created_at": {
+      "default": "",
+      "title": "Created At",
+      "type": "string"
+    },
+    "dataset_id": {
+      "title": "Dataset Id",
+      "type": "string"
+    },
+    "knowledge_version": {
+      "title": "Knowledge Version",
+      "type": "string"
+    },
+    "limitations": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Limitations",
+      "type": "array"
+    },
+    "parent_version": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Parent Version"
+    },
+    "points": {
+      "items": {
+        "additionalProperties": true,
+        "type": "object"
+      },
+      "title": "Points",
+      "type": "array"
+    },
+    "relations": {
+      "items": {
+        "additionalProperties": true,
+        "type": "object"
+      },
+      "title": "Relations",
+      "type": "array"
+    },
+    "review_summary": {
+      "additionalProperties": true,
+      "title": "Review Summary",
+      "type": "object"
+    },
+    "status": {
+      "default": "published",
+      "title": "Status",
+      "type": "string"
+    }
+  },
+  "required": [
+    "dataset_id",
+    "catalog_version",
+    "knowledge_version"
+  ],
+  "title": "KnowledgeSnapshotView",
+  "type": "object"
+}

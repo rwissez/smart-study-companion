@@ -1,0 +1,91 @@
+{
+  "additionalProperties": false,
+  "properties": {
+    "byte_size": {
+      "minimum": 0,
+      "title": "Byte Size",
+      "type": "integer"
+    },
+    "file_id": {
+      "title": "File Id",
+      "type": "string"
+    },
+    "format": {
+      "enum": [
+        "csv",
+        "xlsx",
+        "pdf"
+      ],
+      "title": "Format",
+      "type": "string"
+    },
+    "original_name": {
+      "title": "Original Name",
+      "type": "string"
+    },
+    "reason": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Reason"
+    },
+    "role": {
+      "enum": [
+        "requirements",
+        "materials",
+        "students",
+        "nodes",
+        "records",
+        "dictionary",
+        "standard",
+        "textbook",
+        "unknown"
+      ],
+      "title": "Role",
+      "type": "string"
+    },
+    "sha256": {
+      "title": "Sha256",
+      "type": "string"
+    },
+    "sheet_name": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Sheet Name"
+    },
+    "status": {
+      "enum": [
+        "accepted",
+        "duplicate",
+        "needs_confirmation",
+        "rejected"
+      ],
+      "title": "Status",
+      "type": "string"
+    }
+  },
+  "required": [
+    "file_id",
+    "original_name",
+    "sha256",
+    "byte_size",
+    "format",
+    "role",
+    "status"
+  ],
+  "title": "ImportFile",
+  "type": "object"
+}

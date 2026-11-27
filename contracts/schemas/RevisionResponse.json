@@ -1,0 +1,60 @@
+{
+  "additionalProperties": false,
+  "properties": {
+    "job_id": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Job Id"
+    },
+    "plan_version": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Plan Version"
+    },
+    "publication_status": {
+      "enum": [
+        "unpublished",
+        "published",
+        "superseded"
+      ],
+      "title": "Publication Status",
+      "type": "string"
+    },
+    "review_status": {
+      "enum": [
+        "draft",
+        "validated",
+        "needs_review",
+        "rejected",
+        "human_confirmed"
+      ],
+      "title": "Review Status",
+      "type": "string"
+    },
+    "revision_id": {
+      "title": "Revision Id",
+      "type": "string"
+    }
+  },
+  "required": [
+    "revision_id",
+    "review_status",
+    "publication_status"
+  ],
+  "title": "RevisionResponse",
+  "type": "object"
+}

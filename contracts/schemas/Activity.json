@@ -1,6 +1,457 @@
 {
+  "$defs": {
+    "EvidenceRef": {
+      "additionalProperties": false,
+      "description": "统一证据引用。定位字段由服务端补足并校验，不接受任意对象路径。",
+      "properties": {
+        "analysis_version": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Analysis Version"
+        },
+        "attempt_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Attempt Id"
+        },
+        "catalog_version": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Catalog Version"
+        },
+        "curriculum_type": {
+          "anyOf": [
+            {
+              "enum": [
+                "topic",
+                "indicator",
+                "source"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Curriculum Type"
+        },
+        "dataset_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Dataset Id"
+        },
+        "id": {
+          "title": "Id",
+          "type": "string"
+        },
+        "kind": {
+          "enum": [
+            "record",
+            "metric",
+            "material",
+            "curriculum",
+            "knowledge_point",
+            "relation",
+            "annotation",
+            "rubric_point",
+            "learning_event",
+            "attempt",
+            "grade",
+            "finding",
+            "progress",
+            "recommendation",
+            "source_page",
+            "lesson"
+          ],
+          "title": "Kind",
+          "type": "string"
+        },
+        "knowledge_version": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Knowledge Version"
+        },
+        "material_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Material Id"
+        },
+        "plan_version": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Plan Version"
+        },
+        "run_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Run Id"
+        }
+      },
+      "required": [
+        "kind",
+        "id"
+      ],
+      "title": "EvidenceRef",
+      "type": "object"
+    },
+    "OfficialCardRef": {
+      "additionalProperties": false,
+      "properties": {
+        "catalog_version": {
+          "title": "Catalog Version",
+          "type": "string"
+        },
+        "kind": {
+          "const": "official_card",
+          "title": "Kind",
+          "type": "string"
+        },
+        "material_id": {
+          "title": "Material Id",
+          "type": "string"
+        }
+      },
+      "required": [
+        "kind",
+        "material_id",
+        "catalog_version"
+      ],
+      "title": "OfficialCardRef",
+      "type": "object"
+    },
+    "PersonalizedRef": {
+      "additionalProperties": false,
+      "properties": {
+        "content_id": {
+          "title": "Content Id",
+          "type": "string"
+        },
+        "content_version": {
+          "title": "Content Version",
+          "type": "string"
+        },
+        "kind": {
+          "const": "personalized",
+          "title": "Kind",
+          "type": "string"
+        }
+      },
+      "required": [
+        "kind",
+        "content_id",
+        "content_version"
+      ],
+      "title": "PersonalizedRef",
+      "type": "object"
+    },
+    "SourceLocator": {
+      "additionalProperties": false,
+      "description": "材料出处。``source_file`` 只能是已登记文件或受控来源标记。",
+      "properties": {
+        "chapter": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Chapter"
+        },
+        "file_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "File Id"
+        },
+        "page_end": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Page End"
+        },
+        "pdf_page": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Pdf Page"
+        },
+        "printed_page": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Printed Page"
+        },
+        "section": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Section"
+        },
+        "source_file": {
+          "title": "Source File",
+          "type": "string"
+        },
+        "source_kind": {
+          "anyOf": [
+            {
+              "enum": [
+                "standard",
+                "textbook",
+                "competition_material",
+                "other_registered"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Source Kind"
+        },
+        "verification_status": {
+          "default": "unverified",
+          "enum": [
+            "verified",
+            "unverified"
+          ],
+          "title": "Verification Status",
+          "type": "string"
+        }
+      },
+      "required": [
+        "source_file"
+      ],
+      "title": "SourceLocator",
+      "type": "object"
+    },
+    "VerifiedTextbookRef": {
+      "additionalProperties": false,
+      "properties": {
+        "annotation_id": {
+          "title": "Annotation Id",
+          "type": "string"
+        },
+        "kind": {
+          "const": "verified_textbook",
+          "title": "Kind",
+          "type": "string"
+        },
+        "knowledge_version": {
+          "title": "Knowledge Version",
+          "type": "string"
+        },
+        "locator": {
+          "$ref": "#/$defs/SourceLocator"
+        }
+      },
+      "required": [
+        "kind",
+        "annotation_id",
+        "knowledge_version",
+        "locator"
+      ],
+      "title": "VerifiedTextbookRef",
+      "type": "object"
+    }
+  },
   "additionalProperties": false,
+  "description": "学习活动。旧字段全部保留；新字段用于正式新方案。",
   "properties": {
+    "activity_id": {
+      "default": "",
+      "title": "Activity Id",
+      "type": "string"
+    },
+    "activity_kind": {
+      "default": "question",
+      "enum": [
+        "question",
+        "study_material",
+        "micro_lesson"
+      ],
+      "title": "Activity Kind",
+      "type": "string"
+    },
+    "content_ref": {
+      "anyOf": [
+        {
+          "discriminator": {
+            "mapping": {
+              "official_card": "#/$defs/OfficialCardRef",
+              "personalized": "#/$defs/PersonalizedRef",
+              "verified_textbook": "#/$defs/VerifiedTextbookRef"
+            },
+            "propertyName": "kind"
+          },
+          "oneOf": [
+            {
+              "$ref": "#/$defs/OfficialCardRef"
+            },
+            {
+              "$ref": "#/$defs/VerifiedTextbookRef"
+            },
+            {
+              "$ref": "#/$defs/PersonalizedRef"
+            }
+          ]
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Content Ref"
+    },
+    "content_version": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Content Version"
+    },
+    "dependencies": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Dependencies",
+      "type": "array"
+    },
+    "estimate_minutes": {
+      "default": 4,
+      "maximum": 12,
+      "minimum": 1,
+      "title": "Estimate Minutes",
+      "type": "integer"
+    },
+    "evidence_refs": {
+      "items": {
+        "$ref": "#/$defs/EvidenceRef"
+      },
+      "title": "Evidence Refs",
+      "type": "array"
+    },
+    "expected_outcome": {
+      "default": "",
+      "title": "Expected Outcome",
+      "type": "string"
+    },
+    "exposure_mode": {
+      "anyOf": [
+        {
+          "enum": [
+            "practice",
+            "independent"
+          ],
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Exposure Mode"
+    },
+    "group_id": {
+      "default": "",
+      "title": "Group Id",
+      "type": "string"
+    },
     "hint_levels": {
       "items": {
         "type": "string"
@@ -8,9 +459,24 @@
       "title": "Hint Levels",
       "type": "array"
     },
+    "knowledge_ids": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Knowledge Ids",
+      "type": "array"
+    },
     "material_id": {
-      "title": "Material Id",
-      "type": "string"
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Material Id"
     },
     "observation_points": {
       "items": {
@@ -25,21 +491,63 @@
       "type": "integer"
     },
     "previously_attempted": {
+      "default": false,
       "title": "Previously Attempted",
       "type": "boolean"
     },
     "purpose": {
+      "default": "",
       "title": "Purpose",
+      "type": "string"
+    },
+    "repeat_reason": {
+      "anyOf": [
+        {
+          "enum": [
+            "error_retry",
+            "independence_check",
+            "spaced_review"
+          ],
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Repeat Reason"
+    },
+    "source_label": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Source Label"
+    },
+    "state": {
+      "default": "not_started",
+      "enum": [
+        "not_started",
+        "in_progress",
+        "completed",
+        "cancelled"
+      ],
+      "title": "State",
+      "type": "string"
+    },
+    "title": {
+      "default": "",
+      "title": "Title",
       "type": "string"
     }
   },
   "required": [
-    "order",
-    "material_id",
-    "purpose",
-    "hint_levels",
-    "observation_points",
-    "previously_attempted"
+    "order"
   ],
   "title": "Activity",
   "type": "object"

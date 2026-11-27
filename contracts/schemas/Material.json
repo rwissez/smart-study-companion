@@ -1,5 +1,111 @@
 {
   "$defs": {
+    "DifficultyAssessment": {
+      "additionalProperties": false,
+      "description": "难度评估；没有可靠评估时整体为 null，不默认中等。",
+      "properties": {
+        "evidence_refs": {
+          "items": {
+            "additionalProperties": true,
+            "type": "object"
+          },
+          "title": "Evidence Refs",
+          "type": "array"
+        },
+        "level": {
+          "enum": [
+            "basic",
+            "intermediate",
+            "advanced"
+          ],
+          "title": "Level",
+          "type": "string"
+        },
+        "method": {
+          "enum": [
+            "rule",
+            "model",
+            "teacher"
+          ],
+          "title": "Method",
+          "type": "string"
+        },
+        "reason": {
+          "title": "Reason",
+          "type": "string"
+        },
+        "rule_version": {
+          "title": "Rule Version",
+          "type": "string"
+        },
+        "status": {
+          "enum": [
+            "unverified",
+            "verified"
+          ],
+          "title": "Status",
+          "type": "string"
+        }
+      },
+      "required": [
+        "level",
+        "method",
+        "status",
+        "reason",
+        "rule_version"
+      ],
+      "title": "DifficultyAssessment",
+      "type": "object"
+    },
+    "MathText": {
+      "additionalProperties": false,
+      "description": "数学文本：保留规范原值，LaTeX 只作展示，未验证不得作为等价依据。",
+      "properties": {
+        "display_latex": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Display Latex"
+        },
+        "normalized": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Normalized"
+        },
+        "raw": {
+          "title": "Raw",
+          "type": "string"
+        },
+        "verification_status": {
+          "default": "unverified",
+          "enum": [
+            "unverified",
+            "verified",
+            "rejected"
+          ],
+          "title": "Verification Status",
+          "type": "string"
+        }
+      },
+      "required": [
+        "raw"
+      ],
+      "title": "MathText",
+      "type": "object"
+    },
     "RubricPoint": {
       "additionalProperties": false,
       "properties": {
@@ -26,7 +132,44 @@
     },
     "SourceLocator": {
       "additionalProperties": false,
+      "description": "材料出处。``source_file`` 只能是已登记文件或受控来源标记。",
       "properties": {
+        "chapter": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Chapter"
+        },
+        "file_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "File Id"
+        },
+        "page_end": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Page End"
+        },
         "pdf_page": {
           "anyOf": [
             {
@@ -51,11 +194,42 @@
           "default": null,
           "title": "Printed Page"
         },
+        "section": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Section"
+        },
         "source_file": {
           "title": "Source File",
           "type": "string"
         },
+        "source_kind": {
+          "anyOf": [
+            {
+              "enum": [
+                "standard",
+                "textbook",
+                "competition_material",
+                "other_registered"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Source Kind"
+        },
         "verification_status": {
+          "default": "unverified",
           "enum": [
             "verified",
             "unverified"
@@ -65,8 +239,7 @@
         }
       },
       "required": [
-        "source_file",
-        "verification_status"
+        "source_file"
       ],
       "title": "SourceLocator",
       "type": "object"
@@ -74,9 +247,65 @@
   },
   "additionalProperties": false,
   "properties": {
+    "answer_math": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/MathText"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
+    },
     "content": {
       "title": "Content",
       "type": "string"
+    },
+    "content_math": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/MathText"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
+    },
+    "difficulty": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/DifficultyAssessment"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
+    },
+    "display_order": {
+      "anyOf": [
+        {
+          "type": "integer"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Display Order"
+    },
+    "explanation_math": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/MathText"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
     },
     "indicator_ids": {
       "items": {
@@ -109,6 +338,37 @@
       ],
       "default": null,
       "title": "Max Score"
+    },
+    "option_math": {
+      "items": {
+        "$ref": "#/$defs/MathText"
+      },
+      "title": "Option Math",
+      "type": "array"
+    },
+    "options": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Options",
+      "type": "array"
+    },
+    "question_type": {
+      "anyOf": [
+        {
+          "enum": [
+            "choice",
+            "fill_blank",
+            "solution"
+          ],
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Question Type"
     },
     "reference_answer": {
       "anyOf": [
@@ -152,6 +412,18 @@
       },
       "title": "Rubric Points",
       "type": "array"
+    },
+    "source_label": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Source Label"
     },
     "source_locator": {
       "$ref": "#/$defs/SourceLocator"

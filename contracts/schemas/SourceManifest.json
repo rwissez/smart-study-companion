@@ -1,9 +1,38 @@
 {
   "additionalProperties": false,
   "properties": {
+    "data_origin": {
+      "default": "official",
+      "title": "Data Origin",
+      "type": "string"
+    },
+    "dataset_family_id": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Dataset Family Id"
+    },
     "dataset_id": {
       "title": "Dataset Id",
       "type": "string"
+    },
+    "parent_dataset_id": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Parent Dataset Id"
     },
     "synthetic": {
       "title": "Synthetic",

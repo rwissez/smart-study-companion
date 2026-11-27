@@ -1,0 +1,38 @@
+{
+  "additionalProperties": false,
+  "properties": {
+    "evidence_index": {
+      "anyOf": [
+        {
+          "type": "integer"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Evidence Index"
+    },
+    "label": {
+      "title": "Label",
+      "type": "string"
+    },
+    "source_index": {
+      "anyOf": [
+        {
+          "type": "integer"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Source Index"
+    }
+  },
+  "required": [
+    "label"
+  ],
+  "title": "CitationLabel",
+  "type": "object"
+}

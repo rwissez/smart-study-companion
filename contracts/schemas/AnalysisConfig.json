@@ -12,6 +12,18 @@
       "minimum": 1,
       "title": "Min Valid Distinct Items",
       "type": "integer"
+    },
+    "recent_weight": {
+      "default": 0.6,
+      "maximum": 1.0,
+      "minimum": 0.0,
+      "title": "Recent Weight",
+      "type": "number"
+    },
+    "rule_version": {
+      "default": "b-rules-1",
+      "title": "Rule Version",
+      "type": "string"
     }
   },
   "title": "AnalysisConfig",

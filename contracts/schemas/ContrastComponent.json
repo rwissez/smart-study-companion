@@ -1,0 +1,40 @@
+{
+  "additionalProperties": false,
+  "properties": {
+    "before": {
+      "title": "Before",
+      "type": "string"
+    },
+    "correct": {
+      "title": "Correct",
+      "type": "string"
+    },
+    "id": {
+      "title": "Id",
+      "type": "string"
+    },
+    "incorrect": {
+      "title": "Incorrect",
+      "type": "string"
+    },
+    "note": {
+      "title": "Note",
+      "type": "string"
+    },
+    "type": {
+      "const": "contrast",
+      "title": "Type",
+      "type": "string"
+    }
+  },
+  "required": [
+    "type",
+    "id",
+    "before",
+    "incorrect",
+    "correct",
+    "note"
+  ],
+  "title": "ContrastComponent",
+  "type": "object"
+}

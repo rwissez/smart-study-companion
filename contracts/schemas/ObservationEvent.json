@@ -1,0 +1,93 @@
+{
+  "additionalProperties": false,
+  "properties": {
+    "activity_order": {
+      "title": "Activity Order",
+      "type": "integer"
+    },
+    "created_at": {
+      "default": "",
+      "title": "Created At",
+      "type": "string"
+    },
+    "event_id": {
+      "title": "Event Id",
+      "type": "string"
+    },
+    "event_type": {
+      "enum": [
+        "completed_independent",
+        "completed_with_hints",
+        "step_failed",
+        "not_completed",
+        "teacher_note",
+        "effectiveness_assessed"
+      ],
+      "title": "Event Type",
+      "type": "string"
+    },
+    "failed_step": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Failed Step"
+    },
+    "hint_level_used": {
+      "anyOf": [
+        {
+          "type": "integer"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Hint Level Used"
+    },
+    "material_id": {
+      "title": "Material Id",
+      "type": "string"
+    },
+    "recommendation_id": {
+      "title": "Recommendation Id",
+      "type": "string"
+    },
+    "run_id": {
+      "title": "Run Id",
+      "type": "string"
+    },
+    "student_id": {
+      "title": "Student Id",
+      "type": "string"
+    },
+    "teacher_note": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Teacher Note"
+    }
+  },
+  "required": [
+    "event_id",
+    "run_id",
+    "student_id",
+    "recommendation_id",
+    "activity_order",
+    "material_id",
+    "event_type"
+  ],
+  "title": "ObservationEvent",
+  "type": "object"
+}
