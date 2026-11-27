@@ -50,16 +50,24 @@
 
 | 编号 | 结果 | 说明 |
 |---|---|---|
-| UI-01~05 | 见前端提交与截图 | 前端由独立工作流交付；未通过前不写 passed |
+| UI-01 | **passed**（visual_review 待人工） | `node scripts/verify-pages.mjs` 退出码 0；1920/1440/1366 三档 `scrollWidth <= innerWidth` 全通过；页面纯白、教师墨绿 #234C42、学生青蓝 #326B82、Logo 原 PNG（字节一致）。截图 `docs/evidence/ui/01`—`51` |
+| UI-02 | **passed**（synthetic） | 班级总览、比较、名册、个人画像四页签读取真实 API；不可比时只并列原指标与原因，不画差值 |
+| UI-03 | **partial** | 直编入口与后端 preview/publish 均已存在，页面仍为占位（禁用并注明"编辑界面待接入"）；任务进度/重试/取消可用 |
+| UI-04 | **passed**（synthetic） | 微课堂六类组件 schema、渲染器运行时校验、非法组件回退 `fallback_text` 且禁止完成；三题型作答、逐级提示、受助确认、待评分不显示 0 分 |
+| UI-05 | **passed**（synthetic） | 加载/空/错误/未就绪/历史状态齐备；`verify-pages` 检查控制台 0 错误、学生页无受保护字段 |
+| 前端质量门 | **passed** | `npm run typecheck` 退出码 0；`npm run build` 成功（402.78 kB，gzip 121.71 kB）；`npm test -- --run` 6 文件 20 用例全过 |
 | ZIP-01 | **passed**（synthetic） | `test_exports.py::test_export_zip_contains_required_files_and_hashes`：16 文件、逐项 byte 数与哈希一致 |
-| ZIP-02 | **partial** | 缺项 → 422 EXPORT_INCOMPLETE；`published_only=false` → 422；学生 → 403 | "草稿不入包"另需专门用例 |
+| ZIP-02 | **partial** | 缺项 → 422 EXPORT_INCOMPLETE；`published_only=false` → 422；学生 → 403；"草稿不入包"另需专门用例 |
 | ZIP-03 | **not_run** | 需要赛方授权数据与教师选定三学生 |
-| RUN-01 | **partial** | 版本/指针持久化，重启后按 `formal_heads` 读取；未做进程重启实测 |
+| RUN-01 | **partial** | 版本/指针持久化，重启后按 `formal_heads` 读取；HTTP 闭环实测；未做进程重启实测 |
 | RUN-02 | **passed**（synthetic） | `tests/test_backup.py`：备份→校验→恢复；篡改后校验失败 |
-| RUN-03 | **partial** | 运行模式与身份是独立维度（`DEMO_MODE` vs `VITE_DATA_SOURCE`）；后端无 demo fixture 回退 | 前端 api 模式失败行为待前端联调确认 |
-| E2E-01~04 | **partial** | 后端闭环已实测：导入→A→B→C→学生作答/提示/评分→事件→导出。**未**在真实浏览器+真实模型下跑完整 E2E |
+| RUN-03 | **passed**（synthetic） | 运行模式与身份独立；`verify-pages` 分别在 api 模式（5173）与 demo 模式（5174）跑通，demo 页面带"演示数据"角标，API 失败不回退 |
+| E2E-01 | **partial** | 真实 HTTP：导入→A→B→C→学生读方案（证据 `E2E-http.txt`）；浏览器完整 E2E 由 `verify-pages` 覆盖页面级路径 |
+| E2E-02 | **partial** | 教师直编 preview/publish 后端可用；页面未接，Agent 修改路径未接 |
+| E2E-03 | **passed**（synthetic） | `tests/test_learning_loop.py`：微课堂读取/完成→作答→评分→组完成→局部 B→C 复查；事件、状态、版本可查 |
+| E2E-04 | **not_run** | 需要注入模型超时/worker 中断的故障演练 |
 | PERF-01 | **not_run** | 需要在比赛机、固定条件记录三次耗时 |
-| REL-01 | **partial** | 干净目录 `uv sync --locked` + `alembic upgrade head` + 启动已验证；README 已按实际命令更新 |
+| REL-01 | **passed** | `REL-01-clean-install.txt`：隔离目录克隆 `50722be`，`uv sync --locked` → `alembic upgrade head` → 启动 → 导入 → 四步任务成功 → 读画像 200 → `npm ci` → `npm run build` 全部成功 |
 | REL-02 | **not_run** | 需要授权数据、真实模型与现场演练 |
 
 ## 4. 明确的外部阻塞
@@ -69,6 +77,19 @@
 
 ## 5. 前端状态
 
-前端实现与截图由 `frontend/` 提交与 `docs/evidence/ui/` 记录；本文件在其通过
-`npm run typecheck` / `npm run build` / `npm test` / 浏览器截图检查后更新为实际结论。
-在本轮记录时点，前端尚未完成联调，故 UI-01~05 保持 `not_run`。
+前端已交付并实测（提交 `50722be` 起）：
+
+- `npm run typecheck` 退出码 0，`npm run build` 成功，`npm test -- --run` 6 文件 20 用例全过；
+- `node scripts/verify-pages.mjs` 对真实 dev server + 真实后端跑通，退出码 0，写入 49 张
+  API 模式截图（1920/1440/1366）与 2 张 demo 模式截图到 `docs/evidence/ui/`；
+- 自检覆盖：无横向溢出、学生页无受保护字段、控制台 0 错误、后端/前端/浏览器缺失时非 0
+  退出（不会假成功）。
+
+已知前端限制（页面均显示真实原因，未伪造）：
+
+1. 教师学习方案编辑器仅占位（后端 preview/publish 已就绪）；
+2. 微课堂实际内容只有 `text` + `citation` 组件（规则模板能给出的就这些），
+   `formula/derivation/contrast/number_line` 由 `LessonRenderer.test.tsx` 单测覆盖，
+   缺真实六类数据——需要模型生成更丰富内容后才能有真实样例；
+3. 知识体系 409 未就绪状态由代码路径保证，本机 seed 每次都会跑完 A，截图不可复现；
+4. 证据 `visibility=redacted` 分支已实现但后端不产生该状态，无真实截图。
