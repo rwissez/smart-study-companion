@@ -1276,7 +1276,14 @@ def _textbook_source_inputs(
             models.FileObject,
             models.FileObject.file_id == models.ImportFileRow.file_id,
         )
-        .where(models.FileObject.media_type == "application/pdf")
+        .join(
+            models.ImportRecord,
+            models.ImportRecord.import_id == models.ImportFileRow.import_id,
+        )
+        .where(
+            models.ImportRecord.dataset_id == dataset_id,
+            models.FileObject.media_type == "application/pdf",
+        )
     ).all()
     names: dict[str, str] = {}
     file_ids: dict[str, str] = {}
