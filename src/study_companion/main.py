@@ -1,4 +1,4 @@
-"""Application factory. One process, one app, routers under ``/api/v1``."""
+﻿"""Application factory. One process, one app, routers under ``/api/v1``."""
 
 from __future__ import annotations
 
@@ -21,9 +21,11 @@ from study_companion.api.routes import (
     imports,
     jobs,
     knowledge,
+    learning,
     materials,
     model_settings,
     observations,
+    profile,
 )
 from study_companion.config import get_settings
 
@@ -89,7 +91,9 @@ def create_app() -> FastAPI:
         jobs,
         evidence,
         knowledge,
+        learning,
         model_settings,
+        profile,
         chat,
         observations,
     ):

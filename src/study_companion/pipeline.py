@@ -578,3 +578,174 @@ def handle_import_process(ctx: JobContext) -> dict[str, Any]:
 
 def new_run_id() -> str:
     return repo.new_id("run")
+
+
+# --------------------------------------------------------------------------- #
+# 学习事件驱动的局部更新
+# --------------------------------------------------------------------------- #
+
+
+def _carry_over_states(
+    db: Session,
+    *,
+    new_plan_version: str,
+    old_plan_version: str | None,
+    student_uid: str,
+) -> dict[str, str]:
+    """把已完成/进行中的活动身份延续到新方案，避免历史进度丢失。"""
+
+    if not old_plan_version:
+        return {}
+    old_rows = db.scalars(
+        select(models.PlanActivity).where(models.PlanActivity.plan_version == old_plan_version)
+    ).all()
+    old_by_material = {row.material_id: row for row in old_rows if row.material_id}
+    old_states = {
+        row.activity_id: row.state
+        for row in db.scalars(
+            select(models.ActivityStateRow).where(
+                models.ActivityStateRow.student_uid == student_uid,
+                models.ActivityStateRow.origin_plan_version == old_plan_version,
+            )
+        ).all()
+    }
+    mapping: dict[str, str] = {}
+    new_rows = db.scalars(
+        select(models.PlanActivity).where(models.PlanActivity.plan_version == new_plan_version)
+    ).all()
+    for row in new_rows:
+        old = old_by_material.get(row.material_id or "")
+        if old is None:
+            continue
+        state = old_states.get(old.activity_id)
+        if state not in {"completed", "in_progress"}:
+            continue
+        new_state = db.get(models.ActivityStateRow, row.activity_id)
+        if new_state is None:
+            db.add(
+                models.ActivityStateRow(
+                    activity_id=row.activity_id,
+                    origin_plan_version=new_plan_version,
+                    student_uid=student_uid,
+                    state=state,
+                    generation=1,
+                    updated_at=repo.now_iso(),
+                )
+            )
+        else:
+            new_state.state = state
+            new_state.generation += 1
+            new_state.updated_at = repo.now_iso()
+        row.origin_plan_version = old_plan_version
+        mapping[old.activity_id] = row.activity_id
+    db.flush()
+    return mapping
+
+
+@register("student_update")
+def handle_student_update(ctx: JobContext) -> dict[str, Any]:
+    """组完成/新有效作答后：局部 B → 该学生 C → 审核发布 → 记录适用性。"""
+
+    from study_companion.recommendation.service import recommend_rules, validate_recommendations
+
+    db = ctx.session
+    scope = ctx.scope
+    dataset_id = scope.get("dataset_id")
+    student_id = scope.get("student_id")
+    node_id = scope.get("node_id")
+    if not (dataset_id and student_id and node_id):
+        raise DomainError("VALIDATION_ERROR", "局部更新任务缺少学生或节点")
+    dataset = db.get(models.Dataset, dataset_id)
+    if dataset is None or not dataset.family_id:
+        raise DomainError("NOT_FOUND", "数据集不存在")
+    catalog_version = db.scalar(
+        select(models.Catalog.version)
+        .where(models.Catalog.dataset_id == dataset_id)
+        .order_by(models.Catalog.created_at.desc())
+        .limit(1)
+    )
+    if catalog_version is None:
+        raise DomainError("RESULT_NOT_READY", "数据集缺少课程目录")
+    catalog = load_catalog(db, catalog_version, dataset_id)
+    prepared = load_prepared_dataset(db, dataset_id)
+    student = db.get(models.Student, (dataset_id, student_id))
+    if student is None or not student.student_uid:
+        raise DomainError("NOT_FOUND", "该学生不在当前快照中")
+
+    upsert_step(db, ctx.job, "analysis_student", label="更新学情", status="running")
+    db.commit()
+
+    context = RunContext(
+        run_id=repo.new_id("run"),
+        dataset_id=dataset_id,
+        catalog_version=catalog_version,
+        rule_version=RULE_VERSION,
+        dataset_family_id=dataset.family_id,
+    )
+    bundle = analyze_dataset(prepared, catalog, context, AnalysisConfig(rule_version=RULE_VERSION))
+    affected_students = [item for item in bundle.student_results if item.student_id == student_id and item.node_id == node_id]
+    affected_classes = [item for item in bundle.class_results if item.class_id == student.class_id and item.node_id == node_id]
+    if not affected_students:
+        raise DomainError("RESULT_NOT_READY", "无法为该学生生成学情")
+    filtered = bundle.model_copy(
+        update={"student_results": affected_students, "class_results": affected_classes}
+    )
+    included = [event.event_id for event in prepared.selected_events]
+    result = persist_analysis_bundle(
+        db,
+        filtered,
+        family_id=dataset.family_id,
+        catalog=catalog,
+        job_id=ctx.job.id,
+        event_cutoff=len(included),
+        included_event_ids=included,
+    )
+    upsert_step(db, ctx.job, "analysis_student", label="更新学情", status="succeeded")
+    db.commit()
+
+    upsert_step(db, ctx.job, "plan_student", label="复查学习方案", status="running")
+    db.commit()
+
+    analysis_version = result["analysis_versions"][0]
+    old_key = repo.FormalKey(
+        family_id=dataset.family_id,
+        dataset_id=dataset_id,
+        kind="plan",
+        node_key=node_id,
+        target_key=student_id,
+    )
+    old_head = repo.read_head(db, old_key)
+    old_plan_version = old_head.version_id if old_head else None
+
+    plan_bundle = recommend_rules(affected_students[0], catalog, context, RecommendationConfig())
+    validation = validate_recommendations(plan_bundle, affected_students[0], catalog, RecommendationConfig())
+    review = build_review_info(plan_bundle, validation.issues)
+    published = persist_plan(
+        db,
+        plan_bundle,
+        family_id=dataset.family_id,
+        analysis_version_id=analysis_version,
+        knowledge_version_id=None,
+        job_id=ctx.job.id,
+        review=review,
+        student_uid=student.student_uid,
+        publish=review.status == "validated",
+    )
+    _carry_over_states(
+        db,
+        new_plan_version=published["plan_version"],
+        old_plan_version=old_plan_version,
+        student_uid=student.student_uid,
+    )
+    upsert_step(db, ctx.job, "plan_student", label="复查学习方案", status="succeeded")
+    db.commit()
+
+    return {
+        "student_id": student_id,
+        "node_id": node_id,
+        "analysis_version": analysis_version,
+        "plan_version": published["plan_version"],
+        "review_status": published["review_status"],
+        "publication_status": published["publication_status"],
+        "base_plan_version": old_plan_version,
+    }
