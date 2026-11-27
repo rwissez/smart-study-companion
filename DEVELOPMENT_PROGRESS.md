@@ -28,7 +28,7 @@
 | `uv sync --locked --python 3.12` | 成功，42 resolved / 41 checked，锁文件已更新（新增 openpyxl、python-multipart） |
 | `uv run alembic heads` | `0006_delivery_backfill`（单头） |
 | 空库 / `0002_learning_observations` / `0003_idempotency` 三条升级 | 均成功；`integrity_check=ok`、`foreign_key_check` 空、62 张表 |
-| `uv run pytest -q` | **462 passed, 1 warning**（新增：B 进展 18、B 质量 13、C 规划 14、试验与质量 5、帮助披露 2、Agent 确认 3、导出闭包 7、知识审核 10、介入 11、教师直发 2、教材 37 等） |
+| `uv run pytest -q` | **470 passed, 1 warning**（新增：B 进展 18、B 质量 13、C 规划 14、试验与质量 5、帮助披露 2、Agent 确认 3、导出闭包 7、知识审核 10、介入 11、教师直发 2、教材 37 等） |
 | `_local/http_e2e.py`（真实 HTTP） | 见 E2E-http.txt：导入→A→B→C→学生作答/提示/评分→事件→导出下载全部成功 |
 | `_local/backup_smoke.py` + `tests/test_backup.py` | 备份→校验→恢复通过；篡改后校验失败 |
 | 前端 typecheck / build / vitest / verify-pages | 退出码全 0；6 文件 20 用例通过；49 张截图；控制台 0 错误 |
@@ -62,4 +62,5 @@
 - 2026-11-27：初始化工作区 Git 仓库（以核定 main 为基点，保留 GitHub 远端），导入交接包文档，建立 `codex/final-integration`。
 - 2026-11-27：P0 环境与基线；P1 契约/DB/导入/任务/版本仓储；P2 A 基础版；P3 B 与学习闭环；P4 C 六策略/微课堂/教师直编；P5 对话持久化；P7 导出与备份。
 - 2026-11-27：真实 HTTP 端到端闭环通过并留存证据；修复第 5—8 项缺陷。
+- 2026-11-27：教师评分修订、知识版本差异与影响集、依赖索引（artifact_use/兼容性证明）落地；新增 8 条用例。
 - 2026-11-27：补齐 B 进展与质量报告、C 候选/难度/指纹/负担/试验刹车/质量报告、教师介入、知识审核、教材 PDF 文本层与候选、Agent 确认发布、导出依赖闭包与预检、帮助披露与独立模式确认；修复教师直发的状态主键冲突与导出只导首个节点两个真实缺陷；后端 461 passed。
