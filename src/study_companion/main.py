@@ -13,6 +13,7 @@ from study_companion import __version__
 from study_companion.api.errors import install_error_handlers
 from study_companion.api.middleware import RequestIdMiddleware
 from study_companion.api.routes import (
+    agent_ops,
     chat,
     conversations,
     datasets,
@@ -21,6 +22,7 @@ from study_companion.api.routes import (
     exports,
     health,
     imports,
+    interventions,
     jobs,
     knowledge,
     learning,
@@ -30,6 +32,7 @@ from study_companion.api.routes import (
     observations,
     plan_edit,
     profile,
+    sources,
 )
 from study_companion.config import get_settings
 
@@ -88,9 +91,11 @@ def create_app() -> FastAPI:
 
     for module in (
         health,
+        agent_ops,
         demo_sessions,
         materials,
         imports,
+        interventions,
         datasets,
         jobs,
         evidence,
@@ -102,6 +107,7 @@ def create_app() -> FastAPI:
         model_settings,
         plan_edit,
         profile,
+        sources,
         chat,
         observations,
     ):

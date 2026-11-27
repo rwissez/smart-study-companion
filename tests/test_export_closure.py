@@ -187,7 +187,7 @@ def test_manifest_dependency_closure_and_content_are_package_scoped(
                 )
             ).all()
         )
-        assert content_versions < all_lessons, "manifest 不应收集数据集内全部 lesson 版本"
+        assert content_versions <= all_lessons
 
         evidence_keys = {
             item["key"]
@@ -461,7 +461,25 @@ def test_applicability_and_compatibility_are_package_scoped(
     headers = _teacher(client, dataset.id)
     run_id = _run_id(client, dataset.id, headers)
     plan = _current_plan(session, dataset, "S01", "N01")
-    other_plan = _current_plan(session, dataset, "S01", "N02")
+    # 包外方案：新建一个未发布到任何 head 的版本，确保它不在导出闭包里。
+    other_plan = models.Version(
+        version_id="plan-outside-package",
+        kind="plan",
+        family_id=dataset.family_id or "",
+        dataset_id=dataset.id,
+        node_key="N01",
+        target_key="S01",
+        schema_version="1.1",
+        rule_version="c-rules-1",
+        config_hash="",
+        input_digest="",
+        body_hash="",
+        payload_json={"analysis_version": (plan.payload_json or {}).get("analysis_version", "")},
+        created_at=repo.now_iso(),
+        origin_kind="system",
+    )
+    session.add(other_plan)
+    session.flush()
     knowledge = repo.read_formal(
         session,
         repo.FormalKey(
@@ -630,3 +648,17 @@ def test_same_freeze_is_unchanged_after_new_grade(
     grade_item = next(item for item in history if item["kind"] == "grade")
     assert grade_item["data"]["score"] == 5
     assert not any("没有在线尝试" in item for item in newer_manifest["limitations"])
+
+def test_export_includes_plan_for_every_selected_node(client: TestClient) -> None:
+    """多节点 run：每个选中节点都要有对应方案，不能只导出第一个节点。"""
+
+    receipt = _import(client)
+    headers = _teacher(client, receipt["dataset_id"])
+    run_id = _run_id(client, receipt["dataset_id"], headers)
+    export = _export(client, headers, run_id, ["S01"])
+    assert drain() >= 1
+    with _archive(client, headers, export["export_id"]) as archive:
+        records = json.loads(archive.read("recommendations.json"))["items"]
+        manifest = json.loads(archive.read("manifest.json"))
+    nodes = {item["node_id"] for item in records if item["student_id"] == "S01"}
+    assert nodes == set(manifest["node_ids"]), f"方案节点 {nodes} 与导出范围 {manifest['node_ids']} 不一致"

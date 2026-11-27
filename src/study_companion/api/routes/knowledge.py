@@ -7,7 +7,10 @@ P1 只提供**诚实**的读取骨架：没有构建过正式知识版本时返�
 
 from __future__ import annotations
 
-from fastapi import APIRouter, Query
+from typing import Annotated, Any, Literal
+
+from fastapi import APIRouter, Header, Query
+from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy import select
 
 from study_companion.api.deps import DbSession, Scope
@@ -15,8 +18,20 @@ from study_companion.api.envelope import success
 from study_companion.contracts import DomainError, DomainError as _DomainError  # noqa: F401
 from study_companion.db import models
 from study_companion.db import version_repository as repo
+from study_companion.knowledge import review_service
 
 router = APIRouter(tags=["knowledge"])
+
+
+class ReviewDecisionRequest(BaseModel):
+    """01 §9.2 的教师审核请求；``changes`` 只在 edit 时使用且按对象类型收紧。"""
+
+    model_config = ConfigDict(extra="forbid")
+
+    base_candidate_version: str = Field(min_length=1, max_length=128)
+    decision: Literal["approve", "reject", "edit"]
+    changes: dict[str, Any] | None = None
+    reason: str = Field(min_length=1, max_length=500)
 
 
 def _dataset_family(db: DbSession, dataset_id: str) -> str:
@@ -106,6 +121,62 @@ def list_knowledge_reviews(
             }
         )
     return success({"items": items, "total": len(rows), "page": page, "page_size": page_size})
+
+
+@router.post("/datasets/{dataset_id}/knowledge/reviews/{review_id}")
+def decide_knowledge_review(
+    dataset_id: str,
+    review_id: str,
+    payload: ReviewDecisionRequest,
+    db: DbSession,
+    scope: Scope,
+    idempotency_key: Annotated[
+        str | None, Header(alias="Idempotency-Key", max_length=128)
+    ] = None,
+) -> dict:
+    """教师对单个待审对象做 approve/reject/edit（01 §9.2、02 §9）。
+
+    * approve：生成新的不可变知识版本并经 CAS 切换正式指针；
+    * reject：只记录决定，候选留在历史，正式指针不动；
+    * edit：按对象白名单生成新候选并重新校验，不发布。
+    """
+
+    scope.require("review_knowledge")
+    scope.require_teacher()
+    if scope.dataset_id is not None:
+        scope.require_dataset(dataset_id)
+    dataset = db.get(models.Dataset, dataset_id)
+    if dataset is None:
+        raise DomainError("NOT_FOUND", "数据集不存在")
+    review = db.get(models.Review, review_id)
+    if review is None:
+        raise DomainError("NOT_FOUND", "审核对象不存在")
+
+    idempotency = review_service.idempotency_context(
+        scope,
+        review_service.ENDPOINT,
+        idempotency_key,
+        {
+            "dataset_id": dataset_id,
+            "review_id": review_id,
+            "base_candidate_version": payload.base_candidate_version,
+            "decision": payload.decision,
+            "changes": payload.changes,
+            "reason": payload.reason,
+        },
+    )
+    result = review_service.decide(
+        db,
+        dataset=dataset,
+        review=review,
+        decision=payload.decision,
+        changes=payload.changes,
+        reason=payload.reason,
+        actor=scope.session_id,
+        idempotency=idempotency,
+        base_candidate_version=payload.base_candidate_version,
+    )
+    return success(result)
 
 
 @router.get("/datasets/{dataset_id}/knowledge/quality")

@@ -1,4 +1,4 @@
-﻿"""正式成果导出：冻结、序列化、打包、回读校验与授权下载（06 §8—§9）。
+"""正式成果导出：冻结、序列化、打包、回读校验与授权下载（06 §8—§9）。
 
 关键约束：
 * 导出**只读冻结的正式版本集合**，不重算业务、不调用模型；
@@ -176,7 +176,7 @@ def _build_closure(
     dataset: models.Dataset,
     *,
     catalog_version: str,
-    plan_versions: dict[str, str],
+    plan_versions: dict[str, dict[str, str]],
     student_versions: dict[str, dict[str, str]],
     class_versions: dict[str, dict[str, str]],
     knowledge_version: str | None,
@@ -278,10 +278,11 @@ def _build_closure(
             row = db.get(models.Version, version_id)
             if row is not None:
                 mark(row, node_id=node, current=True)
-    for student_id, version_id in plan_versions.items():
-        row = db.get(models.Version, version_id)
-        if row is not None:
-            mark(row, student_id=student_id, node_id=row.node_key, current=True)
+    for student_id, node_map in plan_versions.items():
+        for node, version_id in node_map.items():
+            row = db.get(models.Version, version_id)
+            if row is not None:
+                mark(row, student_id=student_id, node_id=node, current=True)
     if knowledge_version:
         row = db.get(models.Version, knowledge_version)
         if row is not None:
@@ -352,7 +353,7 @@ def _build_closure(
             )
 
     # 适用性只取本包当前方案版本相关记录，不把其他学生的记录带进来。
-    current_plan_ids = sorted(set(plan_versions.values()))
+    current_plan_ids = sorted({version_id for node_map in plan_versions.values() for version_id in node_map.values()})
     applicability_ids: list[str] = []
     if current_plan_ids:
         for row in db.scalars(
@@ -525,7 +526,7 @@ def assess_export_scope(
                 continue
             class_versions.setdefault(class_id, {})[node] = version.version_id
 
-    plans: dict[str, models.Version] = {}
+    plans: dict[str, dict[str, models.Version]] = {}
     usables: set[str] = set()
     for student_id in students:
         for node in selected_nodes:
@@ -541,7 +542,7 @@ def assess_export_scope(
             )
             if version is None:
                 continue
-            plans[student_id] = version
+            plans.setdefault(student_id, {})[node] = version
             try:
                 bundle = RecommendationBundle.model_validate(version.payload_json or {})
             except Exception:
@@ -568,7 +569,6 @@ def assess_export_scope(
                         "导出会保留空活动与限制说明；如需可执行建议，请先补充可用材料",
                     )
                 )
-            break
     for student_id in students:
         if student_id not in plans:
             blocking.append(
@@ -639,7 +639,7 @@ def assess_export_scope(
                     )
                 )
             else:
-                case_node = plans[student_id].node_key or first_node
+                case_node = next(iter(plans[student_id].values())).node_key or first_node
                 if case_node and case_node not in student_versions.get(student_id, {}):
                     blocking.append(
                         _finding(
@@ -679,7 +679,10 @@ def assess_export_scope(
         db,
         dataset,
         catalog_version=run.catalog_version,
-        plan_versions={student_id: version.version_id for student_id, version in plans.items()},
+        plan_versions={
+            student_id: {node: version.version_id for node, version in node_map.items()}
+            for student_id, node_map in plans.items()
+        },
         student_versions=student_versions,
         class_versions=class_versions,
         knowledge_version=knowledge_version,
@@ -694,7 +697,10 @@ def assess_export_scope(
         "classes": classes,
         "student_versions": student_versions,
         "class_versions": class_versions,
-        "plan_versions": {student_id: version.version_id for student_id, version in plans.items()},
+        "plan_versions": {
+            student_id: {node: version.version_id for node, version in node_map.items()}
+            for student_id, node_map in plans.items()
+        },
         "knowledge_version": knowledge_version,
         "case_ids": case_ids,
         "case_selection": "auto" if auto_selected else "explicit",
@@ -888,12 +894,13 @@ def build_files(db: Session, export: models.Export) -> dict[str, bytes]:
                     "current": True,
                 }
     if not plan_entries:
-        for student_id, version_id in versions["plans"].items():
-            plan_entries[version_id] = {
-                "student_id": student_id,
-                "node_id": "",
-                "current": True,
-            }
+        for student_id, node_map in versions["plans"].items():
+            for node, version_id in node_map.items():
+                plan_entries[version_id] = {
+                    "student_id": student_id,
+                    "node_id": node,
+                    "current": True,
+                }
     if not content_ids:
         content_ids = sorted(
             db.scalars(
@@ -1374,7 +1381,10 @@ def build_files(db: Session, export: models.Export) -> dict[str, bytes]:
     input_items: list[dict[str, Any]] = []
     output_items: list[dict[str, Any]] = []
     for student_id in case_ids:
-        plan_version = versions["plans"].get(student_id, "")
+        plan_node_map = versions["plans"].get(student_id, {})
+        plan_version = next((plan_node_map.get(node) for node in node_ids if plan_node_map.get(node)), "")
+        if not plan_version and plan_node_map:
+            plan_version = next(iter(plan_node_map.values()))
         plan_payload = _load(db, plan_version)
         node = plan_payload.get("node_id") or node_ids[0]
         version_id = versions["student"].get(student_id, {}).get(node, "")
