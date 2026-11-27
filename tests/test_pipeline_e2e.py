@@ -64,7 +64,13 @@ def test_import_runs_pipeline_and_publishes_plans(client: TestClient, imported: 
     headers = {"Authorization": f"Bearer {_teacher_token(client, imported['dataset_id'])}"}
     job = client.get(f"/api/v1/jobs/{imported['job_id']}", headers=headers).json()["data"]
     assert job["status"] == "succeeded"
-    assert [step["status"] for step in job["steps"]] == ["succeeded", "succeeded", "succeeded"]
+    assert [step["step_key"] for step in job["steps"]] == [
+        "load",
+        "knowledge",
+        "analysis",
+        "plans",
+    ]
+    assert all(step["status"] == "succeeded" for step in job["steps"])
     assert job["result"]["published_plan_count"] >= 1
 
     profile = client.get(

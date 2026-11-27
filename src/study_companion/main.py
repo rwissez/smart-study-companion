@@ -22,9 +22,11 @@ from study_companion.api.routes import (
     jobs,
     knowledge,
     learning,
+    lesson,
     materials,
     model_settings,
     observations,
+    plan_edit,
     profile,
 )
 from study_companion.config import get_settings
@@ -92,7 +94,9 @@ def create_app() -> FastAPI:
         evidence,
         knowledge,
         learning,
+        lesson,
         model_settings,
+        plan_edit,
         profile,
         chat,
         observations,

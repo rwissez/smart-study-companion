@@ -23,6 +23,7 @@ from study_companion.contracts import (
     AnalysisInputRef,
     Catalog,
     DomainError,
+    EvidenceRef,
     PreparedDataset,
     RecommendationBundle,
     RecommendationConfig,
@@ -499,13 +500,61 @@ def handle_import_process(ctx: JobContext) -> dict[str, Any]:
     upsert_step(db, ctx.job, "load", label="读取快照与目录", status="succeeded")
     db.commit()
 
+    # A：先构建并发布正式知识体系，B/C 只读正式版本
+    upsert_step(db, ctx.job, "knowledge", label="构建课程知识体系", status="running")
+    db.commit()
+    from study_companion.knowledge.service import KnowledgeConfig, build_knowledge
+    from study_companion.model_service import ModelService
+
+    knowledge_version_id = repo.new_id("kn")
+    knowledge_result = build_knowledge(
+        catalog,
+        context=None,
+        config=KnowledgeConfig(),
+        dataset_id=dataset_id,
+        knowledge_version=knowledge_version_id,
+        model_configured=ModelService().configured,
+    )
+    knowledge_payload = knowledge_result.candidate_snapshot.model_dump(mode="json")
+    knowledge_payload["review_info"] = knowledge_result.review_info.model_dump(mode="json")
+    knowledge_key = repo.FormalKey(
+        family_id=family_id, dataset_id=dataset_id, kind="knowledge"
+    )
+    knowledge_head = repo.read_head(db, knowledge_key)
+    knowledge_version = repo.create_version(
+        db,
+        kind="knowledge",
+        key=knowledge_key,
+        payload=knowledge_payload,
+        rule_version=KnowledgeConfig().rule_version,
+        input_digest=repo.digest(knowledge_payload),
+        job_id=ctx.job.id,
+        version_id=knowledge_version_id,
+        origin_kind="system",
+    )
+    if knowledge_result.review_info.status == "validated":
+        repo.publish(
+            db,
+            key=knowledge_key,
+            version=knowledge_version,
+            path="system_auto",
+            basis="automatic_review",
+            job_id=ctx.job.id,
+            expected_version_id=knowledge_head.version_id if knowledge_head else None,
+            expected_generation=knowledge_head.generation if knowledge_head else 0,
+        )
+    upsert_step(db, ctx.job, "knowledge", label="构建课程知识体系", status="succeeded")
+    db.commit()
+
     context = RunContext(
         run_id=repo.new_id("run"),
         dataset_id=dataset_id,
         catalog_version=catalog_version,
         rule_version=RULE_VERSION,
         dataset_family_id=family_id,
-        knowledge_version=None,
+        knowledge_version=(
+            knowledge_version_id if knowledge_result.review_info.status == "validated" else None
+        ),
     )
     upsert_step(db, ctx.job, "analysis", label="生成学情分析", status="running")
     db.commit()
@@ -548,12 +597,33 @@ def handle_import_process(ctx: JobContext) -> dict[str, Any]:
             plan_bundle,
             family_id=family_id,
             analysis_version_id=analysis_version,
-            knowledge_version_id=None,
+            knowledge_version_id=(
+                knowledge_version_id if knowledge_result.review_info.status == "validated" else None
+            ),
             job_id=ctx.job.id,
             review=review,
             student_uid=student.student_uid if student else None,
             publish=review.status == "validated",
         )
+        if published["publication_status"] == "published" and student is not None:
+            lesson_payload = dict(knowledge_payload)
+            lesson_payload["knowledge_version"] = (
+                knowledge_version_id if knowledge_result.review_info.status == "validated" else None
+            )
+            with_lessons = attach_lessons(
+                db,
+                family_id=family_id,
+                dataset_id=dataset_id,
+                student_id=student_result.student_id,
+                node_id=student_result.node_id,
+                plan_version=published["plan_version"],
+                knowledge_payload=lesson_payload,
+                job_id=ctx.job.id,
+                student_uid=student.student_uid,
+            )
+            if with_lessons:
+                published["plan_version"] = with_lessons["plan_version"]
+                published["lessons"] = with_lessons["lessons"]
         plans.append(
             {
                 "student_id": student_result.student_id,
@@ -574,6 +644,249 @@ def handle_import_process(ctx: JobContext) -> dict[str, Any]:
         "plans": plans,
         "published_plan_count": sum(1 for item in plans if item.get("status") == "published"),
     }
+
+
+def attach_lessons(
+    db: Session,
+    *,
+    family_id: str,
+    dataset_id: str,
+    student_id: str,
+    node_id: str,
+    plan_version: str,
+    knowledge_payload: dict[str, Any] | None,
+    job_id: str | None,
+    student_uid: str | None,
+) -> dict[str, Any] | None:
+    """为方案中的任务组补充个性化微课堂，作为父方案的子修订发布。
+
+    微课堂正文由规则模板从**已核验知识依据**生成；没有知识依据时不生成，
+    并在方案限制中如实说明，不虚构内容。
+    """
+
+    from study_companion.contracts import Activity
+    from study_companion.recommendation import lesson as lesson_service
+
+    plan_row = db.get(models.Version, plan_version)
+    if plan_row is None or plan_row.payload_json is None:
+        return None
+    plan = RecommendationBundle.model_validate(plan_row.payload_json)
+    knowledge_payload = knowledge_payload or {}
+    points = {point["kp_id"]: point for point in knowledge_payload.get("points", [])}
+    annotations = knowledge_payload.get("annotations", [])
+    knowledge_version = None
+    if knowledge_payload.get("knowledge_version"):
+        knowledge_version = knowledge_payload["knowledge_version"]
+    if not points:
+        plan = plan.model_copy(
+            update={
+                "limitations": list(plan.limitations)
+                + ["没有可用知识依据，本轮未生成个性化微课堂"],
+            }
+        )
+
+    new_version_id = repo.new_id("plan")
+    lessons_created: list[dict[str, Any]] = []
+    recommendations = []
+    groups = []
+    for group in plan.task_groups:
+        rec = next((item for item in plan.recommendations if item.group_id == group.group_id), None)
+        if rec is None:
+            continue
+        kp_ids = list(rec.kp_ids)
+        if not kp_ids and knowledge_payload:
+            for annotation in annotations:
+                if annotation.get("source_id") in {
+                    activity.material_id for activity in rec.activities if activity.material_id
+                }:
+                    kp_ids.extend(annotation.get("target_ids", []))
+        kp_id = next((item for item in kp_ids if item in points), None)
+        activities = list(rec.activities)
+        if kp_id:
+            point = points[kp_id]
+            content_id = repo.new_id("lesson")
+            content_version = repo.new_id("lessonv")
+            evidence = []
+            if knowledge_version:
+                evidence = [
+                    {
+                        "kind": "knowledge_point",
+                        "id": kp_id,
+                        "knowledge_version": knowledge_version,
+                    }
+                ]
+            draft = lesson_service.build_rule_lesson(
+                title=point.get("name", "") or group.goal,
+                goal=group.goal or point.get("definition", ""),
+                kp_id=kp_id,
+                evidence_refs=[EvidenceRef(**item) for item in evidence],
+                teaching_points=[
+                    point.get("definition", ""),
+                    group.student_intro or group.expected_outcome or "",
+                ],
+                fallback_text=point.get("definition", ""),
+            )
+            issues = lesson_service.validate_lesson(draft)
+            review = lesson_service.review_info_for(draft, issues)
+            payload = lesson_service.lesson_payload(
+                draft,
+                review=review,
+                origin_plan_version=new_version_id,
+                content_id=content_id,
+                content_version=content_version,
+            )
+            lesson_key = repo.FormalKey(
+                family_id=family_id,
+                dataset_id=dataset_id,
+                kind="lesson",
+                target_key=content_id,
+            )
+            lesson_head = repo.read_head(db, lesson_key)
+            lesson_version = repo.create_version(
+                db,
+                kind="lesson",
+                key=lesson_key,
+                payload=payload,
+                rule_version=lesson_service.RULE_VERSION,
+                input_digest=review.draft_hash or "",
+                job_id=job_id,
+                version_id=content_version,
+                origin_kind="system",
+            )
+            if review.status == "validated":
+                repo.publish(
+                    db,
+                    key=lesson_key,
+                    version=lesson_version,
+                    path="system_auto",
+                    basis="automatic_review",
+                    job_id=job_id,
+                    expected_version_id=lesson_head.version_id if lesson_head else None,
+                    expected_generation=lesson_head.generation if lesson_head else 0,
+                )
+            activities.append(
+                Activity(
+                    order=len(activities) + 1,
+                    material_id=None,
+                    purpose="先读一遍这次的关键结构，再进入练习",
+                    activity_id=f"act-{new_version_id}-{group.order:02d}-lesson",
+                    group_id=group.group_id,
+                    activity_kind="micro_lesson",
+                    state="not_started",
+                    title=draft.title,
+                    expected_outcome=group.expected_outcome,
+                    estimate_minutes=draft.estimated_minutes,
+                    content_ref={
+                        "kind": "personalized",
+                        "content_id": content_id,
+                        "content_version": content_version,
+                    },
+                    content_version=content_version,
+                    knowledge_ids=[kp_id],
+                    source_label="规则模板生成，已审核",
+                )
+            )
+            lessons_created.append(
+                {
+                    "group_id": group.group_id,
+                    "content_id": content_id,
+                    "content_version": content_version,
+                    "review_status": review.status,
+                }
+            )
+        recommendations.append(rec.model_copy(update={"activities": activities, "kp_ids": kp_ids}))
+        groups.append(
+            group.model_copy(
+                update={
+                    "activity_ids": [item.activity_id for item in activities],
+                    "required_activity_ids": [
+                        item.activity_id for item in activities if item.activity_kind != "micro_lesson"
+                    ],
+                }
+            )
+        )
+
+    if not lessons_created:
+        return None
+
+    child = plan.model_copy(
+        update={
+            "recommendations": recommendations,
+            "task_groups": groups,
+            "plan_version": new_version_id,
+            "parent_plan_version": plan_version,
+            "publication_status": "published",
+            "publication_basis": "automatic_review",
+            "publish_path": "system_auto",
+            "created_at": repo.now_iso(),
+        }
+    )
+    key = repo.FormalKey(
+        family_id=family_id,
+        dataset_id=dataset_id,
+        kind="plan",
+        node_key=node_id,
+        target_key=student_id,
+    )
+    head = repo.read_head(db, key)
+    version = repo.create_version(
+        db,
+        kind="plan",
+        key=key,
+        payload=child.model_dump(mode="json"),
+        rule_version=C_RULE_VERSION,
+        input_digest=repo.digest(child.model_dump(mode="json")),
+        run_id=child.run_id,
+        job_id=job_id,
+        version_id=new_version_id,
+        origin_kind="system",
+    )
+    repo.register_edge(db, version, plan_row, role="parent_plan")
+    for edge in repo.dependencies(db, plan_row):
+        dep = db.get(models.Version, edge.dep_version_id)
+        if dep is not None:
+            repo.register_edge(db, version, dep, role=edge.role)
+    repo.publish(
+        db,
+        key=key,
+        version=version,
+        path="system_auto",
+        basis="automatic_review",
+        job_id=job_id,
+        expected_version_id=head.version_id if head else None,
+        expected_generation=head.generation if head else 0,
+    )
+    for group in groups:
+        rec = next((item for item in child.recommendations if item.group_id == group.group_id), None)
+        if rec is None:
+            continue
+        for position, activity in enumerate(rec.activities, start=1):
+            db.add(
+                models.PlanActivity(
+                    plan_version=new_version_id,
+                    activity_id=activity.activity_id,
+                    group_id=group.group_id,
+                    origin_plan_version=plan_version,
+                    kind=activity.activity_kind,
+                    catalog_version=child.catalog_version,
+                    material_id=activity.material_id,
+                    content_version=activity.content_version,
+                    position=position,
+                )
+            )
+            if student_uid and db.get(models.ActivityStateRow, activity.activity_id) is None:
+                db.add(
+                    models.ActivityStateRow(
+                        activity_id=activity.activity_id,
+                        origin_plan_version=new_version_id,
+                        student_uid=student_uid,
+                        state="not_started",
+                        generation=1,
+                        updated_at=repo.now_iso(),
+                    )
+                )
+    db.flush()
+    return {"plan_version": new_version_id, "lessons": lessons_created}
 
 
 def new_run_id() -> str:
