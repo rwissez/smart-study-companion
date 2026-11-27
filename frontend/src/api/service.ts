@@ -1,4 +1,4 @@
-import { ApiError, getAuthToken, newIdempotencyKey, request, requestBlob, requestEnvelope, API_BASE_URL, type ApiResult } from "./client";
+import { ApiError, getAuthToken, getOwnerKey, newIdempotencyKey, request, requestBlob, requestEnvelope, API_BASE_URL, OWNER_KEY_HEADER, type ApiResult } from "./client";
 import * as demo from "./demo/demoService";
 import type {
   AlertItem,
@@ -632,6 +632,8 @@ export async function* streamChat(
   const headers = new Headers({ "Content-Type": "application/json", Accept: "text/event-stream" });
   const token = getAuthToken();
   if (token) headers.set("Authorization", `Bearer ${token}`);
+  const owner = getOwnerKey();
+  if (owner) headers.set(OWNER_KEY_HEADER, owner);
   let response: Response;
   try {
     response = await fetch(`${API_BASE_URL}/chat/stream`, {
@@ -689,9 +691,14 @@ export async function* streamChat(
   }
 }
 
-export async function listConversations(): Promise<Page<ConversationSummary>> {
+/** 会话列表附带服务端派生的稳定 owner key，供浏览器持久化。 */
+export interface ConversationPage extends Page<ConversationSummary> {
+  owner_key?: string;
+}
+
+export async function listConversations(): Promise<ConversationPage> {
   if (isDemo) return { items: [], total: 0, page: 1, page_size: 20 };
-  return request<Page<ConversationSummary>>("/conversations?page=1&page_size=50");
+  return request<ConversationPage>("/conversations?page=1&page_size=50");
 }
 
 export async function getConversationMessages(conversationId: string): Promise<ChatMessageRecord[]> {

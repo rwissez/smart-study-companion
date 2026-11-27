@@ -164,7 +164,7 @@ function toStep(raw: Record<string, unknown>): ChatProgressStep | null {
  * 回答逐段出现；服务端不支持流式时降级为旧 POST /chat，不伪造进度。
  */
 export function ChatPanel({ role, context, onConfigure, initialConversationId }: Props) {
-  const { scopeKey } = useSession();
+  const { scopeKey, rememberOwnerKey } = useSession();
   const queryClient = useQueryClient();
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
@@ -205,10 +205,22 @@ export function ChatPanel({ role, context, onConfigure, initialConversationId }:
     else node.scrollTop = node.scrollHeight;
   };
 
-  const conversations = useQuery<{ items: ConversationSummary[] }>({
+  const conversations = useQuery<{
+    items: ConversationSummary[];
+    total: number;
+    page: number;
+    page_size: number;
+    owner_key?: string;
+  }>({
     queryKey: queryKeys.conversations(scopeKey),
     queryFn: listConversations,
   });
+
+  // 服务端按身份派生 owner key；拿到后写进会话存储，后续请求与开关标签页都用它。
+  useEffect(() => {
+    const ownerKey = conversations.data?.owner_key;
+    if (ownerKey) rememberOwnerKey(ownerKey);
+  }, [conversations.data?.owner_key, rememberOwnerKey]);
 
   const catalog = useQuery({
     queryKey: queryKeys.catalog(scopeKey, null),
@@ -239,12 +251,44 @@ export function ChatPanel({ role, context, onConfigure, initialConversationId }:
     [indicatorNames],
   );
 
+  // URL 里的 conversationId 是唯一入口：刷新、粘贴链接或从历史跳转都按它打开。
+  useEffect(() => {
+    if (!initialConversationId) return;
+    autoSelectedRef.current = true;
+    setSelectedId((previous) => (previous === initialConversationId ? previous : initialConversationId));
+  }, [initialConversationId]);
+
   useEffect(() => {
     if (!selectedId && conversations.data?.items.length && !autoSelectedRef.current) {
       autoSelectedRef.current = true;
       setSelectedId(conversations.data.items[0].conversation_id);
     }
   }, [conversations.data, selectedId]);
+
+  // 身份、角色或数据集变化后旧会话不再属于当前 owner：清掉选择、预览和 URL 参数。
+  const ownerIdentity = `${scopeKey.mode}|${scopeKey.epoch}|${scopeKey.datasetId ?? ""}|${role}`;
+  const ownerIdentityRef = useRef(ownerIdentity);
+  useEffect(() => {
+    if (ownerIdentityRef.current === ownerIdentity) return;
+    ownerIdentityRef.current = ownerIdentity;
+    autoSelectedRef.current = false;
+    setSelectedId(null);
+    setError(null);
+    setProposal(null);
+    setProposalError(null);
+    setDecisionResult(null);
+    setLiveText("");
+    setLiveSteps([]);
+    setLiveMode(null);
+    setPendingUser(null);
+    setFinishedMessageId(null);
+    const next = new URLSearchParams(searchParams);
+    if (next.has("conversationId")) {
+      next.delete("conversationId");
+      setSearchParams(next, { replace: true });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [ownerIdentity]);
 
   const messages = useQuery<ChatMessageRecord[]>({
     queryKey: queryKeys.conversationMessages(scopeKey, selectedId ?? ""),
@@ -272,6 +316,18 @@ export function ChatPanel({ role, context, onConfigure, initialConversationId }:
     setSearchParams(next, { replace: true });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedId]);
+
+  // URL 里带了不属于当前 owner 的会话：服务端按 NOT_FOUND 拒绝，这里清掉参数，
+  // 避免把“看不见的旧会话”留在地址栏里继续请求。
+  useEffect(() => {
+    if (!selectedId || !messages.isError) return;
+    if (errorCode(messages.error) !== "NOT_FOUND") return;
+    setSelectedId(null);
+    const next = new URLSearchParams(searchParams);
+    next.delete("conversationId");
+    setSearchParams(next, { replace: true });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [messages.isError, messages.error, selectedId]);
 
   // 新回答已进入服务端历史后再撤掉本地流式预览，避免闪空或重复。
   useEffect(() => {

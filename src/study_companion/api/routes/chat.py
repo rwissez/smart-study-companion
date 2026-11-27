@@ -6,14 +6,16 @@ fails with ``MODEL_NOT_CONFIGURED`` (503) rather than returning invented text.
 
 from __future__ import annotations
 
+import hashlib
+import hmac
 import json
 import logging
 import queue
 import threading
 import time
-from typing import Any
+from typing import Annotated, Any
 
-from fastapi import APIRouter
+from fastapi import APIRouter, Depends, Request
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
@@ -43,6 +45,81 @@ from study_companion.tools.b_analysis import ServerContext
 
 router = APIRouter(tags=["chat"])
 logger = logging.getLogger(__name__)
+
+# --------------------------------------------------------------------------- #
+# 稳定身份键（01 §9.4）
+#
+# 换标签页会拿到新的 demo session，因此会话归属不能再绑定单个 session_id。
+# 服务端按“角色 + 数据集 + 本人”派生一个稳定键；正式环境接入登录后改用登录
+# 用户 ID。浏览器只会拿到服务端算出的值并原样回传，改成别的值会被拒绝，所以
+# 客户端无法用身份键跳到别人的历史。
+# --------------------------------------------------------------------------- #
+
+OWNER_KEY_HEADER = "X-Owner-Key"
+_OWNER_KEY_NAMESPACE = b"zhanzhi.owner-key.v1"
+_OWNER_KEY_SEPARATOR = "|"
+
+
+def derive_owner_key(scope) -> str:
+    """按会话身份派生稳定 owner key。
+
+    本机 demo 用角色、数据集与本人三者隔离；``SessionScope`` 一旦提供
+    ``user_id``（正式登录），同一函数自动改用登录用户 ID，不再依赖 demo 身份。
+    """
+
+    login_user_id = getattr(scope, "user_id", None)
+    if login_user_id:
+        material = f"user:{login_user_id}"
+    else:
+        material = _OWNER_KEY_SEPARATOR.join(
+            ("demo", scope.role, scope.dataset_id or "", scope.student_id or "")
+        )
+    digest = hmac.new(
+        _OWNER_KEY_NAMESPACE, material.encode("utf-8"), hashlib.sha256
+    ).hexdigest()
+    return f"ok1_{digest}"
+
+
+def legacy_owner_scope_key(scope) -> str:
+    """旧会话写入的 ``role:dataset:student`` 归属键，用于兼容既有历史。"""
+
+    return f"{scope.role}:{scope.dataset_id or ''}:{scope.student_id or ''}"
+
+
+def conversation_owned_by(conversation, scope, owner_key: str) -> bool:
+    """会话是否属于当前身份：新会话看 owner key，旧会话看原 demo session。
+
+    旧会话再叠加角色与数据集比对，避免归属字符串在极端标识下产生歧义。
+    """
+
+    if conversation.scope_key == owner_key:
+        return True
+    if conversation.owner_ref == scope.session_id:
+        return True
+    return (
+        conversation.scope_key == legacy_owner_scope_key(scope)
+        and conversation.role == scope.role
+        and conversation.dataset_id == scope.dataset_id
+    )
+
+
+def resolve_owner_key(request: Request, scope: Scope) -> str:
+    """只接受与会话身份一致的 owner key；缺省时按身份派生（兼容旧客户端）。
+
+    刻意从 ``Request`` 读取而不是声明 Header 参数：身份键是内部约定，不进入
+    公开 OpenAPI 契约，避免为了修会话归属去改 contracts/。
+    """
+
+    expected = derive_owner_key(scope)
+    supplied = (request.headers.get(OWNER_KEY_HEADER) or "").strip()
+    if not supplied:
+        return expected
+    if not hmac.compare_digest(supplied, expected):
+        raise DomainError("FORBIDDEN", "身份键与会话身份不一致")
+    return expected
+
+
+OwnerKey = Annotated[str, Depends(resolve_owner_key)]
 
 
 class ChatMessage(BaseModel):
@@ -478,6 +555,7 @@ def _execute_multi_step(
     settings,
     target,
     *,
+    owner_key: str,
     on_event=None,
 ) -> dict[str, Any]:
     """执行 2—6 步计划；每步独立装配权限与工具，依赖结果只向前传。"""
@@ -640,25 +718,37 @@ def _execute_multi_step(
         scope,
         payload,
         body,
+        owner_key=owner_key,
         status=status,
         trace_source=traces,
     )
 
 
-def _persist_turn(db, scope, payload: "ChatRequest", body: dict[str, Any], *, status: str = "completed", trace_source: list | None = None) -> dict[str, Any]:
+def _persist_turn(
+    db,
+    scope,
+    payload: "ChatRequest",
+    body: dict[str, Any],
+    *,
+    owner_key: str,
+    status: str = "completed",
+    trace_source: list | None = None,
+) -> dict[str, Any]:
     """把本轮对话写入持久化会话，并补齐新契约字段。
 
     旧客户端拿到同样的 ``text``；新客户端可用 ``conversation_id`` 继续多轮。
-    会话不写业务事实，长期事实仍从正式仓储读取。
+    会话不写业务事实，长期事实仍从正式仓储读取。归属写稳定 owner key，
+    ``owner_ref`` 保留创建时的 demo session，供既有确认入口继续校验。
     """
 
     from study_companion.jobs.service import new_id, now_iso
 
-    scope_key = f"{scope.role}:{scope.dataset_id or ''}:{scope.student_id or ''}"
     conversation_id = payload.conversation_id
     if conversation_id:
         conversation = db.get(models.Conversation, conversation_id)
-        if conversation is None or conversation.owner_ref != scope.session_id:
+        if conversation is None or not conversation_owned_by(
+            conversation, scope, owner_key
+        ):
             raise DomainError("NOT_FOUND", "会话不存在或不属于当前身份")
     else:
         title_text = payload.message or (
@@ -667,7 +757,7 @@ def _persist_turn(db, scope, payload: "ChatRequest", body: dict[str, Any], *, st
         conversation = models.Conversation(
             conversation_id=new_id("conv"),
             owner_ref=scope.session_id,
-            scope_key=scope_key,
+            scope_key=owner_key,
             dataset_id=scope.dataset_id,
             role=scope.role,
             title=title_text[:40] or "新的对话",
@@ -1048,7 +1138,13 @@ def _resolve_binding(db, scope, payload: "ChatRequest") -> "ChatRequest":
     return payload.model_copy(update=update) if update else payload
 
 @router.post("/chat")
-def post_chat(payload: ChatRequest, db: DbSession, scope: Scope, settings: AppSettings) -> dict[str, Any]:
+def post_chat(
+    payload: ChatRequest,
+    db: DbSession,
+    scope: Scope,
+    settings: AppSettings,
+    owner_key: OwnerKey,
+) -> dict[str, Any]:
     """兼容入口：一次返回完整回答。
 
     前端新聊天页优先使用 ``POST /chat/stream``；这里保留同样的鉴权、绑定、
@@ -1057,7 +1153,7 @@ def post_chat(payload: ChatRequest, db: DbSession, scope: Scope, settings: AppSe
 
     scope.require("chat_own" if scope.role == "student" else "chat_teacher")
     payload = _resolve_binding(db, scope, payload)
-    body = _execute_chat(db, scope, payload, settings)
+    body = _execute_chat(db, scope, payload, settings, owner_key=owner_key)
     # 依赖清理阶段的提交发生在响应发出之后；历史列表可能紧接着被刷新，必须先落库。
     db.commit()
     return success(body)
@@ -1141,7 +1237,13 @@ def _step_event(event: dict[str, Any]) -> dict[str, Any] | None:
 
 
 @router.post("/chat/stream")
-def post_chat_stream(payload: ChatRequest, db: DbSession, scope: Scope, settings: AppSettings):
+def post_chat_stream(
+    payload: ChatRequest,
+    db: DbSession,
+    scope: Scope,
+    settings: AppSettings,
+    owner_key: OwnerKey,
+):
     """SSE 流式对话：真实工具进度 + 逐段回答。
 
     真实 provider 支持原生流时逐字转发；不支持时按最终文本分块推送，并在每个
@@ -1192,6 +1294,7 @@ def post_chat_stream(payload: ChatRequest, db: DbSession, scope: Scope, settings
                     scope,
                     payload,
                     settings,
+                    owner_key=owner_key,
                     on_event=on_loop_event,
                     on_delta=emit_delta,
                 )
@@ -1259,6 +1362,7 @@ def _execute_chat(
     payload: "ChatRequest",
     settings: AppSettings,
     *,
+    owner_key: str,
     on_event=None,
     on_delta=None,
 ) -> dict[str, Any]:
@@ -1284,7 +1388,9 @@ def _execute_chat(
         if fallback is not None:
             if on_event is not None:
                 on_event({"type": "tool", "tool_name": "rule_summary", "label": "正式学情规则摘要", "status": "succeeded", "evidence_count": len(fallback.get("evidence_refs") or [])})
-            return _persist_turn(db, scope, payload, fallback, status="partial")
+            return _persist_turn(
+                db, scope, payload, fallback, owner_key=owner_key, status="partial"
+            )
         if on_event is not None:
             on_event({"type": "tool", "tool_name": "rule_summary", "label": "正式学情规则摘要", "status": "failed", "message": "当前上下文不足以生成规则摘要"})
         turn = provider.generate([message.model_dump() for message in payload.messages or []])
@@ -1293,6 +1399,7 @@ def _execute_chat(
             scope,
             payload,
             {"text": turn.text or "", "tool_calls": []},
+            owner_key=owner_key,
             status="failed",
         )
 
@@ -1344,6 +1451,7 @@ def _execute_chat(
                 "segments": [{"kind": "limitation", "text": text, "evidence_refs": []}],
                 "warnings": [{"code": "FORBIDDEN", "message": "学生请求只读"}],
             },
+            owner_key=owner_key,
             status="out_of_scope",
         )
     if plan.status == "unclear":
@@ -1362,6 +1470,7 @@ def _execute_chat(
                 "route_source": plan.source,
                 "segments": [{"kind": "limitation", "text": text, "evidence_refs": []}],
             },
+            owner_key=owner_key,
             status="completed",
         )
     if plan.is_multi_step:
@@ -1374,7 +1483,15 @@ def _execute_chat(
                 "message": "先读取前序结果，再按依赖执行后续步骤",
             })
         return _execute_multi_step(
-            db, scope, payload, plan, provider, settings, target, on_event=on_event,
+            db,
+            scope,
+            payload,
+            plan,
+            provider,
+            settings,
+            target,
+            owner_key=owner_key,
+            on_event=on_event,
         )
     task = plan.steps[0].task
     if scope.role not in task.roles:
@@ -1405,6 +1522,7 @@ def _execute_chat(
                 "task_type": task.task_type,
                 "route_source": plan.source,
             },
+            owner_key=owner_key,
             status="out_of_scope",
         )
 
@@ -1499,6 +1617,7 @@ def _execute_chat(
         scope,
         payload,
         body,
+        owner_key=owner_key,
         status=status,
         trace_source=result.tool_trace,
     )

@@ -54,7 +54,11 @@ export class NetworkError extends Error {
 }
 
 let authToken: string | null = null;
+let ownerKey: string | null = null;
 let unauthorizedHandler: (() => void) | null = null;
+
+/** 稳定身份键的请求头：服务端会与会话身份比对，伪造别的键会被拒绝。 */
+export const OWNER_KEY_HEADER = "X-Owner-Key";
 
 /** token 只保存在内存和本标签页 sessionStorage；刷新页面由 SessionProvider 恢复同一会话。 */
 export function setAuthToken(token: string | null) {
@@ -63,6 +67,18 @@ export function setAuthToken(token: string | null) {
 
 export function getAuthToken(): string | null {
   return authToken;
+}
+
+/**
+ * 会话所有者键：跨标签页稳定，由服务端按身份派生、浏览器持久化。
+ * 只在会话身份有效时设置；切换身份时由 SessionProvider 清空。
+ */
+export function setOwnerKey(key: string | null) {
+  ownerKey = key;
+}
+
+export function getOwnerKey(): string | null {
+  return ownerKey;
 }
 
 /** 401 统一回到身份页并清缓存；由会话 Provider 注册。 */
@@ -102,6 +118,7 @@ export async function requestEnvelope<T>(path: string, options: RequestOptions =
   }
   if (idempotencyKey) headers.set("Idempotency-Key", idempotencyKey);
   if (authToken) headers.set("Authorization", `Bearer ${authToken}`);
+  if (ownerKey) headers.set(OWNER_KEY_HEADER, ownerKey);
 
   let response: Response;
   try {
