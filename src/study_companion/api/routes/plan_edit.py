@@ -1,11 +1,17 @@
 """教师学习方案编辑：预览 → 确认 → 发布（C-30 teacher_direct），修订历史与恢复。
 
 旧 ``publish=true`` 兼容字段只会被当作"请求完整审核"，绝不映射成教师直发。
+
+``recommendation-revisions/optimize`` 是教师意图优化的只读入口：复用
+``recommendation.optimize_model`` 生成建议，不写库、不发布；教师确认后仍走
+这里的 preview → publish。
 """
 
 from __future__ import annotations
 
-from fastapi import APIRouter, Query
+from typing import Annotated
+
+from fastapi import APIRouter, Depends, Query
 from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy import select
 
@@ -13,13 +19,16 @@ from study_companion.api.deps import DbSession, Scope
 from study_companion.api.envelope import success
 from study_companion.contracts import (
     DomainError,
+    RecommendationBundle,
     RevisionChanges,
+    RevisionIntent,
     RevisionRequest,
     RevisionSummary,
     TeacherRevisionPreviewRequest,
 )
 from study_companion.db import models
-from study_companion.recommendation import publication
+from study_companion.model_service import ModelService
+from study_companion.recommendation import optimize_service, publication
 
 router = APIRouter(tags=["plan-edit"])
 
@@ -28,6 +37,22 @@ class PublishRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     warning_digest: str = Field(min_length=1, max_length=128)
+
+
+class OptimizeIntentRequest(BaseModel):
+    """教师填写的修改意图；服务端据此生成只读建议。"""
+
+    model_config = ConfigDict(extra="forbid")
+
+    node_id: str = Field(min_length=1, max_length=64)
+    base_plan_version: str | None = Field(default=None, max_length=128)
+    intent: str = Field(min_length=1, max_length=500)
+
+
+def get_optimize_model_service() -> ModelService:
+    """按本机模型设置构造服务；测试可覆盖这个依赖注入假服务。"""
+
+    return ModelService()
 
 
 class UndoRequest(BaseModel):
@@ -69,6 +94,25 @@ def _dataset_for_student(db: DbSession, scope: Scope, dataset_id: str, student_i
     return dataset
 
 
+def _activity_states(db: DbSession, base_plan_version: str) -> dict[str, str]:
+    """库里真实的活动状态：覆盖到方案上，并冻结已完成/进行中的活动。"""
+
+    rows = db.scalars(
+        select(models.ActivityStateRow).where(
+            models.ActivityStateRow.origin_plan_version == base_plan_version
+        )
+    ).all()
+    return {row.activity_id: row.state for row in rows}
+
+
+def _node_available_ids(db: DbSession, dataset_id: str, node_id: str) -> list[str] | None:
+    node = db.get(models.Node, (dataset_id, node_id))
+    if node is None:
+        return None
+    available = (node.payload_json or {}).get("available_question_ids")
+    return list(available) if isinstance(available, list) and available else None
+
+
 @router.post("/runs/{run_id}/students/{student_id}/recommendation-revisions/preview")
 def preview_revision(
     run_id: str,
@@ -103,6 +147,58 @@ def preview_revision(
             "warnings": [item.model_dump(mode="json") for item in preview.warnings],
             "expires_at": preview.expires_at,
         }
+    )
+
+
+@router.post("/runs/{run_id}/students/{student_id}/recommendation-revisions/optimize")
+def optimize_revision(
+    run_id: str,
+    student_id: str,
+    payload: OptimizeIntentRequest,
+    db: DbSession,
+    scope: Scope,
+    service: Annotated[ModelService, Depends(get_optimize_model_service)],
+) -> dict:
+    """按教师意图生成只读优化建议；不写库、不发布，候选仍走 preview → publish。
+
+    输入：教师意图 + 当前正式方案（服务端读取），候选活动池由当前目录版本的
+    正式题目装配。程序校验非法活动 id、来源和已完成/进行中活动，任何一条不合法
+    就整份拒绝；模型不可用返回 unavailable，保留当前方案。
+    """
+
+    scope.require("edit_recommendations")
+    scope.require_teacher()
+    run = db.get(models.AnalysisRun, run_id)
+    if run is None:
+        raise DomainError("NOT_FOUND", "分析运行不存在")
+    dataset = _dataset_for_student(db, scope, run.dataset_id, student_id)
+    version = _plan_row(db, run_id, student_id, payload.node_id)
+    if payload.base_plan_version and payload.base_plan_version != version.version_id:
+        raise DomainError("REVISION_CONFLICT", "正式方案已更新，请刷新后再按意图优化")
+
+    bundle = RecommendationBundle.model_validate(version.payload_json or {})
+    from study_companion.library.datasets import load_catalog
+
+    catalog = load_catalog(db, bundle.catalog_version, dataset.id)
+    available_ids = _node_available_ids(db, dataset.id, payload.node_id)
+    candidates = optimize_service.build_candidates(
+        catalog, bundle, available_ids=available_ids
+    )
+    outcome = optimize_service.optimize_teacher_plan(
+        service=service,
+        bundle=bundle,
+        intent=RevisionIntent(goal=payload.intent, reason=payload.intent),
+        candidates=candidates,
+        known_states=_activity_states(db, version.version_id),
+    )
+    return success(
+        optimize_service.build_optimize_view(
+            outcome,
+            bundle,
+            candidates,
+            base_plan_version=version.version_id,
+            pool_note=optimize_service.candidate_pool_note(available_ids=available_ids),
+        )
     )
 
 

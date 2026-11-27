@@ -5,6 +5,7 @@ import {
   getPlan,
   listLearningEvents,
   listRevisions,
+  optimizePlanRevision,
   previewRevision,
   publishRevision,
   searchMaterials,
@@ -13,6 +14,9 @@ import type {
   ActivityState,
   MaterialView,
   PlanActivity,
+  PlanOptimizeChange,
+  PlanOptimizeResult,
+  PlanOptimizeStatus,
   PlanView,
   RevisionChanges,
   RevisionPreview,
@@ -45,6 +49,26 @@ function severityLabel(severity: string): string {
   return severity === "error" ? "硬门" : severity === "warning" ? "教学警告" : "提示";
 }
 
+const OPTIMIZE_STATUS_LABEL: Record<PlanOptimizeStatus, string> = {
+  proposal: "已生成候选建议（只读，不发布）",
+  unsatisfiable: "现有候选无法满足这条意图",
+  rejected: "模型建议未通过程序校验，已整份拒绝",
+  unavailable: "模型不可用，保留当前方案",
+};
+
+const OPTIMIZE_OP_LABEL: Record<PlanOptimizeChange["op"], string> = {
+  add: "增加",
+  remove: "移除",
+  replace: "替换",
+  reorder: "调序",
+};
+
+function optimizeSourceLabel(source: string | null): string {
+  if (source === "current_plan") return "当前方案";
+  if (source === "catalog") return "正式目录候选";
+  return "未标注来源";
+}
+
 /** 教师学习方案编辑：改文字 / 调活动，检查并发布走 preview → 确认 → publish。 */
 export function PlanEditor({ open, studentId, nodeId, onClose, onPublished }: Props) {
   const { scopeKey } = useSession();
@@ -66,6 +90,10 @@ export function PlanEditor({ open, studentId, nodeId, onClose, onPublished }: Pr
   const [confirmClose, setConfirmClose] = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);
   const [searchText, setSearchText] = useState("");
+  const [optimizeIntent, setOptimizeIntent] = useState("");
+  const [optimizeResult, setOptimizeResult] = useState<PlanOptimizeResult | null>(null);
+  const [optimizeBusy, setOptimizeBusy] = useState(false);
+  const [optimizeError, setOptimizeError] = useState<string | null>(null);
 
   const plan = useQuery<PlanView>({
     queryKey: queryKeys.plan(scopeKey, studentId, nodeId, null),
@@ -113,6 +141,10 @@ export function PlanEditor({ open, studentId, nodeId, onClose, onPublished }: Pr
     setPreview(null);
     setAckWarnings(false);
     setError(null);
+    // 上一份方案的优化建议不能带到新版本上。
+    setOptimizeIntent("");
+    setOptimizeResult(null);
+    setOptimizeError(null);
   };
 
   useEffect(() => {
@@ -247,6 +279,53 @@ export function PlanEditor({ open, studentId, nodeId, onClose, onPublished }: Pr
     }
   };
 
+  const requestOptimize = async () => {
+    if (!plan.data) return;
+    const intent = optimizeIntent.trim();
+    if (!intent) {
+      setOptimizeError("请先写下想怎么改，例如：减轻书写负担，把重复练习换成一道独立检查题。");
+      return;
+    }
+    setOptimizeBusy(true);
+    setOptimizeError(null);
+    setNotice(null);
+    try {
+      const result = await optimizePlanRevision(plan.data.plan.run_id, studentId, {
+        nodeId,
+        basePlanVersion: plan.data.plan_version,
+        intent,
+      });
+      setOptimizeResult(result);
+    } catch (reason) {
+      const code = errorCode(reason);
+      if (code === "REVISION_CONFLICT" || code === "CONFLICT") {
+        setNotice("方案已更新，已为你刷新；请重新填写意图再生成建议。");
+        setOptimizeResult(null);
+        await queryClient.invalidateQueries({ queryKey: queryKeys.plan(scopeKey, studentId, nodeId, null) });
+        await plan.refetch();
+      } else {
+        setOptimizeError(toErrorMessage(reason));
+      }
+    } finally {
+      setOptimizeBusy(false);
+    }
+  };
+
+  /** 只有在建议能由现有活动直接表达时才可带入草稿；带入后仍要重新检查草稿。 */
+  const applyOptimizeDraft = () => {
+    const suggested = optimizeResult?.revision_changes?.activities;
+    if (!suggested || suggested.length === 0) return;
+    markActivityDirty(
+      suggested.map((activity, index) => ({
+        ...activity,
+        order: index + 1,
+        hint_levels: [...activity.hint_levels],
+      })),
+    );
+    if (!revisionReason.trim()) setRevisionReason(optimizeIntent.trim().slice(0, 500));
+    setNotice("已把可套用的调整带入草稿；请先做“检查草稿（第一步）”，通过后再确认发布。");
+  };
+
   const doPublish = async () => {
     if (!plan.data || !preview) return;
     if (preview.warnings.some((warning) => warning.severity === "warning") && !ackWarnings) {
@@ -371,6 +450,92 @@ export function PlanEditor({ open, studentId, nodeId, onClose, onPublished }: Pr
             </p>
             <div className="editorGrid">
             <div className="stack">
+              <div className="sectionHead">
+                <h3 className="sectionTitle">按意图优化</h3>
+              </div>
+              <p className="small muted">
+                写下想怎么改，系统只在当前方案与正式候选里给只读建议；不会直接改方案，也不会发布。
+              </p>
+              <label className="field">
+                <span className="fieldLabel">教师修改意图</span>
+                <textarea
+                  className="textarea"
+                  style={{ minHeight: 72 }}
+                  value={optimizeIntent}
+                  maxLength={500}
+                  placeholder="例如：减轻书写负担，把重复练习换成一道独立检查题"
+                  onChange={(event) => { setOptimizeIntent(event.target.value); setOptimizeError(null); }}
+                />
+              </label>
+              <button
+                type="button"
+                className="btn btnSm"
+                onClick={() => void requestOptimize()}
+                disabled={optimizeBusy || busy || !optimizeIntent.trim()}
+              >
+                {optimizeBusy ? "生成中…" : "生成优化建议"}
+              </button>
+              {optimizeError ? <p className="small fieldError" role="alert">{optimizeError}</p> : null}
+              {optimizeResult ? (
+                <div className="statePanel" role="status">
+                  <span className="stateTitle">{OPTIMIZE_STATUS_LABEL[optimizeResult.status]}</span>
+                  {optimizeResult.reason ? <span className="small">{optimizeResult.reason}</span> : null}
+                  <span className="xs muted">
+                    候选池 {optimizeResult.candidate_count} 道题 · {optimizeResult.pool_note} ·{" "}
+                    {optimizeResult.model_used ? "本次由模型生成" : "本次未使用模型"}
+                  </span>
+                  {optimizeResult.changes.length ? (
+                    <ul>
+                      {optimizeResult.changes.map((change, index) => {
+                        const title = change.activity_title ?? change.activity_key ?? "未命名活动";
+                        const from = change.from_activity_title ?? change.from_activity_key;
+                        return (
+                          <li key={`${change.op}-${index}`} className="small">
+                            <strong>{OPTIMIZE_OP_LABEL[change.op]}</strong>
+                            {` · ${change.group_key}`}
+                            {change.group_goal ? `（${change.group_goal}）` : ""}
+                            {change.op === "replace" && from ? `：由「${from}」换成「${title}」` : `：${title}`}
+                            {change.position ? `，目标位置第 ${change.position} 位` : ""}
+                            {` · 来源：${optimizeSourceLabel(change.activity_source)}`}
+                            <div className="xs muted">{change.reason}</div>
+                            {change.apply_blocker ? <div className="xs muted">{change.apply_blocker}</div> : null}
+                          </li>
+                        );
+                      })}
+                    </ul>
+                  ) : null}
+                  {optimizeResult.limitations.length ? (
+                    <ul>
+                      {optimizeResult.limitations.map((item, index) => (
+                        <li key={`limitation-${index}`} className="xs muted">{item}</li>
+                      ))}
+                    </ul>
+                  ) : null}
+                  {optimizeResult.blocked_reasons.length ? (
+                    <ul>
+                      {optimizeResult.blocked_reasons.map((item, index) => (
+                        <li key={`blocked-${index}`} className="xs muted">{item}</li>
+                      ))}
+                    </ul>
+                  ) : null}
+                  {optimizeResult.issues.length ? (
+                    <ul>
+                      {optimizeResult.issues.map((issue, index) => (
+                        <li key={`issue-${index}`} className="xs">
+                          <strong>{issue.severity === "error" ? "硬门" : "问题"}</strong>：{issue.message}
+                        </li>
+                      ))}
+                    </ul>
+                  ) : null}
+                  <span className="xs muted">{optimizeResult.preview_note}</span>
+                  {optimizeResult.revision_changes?.activities?.length ? (
+                    <button type="button" className="btn btnSm" onClick={applyOptimizeDraft} disabled={busy}>
+                      把可套用的调整带入草稿（仍需检查）
+                    </button>
+                  ) : null}
+                </div>
+              ) : null}
+
               <h3 className="paneTitle">方案文字</h3>
               <label className="field">
                 <span className="fieldLabel">学习目标</span>

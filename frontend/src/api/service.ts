@@ -37,6 +37,7 @@ import type {
   MicroLessonView,
   ModelSettings,
   Page,
+  PlanOptimizeResult,
   PlanReviewDecisionResult,
   PlanReviewItem,
   PlanView,
@@ -770,6 +771,26 @@ export async function previewRevision(
         base_plan_version: payload.basePlanVersion,
         reason: payload.reason,
         changes: payload.changes,
+      }),
+    },
+  );
+}
+
+/** 按教师意图生成只读优化建议；不会改方案，也不会发布。 */
+export async function optimizePlanRevision(
+  runId: string,
+  studentId: string,
+  payload: { nodeId: string; basePlanVersion: string; intent: string },
+): Promise<PlanOptimizeResult> {
+  if (isDemo) throw new Error("演示模式不会调用真实模型优化。");
+  return request<PlanOptimizeResult>(
+    `/runs/${segment(runId)}/students/${segment(studentId)}/recommendation-revisions/optimize`,
+    {
+      method: "POST",
+      body: JSON.stringify({
+        node_id: payload.nodeId,
+        base_plan_version: payload.basePlanVersion,
+        intent: payload.intent,
       }),
     },
   );

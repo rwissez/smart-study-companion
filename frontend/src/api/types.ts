@@ -949,6 +949,41 @@ export interface RevisionPreview {
   expires_at: string;
 }
 
+/** 教师意图优化：只读建议；status=unavailable 表示模型不可用，方案未改。 */
+export type PlanOptimizeStatus = "proposal" | "unsatisfiable" | "rejected" | "unavailable";
+
+export interface PlanOptimizeChange {
+  op: "add" | "remove" | "replace" | "reorder";
+  group_key: string;
+  group_goal: string;
+  activity_key: string | null;
+  activity_title: string | null;
+  activity_source: string | null;
+  from_activity_key: string | null;
+  from_activity_title: string | null;
+  position: number | null;
+  reason: string;
+  applicable: boolean;
+  apply_blocker: string | null;
+}
+
+export interface PlanOptimizeResult {
+  status: PlanOptimizeStatus;
+  read_only: boolean;
+  model_used: boolean;
+  reason: string;
+  limitations: string[];
+  issues: RevisionWarning[];
+  base_plan_version: string;
+  candidate_count: number;
+  pool_note: string;
+  changes: PlanOptimizeChange[];
+  blocked_reasons: string[];
+  /** 只有移除/调序第一个任务组时才给出，可直接带入草稿后走 preview。 */
+  revision_changes: RevisionChanges | null;
+  preview_note: string;
+}
+
 export interface RevisionSummary {
   revision_id: string;
   revision: number;
