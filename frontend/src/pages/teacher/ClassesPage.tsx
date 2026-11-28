@@ -303,7 +303,12 @@ export function ClassesPage() {
               <IndicatorRadar metrics={result.metrics} names={names} order={order} />
               <details style={{ marginTop: 16 }}>
                 <summary className="small muted" style={{ cursor: "pointer" }}>全部指标明细</summary>
-                <MetricList metrics={result.metrics} names={names} onEvidence={onEvidence} />
+                <MetricList
+                  metrics={result.metrics}
+                  names={names}
+                  onEvidence={onEvidence}
+                  evidenceContext={{ class_id: activeClassId, student_id: null }}
+                />
               </details>
             </div>
             <div className="stackLg">
@@ -312,7 +317,13 @@ export function ClassesPage() {
                   <h2 className="sectionTitle">共性问题</h2>
                   <span className="sectionHint">{result.common_findings.length} 条</span>
                 </div>
-                <FindingsList findings={result.common_findings} names={names} onEvidence={onEvidence} emptyText="服务端没有返回共性问题；这不等于没有问题。" />
+                <FindingsList
+                  findings={result.common_findings}
+                  names={names}
+                  onEvidence={onEvidence}
+                  emptyText="服务端没有返回共性问题；这不等于没有问题。"
+                  evidenceContext={{ class_id: activeClassId, student_id: null }}
+                />
               </div>
               <div>
                 <div className="sectionHead">

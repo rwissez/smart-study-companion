@@ -1,15 +1,19 @@
 import type { EvidenceRef, Metric } from "../../api/types";
 import { formatFraction, formatPercent } from "../../lib/format";
 import { metricNameLabel, unitLabel } from "../../lib/labels";
+import { EvidenceRefsButton } from "../evidence/EvidenceRefsButton";
+import type { EvidenceContext } from "../evidence/types";
 
 interface Props {
   metrics: Metric[];
   names: Record<string, string>;
   onEvidence?: (ref: EvidenceRef) => void;
+  evidenceContext?: EvidenceContext;
+  materialNames?: Record<string, string>;
 }
 
 /** 全部指标明细：名称、单位、数值、分子/分母、排除量、限制与证据入口。 */
-export function MetricList({ metrics, names, onEvidence }: Props) {
+export function MetricList({ metrics, names, onEvidence, evidenceContext, materialNames }: Props) {
   if (metrics.length === 0) {
     return <p className="muted small">本次分析没有返回指标。</p>;
   }
@@ -41,9 +45,12 @@ export function MetricList({ metrics, names, onEvidence }: Props) {
               <td className="numeric">{metric.excluded_event_count}</td>
               <td>
                 {metric.evidence_refs.length && onEvidence ? (
-                  <button type="button" className="btn btnSm btnGhost" onClick={() => onEvidence(metric.evidence_refs[0])}>
-                    查看依据
-                  </button>
+                  <EvidenceRefsButton
+                    refs={metric.evidence_refs}
+                    onOpen={onEvidence}
+                    context={evidenceContext}
+                    materialNames={materialNames}
+                  />
                 ) : (
                   <span className="xs muted">无引用</span>
                 )}

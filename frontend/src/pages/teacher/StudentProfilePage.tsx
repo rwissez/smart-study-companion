@@ -292,7 +292,13 @@ export function StudentProfilePage() {
                   <IndicatorRadar metrics={result.metrics} names={names} order={order} />
                   <details style={{ marginTop: 16 }}>
                     <summary className="small muted" style={{ cursor: "pointer" }}>全部指标明细</summary>
-                    <MetricList metrics={result.metrics} names={names} onEvidence={setEvidence} />
+                    <MetricList
+                      metrics={result.metrics}
+                      names={names}
+                      onEvidence={setEvidence}
+                      evidenceContext={{ student_id: studentId, class_id: result?.class_id ?? null }}
+                      materialNames={materialNames}
+                    />
                   </details>
                 </div>
                 <div>
@@ -300,7 +306,13 @@ export function StudentProfilePage() {
                     <h2 className="sectionTitle">诊断发现</h2>
                     <span className="sectionHint">{result.findings.length} 条 · 证据与表现分开判断</span>
                   </div>
-                  <FindingsList findings={result.findings} names={names} onEvidence={setEvidence} />
+                  <FindingsList
+                    findings={result.findings}
+                    names={names}
+                    onEvidence={setEvidence}
+                    evidenceContext={{ student_id: studentId, class_id: result?.class_id ?? null }}
+                    materialNames={materialNames}
+                  />
                   {result.summary ? <p className="prose" style={{ marginTop: 12 }}>{result.summary}</p> : null}
                   {result.strategy_signals.length ? (
                     <div style={{ marginTop: 12 }}>
@@ -376,7 +388,13 @@ export function StudentProfilePage() {
                 <StatePanel kind="error" title="进展读取失败" message={toErrorMessage(progress.error)} requestId={errorRequestId(progress.error)} />
               ) : null}
               {progress.data ? (
-                <ProgressView items={progress.data.items} names={names} onEvidence={setEvidence} />
+                <ProgressView
+                  items={progress.data.items}
+                  names={names}
+                  onEvidence={setEvidence}
+                  evidenceContext={{ student_id: studentId, class_id: result?.class_id ?? null }}
+                  materialNames={materialNames}
+                />
               ) : null}
             </section>
           ) : null}
