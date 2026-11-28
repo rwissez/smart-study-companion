@@ -120,6 +120,9 @@ describe("ChatPanel 流式回答与历史刷新", () => {
     getCatalog.mockResolvedValue({ version: "v1", topics: [], indicators: [], materials: [], links: [] });
     listConversations.mockResolvedValue({ items: [], total: 0, page: 1, page_size: 20 });
     getConversationMessages.mockResolvedValue([]);
+    listClasses.mockResolvedValue([]);
+    listStudents.mockResolvedValue({ items: [], total: 0, page: 1, page_size: 200 });
+    listRuns.mockResolvedValue([]);
   });
 
   it("逐段显示真实工具进度和回答，完成后刷新历史并保存 conversation_id", async () => {
