@@ -1,0 +1,953 @@
+{
+  "schema_version": "1.1",
+  "request_id": "req-1c6566b0649440f2",
+  "data": {
+    "text": "数据已查过一轮，先把范围说清楚：逐题的学生原句和评分点明细，这批数据里取不到，只有按考点汇总的分数与记录号；下面不写“原句”，也不替学生猜错在哪一步。老师打开作答页核对最稳。\n\n## 一、答题分析\n\n本轮 D03 在 N01 留下的作答共 8 道题（Q003、Q007、Q009、Q014、Q016、Q018、Q022、Q025），对应 8 条作答记录（DR0051–DR0058），分成四个考点。\n\n- **「识别同类项、去括号并化简」**：3 道（DR0051、DR0052、DR0054），合计 3/5 分，其中 1 道满分、2 道扣分（指标 M-STU-D03-N01-T01I2-valid_score_ratio、full_score_ratio）。方案里针对这两处扣分新排了题：去括号 `-2(2a-3)`、化简 `3x+2-5x+7`（Q010、Q012，尚未做）。\n- **「表示数量关系并代入求值」**：2 道（DR0055、DR0057），合计 0/4 分，两道都没拿到分（M-STU-D03-N01-T01I1-valid_score_ratio）。\n- 另外两个考点：1 道（DR0053）0/3；2 道（DR0056、DR0058）1/6。这两处题量太少，先记录在案，不作结论。\n\n一个要提前说的缺口：这位学生的失分细目没有生成机器解释，错因只留下一个标签“迁移困难”（F-STU-D03-N01-T01I2），具体卡在符号、分配还是合并，现有数据看不出来。\n\n## 二、学情诊断\n\n**证据够的**：只有「识别同类项、去括号并化简」一处（F-STU-D03-N01-T01I2）。3 道不同样题，得分率 0.60，满分比 0.33，判定为“需练”，表现阈值 0.8，规则版本 b-rules-1。\n\n**证据不足的，这轮不下结论**：\n- 表示数量关系并代入求值（F-STU-D03-N01-T01I1）：只有 2 道样题，低于 3 道下限，虽然分数是 0，也不定薄弱。\n- 另两个考点（F-STU-D03-N01-T01I3 仅 1 道；F-STU-D03-N01-T02I1 仅 2 道）：题量同样不够。\n\n**其余指标本轮不动的原因**：一是样题数不够；二是整批数据里有 161 道失分题超出单次语义解释上限，机器只保留了确定性统计，没给细解释（分析结果 limitations 里有记）。题量不够时先攒证据，比按低分直接判薄弱更稳妥。T01I3、T02I1 这两处本轮也没有排任务，下周看证据再说。\n\n## 三、教学建议\n\n已发布的方案（plan-60aa8df6beea48fd9172，已校验发布，无修订历史）排了两组，可以这样安排：\n\n**先做第一组：识别同类项、去括号并化简**（grp-plan-128e4b719716435a8498-01）。顺序是 4 分钟微课堂「括号前是负号：先逐项乘进去，再合并同类项」，然后 Q010 4 分钟、Q012 4 分钟。三层提示（我的建议，尚未进方案）：第一层只问“括号前是负号，乘进去后每一项的符号都变了吗”；第二层点到“先逐项乘，别急着合并”；第三层给出第一步的结果，请他接着合并。观察点：这两道题是否用到第三层提示，是本轮判断的关键；独立正确率到 80% 以上，下一轮换变式；仍要三级提示，就降低难度、补前置知识并考虑教师介入（方案里已写了这两条调整条件）。\n\n**第二组按诊断走：表示数量关系并代入求值**（grp-plan-128e4b719716435a8498-02）。4 分钟微课堂「先列式再代入」+ Q001 列式 2 分钟 + Q002 代入求值 2 分钟。这组目的不是补课，是先看清卡在列式还是代入。三层提示：先问“题里哪个量在变”；再问“先写式子还是先代数字”；最后帮他把负号和括号的位置标出来。观察点：若这轮仍看不出卡点，继续加诊断题，不要把不足当作薄弱。\n\n材料上有一处限制：我在正式目录按“练习”筛过，没有可用练习题，新增练习只能沿用方案里的 Q010、Q012、Q001、Q002。知识卡 L01 覆盖这几个考点，来源标注为未核验，可以先用来写提示措辞，暂不当作作业下发。\n\n以上提示层次和观察点是补充建议，不是已发布内容；顺序可调，任一项也可以关闭或跳过，判断权在老师。",
+    "tool_trace": [
+      {
+        "call_id": "call_00_6xnp9av3rwymp6e4jvw9i402",
+        "tool_name": "get_student_analysis",
+        "stage": "",
+        "status": "succeeded",
+        "message": "",
+        "evidence_refs": [
+          {
+            "kind": "metric",
+            "id": "M-STU-D03-N01-T01I1-valid_score_ratio",
+            "run_id": "run-7151b4307fd54f9cb1e0"
+          },
+          {
+            "kind": "metric",
+            "id": "M-STU-D03-N01-T01I1-full_score_ratio",
+            "run_id": "run-7151b4307fd54f9cb1e0"
+          },
+          {
+            "kind": "metric",
+            "id": "M-STU-D03-N01-T01I1-observed_response_ratio",
+            "run_id": "run-7151b4307fd54f9cb1e0"
+          },
+          {
+            "kind": "metric",
+            "id": "M-STU-D03-N01-T01I1-item_coverage",
+            "run_id": "run-7151b4307fd54f9cb1e0"
+          },
+          {
+            "kind": "metric",
+            "id": "M-STU-D03-N01-T01I2-valid_score_ratio",
+            "run_id": "run-7151b4307fd54f9cb1e0"
+          },
+          {
+            "kind": "metric",
+            "id": "M-STU-D03-N01-T01I2-full_score_ratio",
+            "run_id": "run-7151b4307fd54f9cb1e0"
+          },
+          {
+            "kind": "metric",
+            "id": "M-STU-D03-N01-T01I2-observed_response_ratio",
+            "run_id": "run-7151b4307fd54f9cb1e0"
+          },
+          {
+            "kind": "metric",
+            "id": "M-STU-D03-N01-T01I2-item_coverage",
+            "run_id": "run-7151b4307fd54f9cb1e0"
+          },
+          {
+            "kind": "metric",
+            "id": "M-STU-D03-N01-T01I3-valid_score_ratio",
+            "run_id": "run-7151b4307fd54f9cb1e0"
+          },
+          {
+            "kind": "metric",
+            "id": "M-STU-D03-N01-T01I3-full_score_ratio",
+            "run_id": "run-7151b4307fd54f9cb1e0"
+          },
+          {
+            "kind": "metric",
+            "id": "M-STU-D03-N01-T01I3-observed_response_ratio",
+            "run_id": "run-7151b4307fd54f9cb1e0"
+          },
+          {
+            "kind": "metric",
+            "id": "M-STU-D03-N01-T01I3-item_coverage",
+            "run_id": "run-7151b4307fd54f9cb1e0"
+          },
+          {
+            "kind": "metric",
+            "id": "M-STU-D03-N01-T02I1-valid_score_ratio",
+            "run_id": "run-7151b4307fd54f9cb1e0"
+          },
+          {
+            "kind": "metric",
+            "id": "M-STU-D03-N01-T02I1-full_score_ratio",
+            "run_id": "run-7151b4307fd54f9cb1e0"
+          },
+          {
+            "kind": "metric",
+            "id": "M-STU-D03-N01-T02I1-observed_response_ratio",
+            "run_id": "run-7151b4307fd54f9cb1e0"
+          },
+          {
+            "kind": "metric",
+            "id": "M-STU-D03-N01-T02I1-item_coverage",
+            "run_id": "run-7151b4307fd54f9cb1e0"
+          }
+        ]
+      },
+      {
+        "call_id": "call_01_m953xlprdmyi0sdi12bk53l3",
+        "tool_name": "get_student_plan",
+        "stage": "",
+        "status": "succeeded",
+        "message": "",
+        "evidence_refs": []
+      },
+      {
+        "call_id": "call_02_cynnbkfmnfdr5hbzfpxkc3e6",
+        "tool_name": "get_micro_lesson",
+        "stage": "",
+        "status": "succeeded",
+        "message": "",
+        "evidence_refs": []
+      },
+      {
+        "call_id": "call_03_84o4irzl894mzijroedelky8",
+        "tool_name": "get_open_interventions",
+        "stage": "",
+        "status": "succeeded",
+        "message": "",
+        "evidence_refs": []
+      },
+      {
+        "call_id": "call_00_fuzkqx5w4s1g0k1c87gaxs4y",
+        "tool_name": "get_plan_reason",
+        "stage": "",
+        "status": "succeeded",
+        "message": "",
+        "evidence_refs": [
+          {
+            "kind": "metric",
+            "id": "M-STU-D03-N01-T01I2-valid_score_ratio",
+            "run_id": "run-7151b4307fd54f9cb1e0",
+            "catalog_version": null,
+            "dataset_id": null,
+            "knowledge_version": null,
+            "analysis_version": null,
+            "plan_version": null,
+            "material_id": null,
+            "attempt_id": null,
+            "curriculum_type": null
+          },
+          {
+            "kind": "metric",
+            "id": "M-STU-D03-N01-T01I2-full_score_ratio",
+            "run_id": "run-7151b4307fd54f9cb1e0",
+            "catalog_version": null,
+            "dataset_id": null,
+            "knowledge_version": null,
+            "analysis_version": null,
+            "plan_version": null,
+            "material_id": null,
+            "attempt_id": null,
+            "curriculum_type": null
+          },
+          {
+            "kind": "metric",
+            "id": "M-STU-D03-N01-T01I2-observed_response_ratio",
+            "run_id": "run-7151b4307fd54f9cb1e0",
+            "catalog_version": null,
+            "dataset_id": null,
+            "knowledge_version": null,
+            "analysis_version": null,
+            "plan_version": null,
+            "material_id": null,
+            "attempt_id": null,
+            "curriculum_type": null
+          },
+          {
+            "kind": "metric",
+            "id": "M-STU-D03-N01-T01I2-item_coverage",
+            "run_id": "run-7151b4307fd54f9cb1e0",
+            "catalog_version": null,
+            "dataset_id": null,
+            "knowledge_version": null,
+            "analysis_version": null,
+            "plan_version": null,
+            "material_id": null,
+            "attempt_id": null,
+            "curriculum_type": null
+          },
+          {
+            "kind": "metric",
+            "id": "M-STU-D03-N01-T01I1-valid_score_ratio",
+            "run_id": "run-7151b4307fd54f9cb1e0",
+            "catalog_version": null,
+            "dataset_id": null,
+            "knowledge_version": null,
+            "analysis_version": null,
+            "plan_version": null,
+            "material_id": null,
+            "attempt_id": null,
+            "curriculum_type": null
+          },
+          {
+            "kind": "metric",
+            "id": "M-STU-D03-N01-T01I1-full_score_ratio",
+            "run_id": "run-7151b4307fd54f9cb1e0",
+            "catalog_version": null,
+            "dataset_id": null,
+            "knowledge_version": null,
+            "analysis_version": null,
+            "plan_version": null,
+            "material_id": null,
+            "attempt_id": null,
+            "curriculum_type": null
+          },
+          {
+            "kind": "metric",
+            "id": "M-STU-D03-N01-T01I1-observed_response_ratio",
+            "run_id": "run-7151b4307fd54f9cb1e0",
+            "catalog_version": null,
+            "dataset_id": null,
+            "knowledge_version": null,
+            "analysis_version": null,
+            "plan_version": null,
+            "material_id": null,
+            "attempt_id": null,
+            "curriculum_type": null
+          },
+          {
+            "kind": "metric",
+            "id": "M-STU-D03-N01-T01I1-item_coverage",
+            "run_id": "run-7151b4307fd54f9cb1e0",
+            "catalog_version": null,
+            "dataset_id": null,
+            "knowledge_version": null,
+            "analysis_version": null,
+            "plan_version": null,
+            "material_id": null,
+            "attempt_id": null,
+            "curriculum_type": null
+          },
+          {
+            "kind": "recommendation",
+            "id": "plan-60aa8df6beea48fd9172",
+            "plan_version": "plan-60aa8df6beea48fd9172",
+            "dataset_id": "ds-9433de079cc54581864c"
+          }
+        ]
+      },
+      {
+        "call_id": "call_01_wjfvzrvhbvtnwvtg5sir9qrj",
+        "tool_name": "get_plan_history",
+        "stage": "",
+        "status": "succeeded",
+        "message": "",
+        "evidence_refs": []
+      },
+      {
+        "call_id": "call_02_2d5x6n59f0pv6eoh9oralzur",
+        "tool_name": "search_learning_materials",
+        "stage": "",
+        "status": "succeeded",
+        "message": "",
+        "evidence_refs": []
+      },
+      {
+        "call_id": "call_03_6n5vps2rgogmd3wg5tupcyj8",
+        "tool_name": "search_learning_materials",
+        "stage": "",
+        "status": "succeeded",
+        "message": "",
+        "evidence_refs": [
+          {
+            "kind": "material",
+            "id": "B01",
+            "catalog_version": "catalog-20583c4b1ad24692a264",
+            "dataset_id": "ds-9433de079cc54581864c"
+          },
+          {
+            "kind": "material",
+            "id": "B02",
+            "catalog_version": "catalog-20583c4b1ad24692a264",
+            "dataset_id": "ds-9433de079cc54581864c"
+          },
+          {
+            "kind": "material",
+            "id": "B03",
+            "catalog_version": "catalog-20583c4b1ad24692a264",
+            "dataset_id": "ds-9433de079cc54581864c"
+          },
+          {
+            "kind": "material",
+            "id": "B04",
+            "catalog_version": "catalog-20583c4b1ad24692a264",
+            "dataset_id": "ds-9433de079cc54581864c"
+          },
+          {
+            "kind": "material",
+            "id": "B05",
+            "catalog_version": "catalog-20583c4b1ad24692a264",
+            "dataset_id": "ds-9433de079cc54581864c"
+          },
+          {
+            "kind": "material",
+            "id": "B06",
+            "catalog_version": "catalog-20583c4b1ad24692a264",
+            "dataset_id": "ds-9433de079cc54581864c"
+          },
+          {
+            "kind": "material",
+            "id": "B07",
+            "catalog_version": "catalog-20583c4b1ad24692a264",
+            "dataset_id": "ds-9433de079cc54581864c"
+          },
+          {
+            "kind": "material",
+            "id": "B08",
+            "catalog_version": "catalog-20583c4b1ad24692a264",
+            "dataset_id": "ds-9433de079cc54581864c"
+          },
+          {
+            "kind": "material",
+            "id": "L01",
+            "catalog_version": "catalog-20583c4b1ad24692a264",
+            "dataset_id": "ds-9433de079cc54581864c"
+          },
+          {
+            "kind": "material",
+            "id": "L02",
+            "catalog_version": "catalog-20583c4b1ad24692a264",
+            "dataset_id": "ds-9433de079cc54581864c"
+          },
+          {
+            "kind": "material",
+            "id": "L03",
+            "catalog_version": "catalog-20583c4b1ad24692a264",
+            "dataset_id": "ds-9433de079cc54581864c"
+          }
+        ]
+      }
+    ],
+    "fact_check": {
+      "status": "passed",
+      "issues": [],
+      "checked_evidence": [
+        "B01",
+        "B02",
+        "B03",
+        "B04",
+        "B05",
+        "B06",
+        "B07",
+        "B08",
+        "L01",
+        "L02",
+        "L03",
+        "M-STU-D03-N01-T01I1-full_score_ratio",
+        "M-STU-D03-N01-T01I1-item_coverage",
+        "M-STU-D03-N01-T01I1-observed_response_ratio",
+        "M-STU-D03-N01-T01I1-valid_score_ratio",
+        "M-STU-D03-N01-T01I2-full_score_ratio",
+        "M-STU-D03-N01-T01I2-item_coverage",
+        "M-STU-D03-N01-T01I2-observed_response_ratio",
+        "M-STU-D03-N01-T01I2-valid_score_ratio",
+        "M-STU-D03-N01-T01I3-full_score_ratio",
+        "M-STU-D03-N01-T01I3-item_coverage",
+        "M-STU-D03-N01-T01I3-observed_response_ratio",
+        "M-STU-D03-N01-T01I3-valid_score_ratio",
+        "M-STU-D03-N01-T02I1-full_score_ratio",
+        "M-STU-D03-N01-T02I1-item_coverage",
+        "M-STU-D03-N01-T02I1-observed_response_ratio",
+        "M-STU-D03-N01-T02I1-valid_score_ratio",
+        "plan-60aa8df6beea48fd9172"
+      ],
+      "checked_numbers": [
+        "-01",
+        "-02",
+        "-1",
+        "-128",
+        "-2",
+        "-3",
+        "-5",
+        "-60",
+        "0",
+        "0.33",
+        "0.60",
+        "0.8",
+        "001",
+        "002",
+        "003",
+        "0051",
+        "0052",
+        "0053",
+        "0054",
+        "0055",
+        "0056",
+        "0057",
+        "0058",
+        "007",
+        "009",
+        "01",
+        "010",
+        "012",
+        "014",
+        "016",
+        "018",
+        "02",
+        "022",
+        "025",
+        "03",
+        "1",
+        "161",
+        "2",
+        "3",
+        "4",
+        "48",
+        "5",
+        "6",
+        "7",
+        "719716435",
+        "8",
+        "80%",
+        "8498",
+        "9172"
+      ],
+      "limitations": [
+        "只核对证据编号与数字来源，不判断解释是否正确"
+      ]
+    },
+    "warnings": [],
+    "stopped_reason": "model_finished",
+    "prompt_version": "router-v1+task-student-learning-advice-v1+teacher-style-v1",
+    "evidence_refs": [
+      {
+        "kind": "metric",
+        "id": "M-STU-D03-N01-T01I1-valid_score_ratio",
+        "run_id": "run-7151b4307fd54f9cb1e0"
+      },
+      {
+        "kind": "metric",
+        "id": "M-STU-D03-N01-T01I1-full_score_ratio",
+        "run_id": "run-7151b4307fd54f9cb1e0"
+      },
+      {
+        "kind": "metric",
+        "id": "M-STU-D03-N01-T01I1-observed_response_ratio",
+        "run_id": "run-7151b4307fd54f9cb1e0"
+      },
+      {
+        "kind": "metric",
+        "id": "M-STU-D03-N01-T01I1-item_coverage",
+        "run_id": "run-7151b4307fd54f9cb1e0"
+      },
+      {
+        "kind": "metric",
+        "id": "M-STU-D03-N01-T01I2-valid_score_ratio",
+        "run_id": "run-7151b4307fd54f9cb1e0"
+      },
+      {
+        "kind": "metric",
+        "id": "M-STU-D03-N01-T01I2-full_score_ratio",
+        "run_id": "run-7151b4307fd54f9cb1e0"
+      },
+      {
+        "kind": "metric",
+        "id": "M-STU-D03-N01-T01I2-observed_response_ratio",
+        "run_id": "run-7151b4307fd54f9cb1e0"
+      },
+      {
+        "kind": "metric",
+        "id": "M-STU-D03-N01-T01I2-item_coverage",
+        "run_id": "run-7151b4307fd54f9cb1e0"
+      },
+      {
+        "kind": "metric",
+        "id": "M-STU-D03-N01-T01I3-valid_score_ratio",
+        "run_id": "run-7151b4307fd54f9cb1e0"
+      },
+      {
+        "kind": "metric",
+        "id": "M-STU-D03-N01-T01I3-full_score_ratio",
+        "run_id": "run-7151b4307fd54f9cb1e0"
+      },
+      {
+        "kind": "metric",
+        "id": "M-STU-D03-N01-T01I3-observed_response_ratio",
+        "run_id": "run-7151b4307fd54f9cb1e0"
+      },
+      {
+        "kind": "metric",
+        "id": "M-STU-D03-N01-T01I3-item_coverage",
+        "run_id": "run-7151b4307fd54f9cb1e0"
+      },
+      {
+        "kind": "metric",
+        "id": "M-STU-D03-N01-T02I1-valid_score_ratio",
+        "run_id": "run-7151b4307fd54f9cb1e0"
+      },
+      {
+        "kind": "metric",
+        "id": "M-STU-D03-N01-T02I1-full_score_ratio",
+        "run_id": "run-7151b4307fd54f9cb1e0"
+      },
+      {
+        "kind": "metric",
+        "id": "M-STU-D03-N01-T02I1-observed_response_ratio",
+        "run_id": "run-7151b4307fd54f9cb1e0"
+      },
+      {
+        "kind": "metric",
+        "id": "M-STU-D03-N01-T02I1-item_coverage",
+        "run_id": "run-7151b4307fd54f9cb1e0"
+      },
+      {
+        "kind": "metric",
+        "id": "M-STU-D03-N01-T01I2-valid_score_ratio",
+        "run_id": "run-7151b4307fd54f9cb1e0",
+        "catalog_version": null,
+        "dataset_id": null,
+        "knowledge_version": null,
+        "analysis_version": null,
+        "plan_version": null,
+        "material_id": null,
+        "attempt_id": null,
+        "curriculum_type": null
+      },
+      {
+        "kind": "metric",
+        "id": "M-STU-D03-N01-T01I2-full_score_ratio",
+        "run_id": "run-7151b4307fd54f9cb1e0",
+        "catalog_version": null,
+        "dataset_id": null,
+        "knowledge_version": null,
+        "analysis_version": null,
+        "plan_version": null,
+        "material_id": null,
+        "attempt_id": null,
+        "curriculum_type": null
+      },
+      {
+        "kind": "metric",
+        "id": "M-STU-D03-N01-T01I2-observed_response_ratio",
+        "run_id": "run-7151b4307fd54f9cb1e0",
+        "catalog_version": null,
+        "dataset_id": null,
+        "knowledge_version": null,
+        "analysis_version": null,
+        "plan_version": null,
+        "material_id": null,
+        "attempt_id": null,
+        "curriculum_type": null
+      },
+      {
+        "kind": "metric",
+        "id": "M-STU-D03-N01-T01I2-item_coverage",
+        "run_id": "run-7151b4307fd54f9cb1e0",
+        "catalog_version": null,
+        "dataset_id": null,
+        "knowledge_version": null,
+        "analysis_version": null,
+        "plan_version": null,
+        "material_id": null,
+        "attempt_id": null,
+        "curriculum_type": null
+      },
+      {
+        "kind": "metric",
+        "id": "M-STU-D03-N01-T01I1-valid_score_ratio",
+        "run_id": "run-7151b4307fd54f9cb1e0",
+        "catalog_version": null,
+        "dataset_id": null,
+        "knowledge_version": null,
+        "analysis_version": null,
+        "plan_version": null,
+        "material_id": null,
+        "attempt_id": null,
+        "curriculum_type": null
+      },
+      {
+        "kind": "metric",
+        "id": "M-STU-D03-N01-T01I1-full_score_ratio",
+        "run_id": "run-7151b4307fd54f9cb1e0",
+        "catalog_version": null,
+        "dataset_id": null,
+        "knowledge_version": null,
+        "analysis_version": null,
+        "plan_version": null,
+        "material_id": null,
+        "attempt_id": null,
+        "curriculum_type": null
+      },
+      {
+        "kind": "metric",
+        "id": "M-STU-D03-N01-T01I1-observed_response_ratio",
+        "run_id": "run-7151b4307fd54f9cb1e0",
+        "catalog_version": null,
+        "dataset_id": null,
+        "knowledge_version": null,
+        "analysis_version": null,
+        "plan_version": null,
+        "material_id": null,
+        "attempt_id": null,
+        "curriculum_type": null
+      },
+      {
+        "kind": "metric",
+        "id": "M-STU-D03-N01-T01I1-item_coverage",
+        "run_id": "run-7151b4307fd54f9cb1e0",
+        "catalog_version": null,
+        "dataset_id": null,
+        "knowledge_version": null,
+        "analysis_version": null,
+        "plan_version": null,
+        "material_id": null,
+        "attempt_id": null,
+        "curriculum_type": null
+      },
+      {
+        "kind": "recommendation",
+        "id": "plan-60aa8df6beea48fd9172",
+        "plan_version": "plan-60aa8df6beea48fd9172",
+        "dataset_id": "ds-9433de079cc54581864c"
+      },
+      {
+        "kind": "material",
+        "id": "B01",
+        "catalog_version": "catalog-20583c4b1ad24692a264",
+        "dataset_id": "ds-9433de079cc54581864c"
+      },
+      {
+        "kind": "material",
+        "id": "B02",
+        "catalog_version": "catalog-20583c4b1ad24692a264",
+        "dataset_id": "ds-9433de079cc54581864c"
+      },
+      {
+        "kind": "material",
+        "id": "B03",
+        "catalog_version": "catalog-20583c4b1ad24692a264",
+        "dataset_id": "ds-9433de079cc54581864c"
+      },
+      {
+        "kind": "material",
+        "id": "B04",
+        "catalog_version": "catalog-20583c4b1ad24692a264",
+        "dataset_id": "ds-9433de079cc54581864c"
+      },
+      {
+        "kind": "material",
+        "id": "B05",
+        "catalog_version": "catalog-20583c4b1ad24692a264",
+        "dataset_id": "ds-9433de079cc54581864c"
+      },
+      {
+        "kind": "material",
+        "id": "B06",
+        "catalog_version": "catalog-20583c4b1ad24692a264",
+        "dataset_id": "ds-9433de079cc54581864c"
+      },
+      {
+        "kind": "material",
+        "id": "B07",
+        "catalog_version": "catalog-20583c4b1ad24692a264",
+        "dataset_id": "ds-9433de079cc54581864c"
+      },
+      {
+        "kind": "material",
+        "id": "B08",
+        "catalog_version": "catalog-20583c4b1ad24692a264",
+        "dataset_id": "ds-9433de079cc54581864c"
+      },
+      {
+        "kind": "material",
+        "id": "L01",
+        "catalog_version": "catalog-20583c4b1ad24692a264",
+        "dataset_id": "ds-9433de079cc54581864c"
+      },
+      {
+        "kind": "material",
+        "id": "L02",
+        "catalog_version": "catalog-20583c4b1ad24692a264",
+        "dataset_id": "ds-9433de079cc54581864c"
+      },
+      {
+        "kind": "material",
+        "id": "L03",
+        "catalog_version": "catalog-20583c4b1ad24692a264",
+        "dataset_id": "ds-9433de079cc54581864c"
+      }
+    ],
+    "task_type": "student_learning_advice",
+    "route_source": "model",
+    "segments": [
+      {
+        "kind": "explanation",
+        "text": "数据已查过一轮，先把范围说清楚：逐题的学生原句和评分点明细，这批数据里取不到，只有按考点汇总的分数与记录号；下面不写“原句”，也不替学生猜错在哪一步。老师打开作答页核对最稳。\n\n## 一、答题分析\n\n本轮 D03 在 N01 留下的作答共 8 道题（Q003、Q007、Q009、Q014、Q016、Q018、Q022、Q025），对应 8 条作答记录（DR0051–DR0058），分成四个考点。\n\n- **「识别同类项、去括号并化简」**：3 道（DR0051、DR0052、DR0054），合计 3/5 分，其中 1 道满分、2 道扣分（指标 M-STU-D03-N01-T01I2-valid_score_ratio、full_score_ratio）。方案里针对这两处扣分新排了题：去括号 `-2(2a-3)`、化简 `3x+2-5x+7`（Q010、Q012，尚未做）。\n- **「表示数量关系并代入求值」**：2 道（DR0055、DR0057），合计 0/4 分，两道都没拿到分（M-STU-D03-N01-T01I1-valid_score_ratio）。\n- 另外两个考点：1 道（DR0053）0/3；2 道（DR0056、DR0058）1/6。这两处题量太少，先记录在案，不作结论。\n\n一个要提前说的缺口：这位学生的失分细目没有生成机器解释，错因只留下一个标签“迁移困难”（F-STU-D03-N01-T01I2），具体卡在符号、分配还是合并，现有数据看不出来。\n\n## 二、学情诊断\n\n**证据够的**：只有「识别同类项、去括号并化简」一处（F-STU-D03-N01-T01I2）。3 道不同样题，得分率 0.60，满分比 0.33，判定为“需练”，表现阈值 0.8，规则版本 b-rules-1。\n\n**证据不足的，这轮不下结论**：\n- 表示数量关系并代入求值（F-STU-D03-N01-T01I1）：只有 2 道样题，低于 3 道下限，虽然分数是 0，也不定薄弱。\n- 另两个考点（F-STU-D03-N01-T01I3 仅 1 道；F-STU-D03-N01-T02I1 仅 2 道）：题量同样不够。\n\n**其余指标本轮不动的原因**：一是样题数不够；二是整批数据里有 161 道失分题超出单次语义解释上限，机器只保留了确定性统计，没给细解释（分析结果 limitations 里有记）。题量不够时先攒证据，比按低分直接判薄弱更稳妥。T01I3、T02I1 这两处本轮也没有排任务，下周看证据再说。\n\n## 三、教学建议\n\n已发布的方案（plan-60aa8df6beea48fd9172，已校验发布，无修订历史）排了两组，可以这样安排：\n\n**先做第一组：识别同类项、去括号并化简**（grp-plan-128e4b719716435a8498-01）。顺序是 4 分钟微课堂「括号前是负号：先逐项乘进去，再合并同类项」，然后 Q010 4 分钟、Q012 4 分钟。三层提示（我的建议，尚未进方案）：第一层只问“括号前是负号，乘进去后每一项的符号都变了吗”；第二层点到“先逐项乘，别急着合并”；第三层给出第一步的结果，请他接着合并。观察点：这两道题是否用到第三层提示，是本轮判断的关键；独立正确率到 80% 以上，下一轮换变式；仍要三级提示，就降低难度、补前置知识并考虑教师介入（方案里已写了这两条调整条件）。\n\n**第二组按诊断走：表示数量关系并代入求值**（grp-plan-128e4b719716435a8498-02）。4 分钟微课堂「先列式再代入」+ Q001 列式 2 分钟 + Q002 代入求值 2 分钟。这组目的不是补课，是先看清卡在列式还是代入。三层提示：先问“题里哪个量在变”；再问“先写式子还是先代数字”；最后帮他把负号和括号的位置标出来。观察点：若这轮仍看不出卡点，继续加诊断题，不要把不足当作薄弱。\n\n材料上有一处限制：我在正式目录按“练习”筛过，没有可用练习题，新增练习只能沿用方案里的 Q010、Q012、Q001、Q002。知识卡 L01 覆盖这几个考点，来源标注为未核验，可以先用来写提示措辞，暂不当作作业下发。\n\n以上提示层次和观察点是补充建议，不是已发布内容；顺序可调，任一项也可以关闭或跳过，判断权在老师。",
+        "evidence_refs": [
+          {
+            "kind": "metric",
+            "id": "M-STU-D03-N01-T01I1-valid_score_ratio",
+            "run_id": "run-7151b4307fd54f9cb1e0"
+          },
+          {
+            "kind": "metric",
+            "id": "M-STU-D03-N01-T01I1-full_score_ratio",
+            "run_id": "run-7151b4307fd54f9cb1e0"
+          },
+          {
+            "kind": "metric",
+            "id": "M-STU-D03-N01-T01I1-observed_response_ratio",
+            "run_id": "run-7151b4307fd54f9cb1e0"
+          },
+          {
+            "kind": "metric",
+            "id": "M-STU-D03-N01-T01I1-item_coverage",
+            "run_id": "run-7151b4307fd54f9cb1e0"
+          },
+          {
+            "kind": "metric",
+            "id": "M-STU-D03-N01-T01I2-valid_score_ratio",
+            "run_id": "run-7151b4307fd54f9cb1e0"
+          },
+          {
+            "kind": "metric",
+            "id": "M-STU-D03-N01-T01I2-full_score_ratio",
+            "run_id": "run-7151b4307fd54f9cb1e0"
+          },
+          {
+            "kind": "metric",
+            "id": "M-STU-D03-N01-T01I2-observed_response_ratio",
+            "run_id": "run-7151b4307fd54f9cb1e0"
+          },
+          {
+            "kind": "metric",
+            "id": "M-STU-D03-N01-T01I2-item_coverage",
+            "run_id": "run-7151b4307fd54f9cb1e0"
+          },
+          {
+            "kind": "metric",
+            "id": "M-STU-D03-N01-T01I3-valid_score_ratio",
+            "run_id": "run-7151b4307fd54f9cb1e0"
+          },
+          {
+            "kind": "metric",
+            "id": "M-STU-D03-N01-T01I3-full_score_ratio",
+            "run_id": "run-7151b4307fd54f9cb1e0"
+          },
+          {
+            "kind": "metric",
+            "id": "M-STU-D03-N01-T01I3-observed_response_ratio",
+            "run_id": "run-7151b4307fd54f9cb1e0"
+          },
+          {
+            "kind": "metric",
+            "id": "M-STU-D03-N01-T01I3-item_coverage",
+            "run_id": "run-7151b4307fd54f9cb1e0"
+          },
+          {
+            "kind": "metric",
+            "id": "M-STU-D03-N01-T02I1-valid_score_ratio",
+            "run_id": "run-7151b4307fd54f9cb1e0"
+          },
+          {
+            "kind": "metric",
+            "id": "M-STU-D03-N01-T02I1-full_score_ratio",
+            "run_id": "run-7151b4307fd54f9cb1e0"
+          },
+          {
+            "kind": "metric",
+            "id": "M-STU-D03-N01-T02I1-observed_response_ratio",
+            "run_id": "run-7151b4307fd54f9cb1e0"
+          },
+          {
+            "kind": "metric",
+            "id": "M-STU-D03-N01-T02I1-item_coverage",
+            "run_id": "run-7151b4307fd54f9cb1e0"
+          },
+          {
+            "kind": "metric",
+            "id": "M-STU-D03-N01-T01I2-valid_score_ratio",
+            "run_id": "run-7151b4307fd54f9cb1e0",
+            "catalog_version": null,
+            "dataset_id": null,
+            "knowledge_version": null,
+            "analysis_version": null,
+            "plan_version": null,
+            "material_id": null,
+            "attempt_id": null,
+            "curriculum_type": null
+          },
+          {
+            "kind": "metric",
+            "id": "M-STU-D03-N01-T01I2-full_score_ratio",
+            "run_id": "run-7151b4307fd54f9cb1e0",
+            "catalog_version": null,
+            "dataset_id": null,
+            "knowledge_version": null,
+            "analysis_version": null,
+            "plan_version": null,
+            "material_id": null,
+            "attempt_id": null,
+            "curriculum_type": null
+          },
+          {
+            "kind": "metric",
+            "id": "M-STU-D03-N01-T01I2-observed_response_ratio",
+            "run_id": "run-7151b4307fd54f9cb1e0",
+            "catalog_version": null,
+            "dataset_id": null,
+            "knowledge_version": null,
+            "analysis_version": null,
+            "plan_version": null,
+            "material_id": null,
+            "attempt_id": null,
+            "curriculum_type": null
+          },
+          {
+            "kind": "metric",
+            "id": "M-STU-D03-N01-T01I2-item_coverage",
+            "run_id": "run-7151b4307fd54f9cb1e0",
+            "catalog_version": null,
+            "dataset_id": null,
+            "knowledge_version": null,
+            "analysis_version": null,
+            "plan_version": null,
+            "material_id": null,
+            "attempt_id": null,
+            "curriculum_type": null
+          },
+          {
+            "kind": "metric",
+            "id": "M-STU-D03-N01-T01I1-valid_score_ratio",
+            "run_id": "run-7151b4307fd54f9cb1e0",
+            "catalog_version": null,
+            "dataset_id": null,
+            "knowledge_version": null,
+            "analysis_version": null,
+            "plan_version": null,
+            "material_id": null,
+            "attempt_id": null,
+            "curriculum_type": null
+          },
+          {
+            "kind": "metric",
+            "id": "M-STU-D03-N01-T01I1-full_score_ratio",
+            "run_id": "run-7151b4307fd54f9cb1e0",
+            "catalog_version": null,
+            "dataset_id": null,
+            "knowledge_version": null,
+            "analysis_version": null,
+            "plan_version": null,
+            "material_id": null,
+            "attempt_id": null,
+            "curriculum_type": null
+          },
+          {
+            "kind": "metric",
+            "id": "M-STU-D03-N01-T01I1-observed_response_ratio",
+            "run_id": "run-7151b4307fd54f9cb1e0",
+            "catalog_version": null,
+            "dataset_id": null,
+            "knowledge_version": null,
+            "analysis_version": null,
+            "plan_version": null,
+            "material_id": null,
+            "attempt_id": null,
+            "curriculum_type": null
+          },
+          {
+            "kind": "metric",
+            "id": "M-STU-D03-N01-T01I1-item_coverage",
+            "run_id": "run-7151b4307fd54f9cb1e0",
+            "catalog_version": null,
+            "dataset_id": null,
+            "knowledge_version": null,
+            "analysis_version": null,
+            "plan_version": null,
+            "material_id": null,
+            "attempt_id": null,
+            "curriculum_type": null
+          },
+          {
+            "kind": "recommendation",
+            "id": "plan-60aa8df6beea48fd9172",
+            "plan_version": "plan-60aa8df6beea48fd9172",
+            "dataset_id": "ds-9433de079cc54581864c"
+          },
+          {
+            "kind": "material",
+            "id": "B01",
+            "catalog_version": "catalog-20583c4b1ad24692a264",
+            "dataset_id": "ds-9433de079cc54581864c"
+          },
+          {
+            "kind": "material",
+            "id": "B02",
+            "catalog_version": "catalog-20583c4b1ad24692a264",
+            "dataset_id": "ds-9433de079cc54581864c"
+          },
+          {
+            "kind": "material",
+            "id": "B03",
+            "catalog_version": "catalog-20583c4b1ad24692a264",
+            "dataset_id": "ds-9433de079cc54581864c"
+          },
+          {
+            "kind": "material",
+            "id": "B04",
+            "catalog_version": "catalog-20583c4b1ad24692a264",
+            "dataset_id": "ds-9433de079cc54581864c"
+          },
+          {
+            "kind": "material",
+            "id": "B05",
+            "catalog_version": "catalog-20583c4b1ad24692a264",
+            "dataset_id": "ds-9433de079cc54581864c"
+          },
+          {
+            "kind": "material",
+            "id": "B06",
+            "catalog_version": "catalog-20583c4b1ad24692a264",
+            "dataset_id": "ds-9433de079cc54581864c"
+          },
+          {
+            "kind": "material",
+            "id": "B07",
+            "catalog_version": "catalog-20583c4b1ad24692a264",
+            "dataset_id": "ds-9433de079cc54581864c"
+          },
+          {
+            "kind": "material",
+            "id": "B08",
+            "catalog_version": "catalog-20583c4b1ad24692a264",
+            "dataset_id": "ds-9433de079cc54581864c"
+          },
+          {
+            "kind": "material",
+            "id": "L01",
+            "catalog_version": "catalog-20583c4b1ad24692a264",
+            "dataset_id": "ds-9433de079cc54581864c"
+          },
+          {
+            "kind": "material",
+            "id": "L02",
+            "catalog_version": "catalog-20583c4b1ad24692a264",
+            "dataset_id": "ds-9433de079cc54581864c"
+          },
+          {
+            "kind": "material",
+            "id": "L03",
+            "catalog_version": "catalog-20583c4b1ad24692a264",
+            "dataset_id": "ds-9433de079cc54581864c"
+          }
+        ]
+      }
+    ],
+    "proposals": [],
+    "conversation_id": "conv-ec72ee1a4c794b44a98f",
+    "message_id": "msg-23781a35fe394aeb884e",
+    "status": "completed",
+    "operation_results": []
+  },
+  "warnings": []
+}

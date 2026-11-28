@@ -1,0 +1,315 @@
+{
+  "schema_version": "1.1",
+  "request_id": "req-00c63c2afe36488d",
+  "data": {
+    "text": "## D14 · N01 节点案例摘要\n\n**一句话结论**：这个学生最值得肯定的，是在已观测充分的题组上稳定达到满分——基础层面有扎实的证据支撑，并非“碰巧做对”。\n\n**强项（两项指标，证据充分）**\n\n1. 题组 T01I2：得分率 1.00（5 分得分的题全部拿到，5/5）；满分题比例 1.00（3/3 题满分）；有效不同样题 3 道，达到判定下限。判定为已掌握。\n判定为已掌握，是本节点观测面最广的一块。\n\n两块合起来看，学生在 10 道有效题上拿到 10 分和 5 分记分口径的接近满分，做题表现稳定，已出现的作答记录基本没有空答（已出现记录中的作答率 1.00）。\n\n**证据不足、不能判掌握的部分**\n\n- 题组 T01I1：只有 1 道有效不同样题，低于 3 道的判定下限；虽然这 1 道得分率 1.00，但样本太薄，不能据此说掌握。\n\n这两处若被当作“已掌握”并入结论，会把观测不足误当成能力结论，故单列待观察。另需说明：本节点只有一次正式分析，没有可比的基线与历史版本，**不能判断进步或退步**，只能描述当前这一次的快照。\n\n**一条变式或迁移建议**\n\n在 T02I1 上安排一小组换情境、换表征的迁移题（而非同型重复题）：本节点该题组的分析已标记出“迁移困难”这一类信号，说明常规题型做对不等于新情境下能调用。所以此处值得投入的是变化题目外壳，而不是再刷同类。同理，T01I1、T01I3 需要的是补足观测题量（各补到 3 道以上不同样题），而不是把已满分的那 1 道反复做——重复刷题既不新增信息，也占掉补观测的时间。\n\n**限制与未完成项**\n\n- 当前环境未提供方案读取工具（get_student_plan 不可用），因此未能核对已发布方案内容；分析结果本身也处于未发布状态，故本摘要只覆盖学情侧。\n- 未逐条读取作答过程与评分细节，具体某题的解法步骤、错在哪一步，本摘要不作判断。\n- 该学生在多个节点都有记录，节点间教学范围不同，不可拿总分横向比较。\n\n限制：回答里有一部分数字没有在本轮工具结果中找到出处，已删去。",
+    "tool_trace": [
+      {
+        "call_id": "call_00_ke76ugb6gha1t83r1g6ghxry",
+        "tool_name": "get_student_analysis",
+        "stage": "",
+        "status": "succeeded",
+        "message": "",
+        "evidence_refs": [
+          {
+            "kind": "metric",
+            "id": "M-STU-D14-N01-T01I1-valid_score_ratio",
+            "run_id": "run-7151b4307fd54f9cb1e0"
+          },
+          {
+            "kind": "metric",
+            "id": "M-STU-D14-N01-T01I1-full_score_ratio",
+            "run_id": "run-7151b4307fd54f9cb1e0"
+          },
+          {
+            "kind": "metric",
+            "id": "M-STU-D14-N01-T01I1-observed_response_ratio",
+            "run_id": "run-7151b4307fd54f9cb1e0"
+          },
+          {
+            "kind": "metric",
+            "id": "M-STU-D14-N01-T01I1-item_coverage",
+            "run_id": "run-7151b4307fd54f9cb1e0"
+          },
+          {
+            "kind": "metric",
+            "id": "M-STU-D14-N01-T01I2-valid_score_ratio",
+            "run_id": "run-7151b4307fd54f9cb1e0"
+          },
+          {
+            "kind": "metric",
+            "id": "M-STU-D14-N01-T01I2-full_score_ratio",
+            "run_id": "run-7151b4307fd54f9cb1e0"
+          },
+          {
+            "kind": "metric",
+            "id": "M-STU-D14-N01-T01I2-observed_response_ratio",
+            "run_id": "run-7151b4307fd54f9cb1e0"
+          },
+          {
+            "kind": "metric",
+            "id": "M-STU-D14-N01-T01I2-item_coverage",
+            "run_id": "run-7151b4307fd54f9cb1e0"
+          },
+          {
+            "kind": "metric",
+            "id": "M-STU-D14-N01-T01I3-valid_score_ratio",
+            "run_id": "run-7151b4307fd54f9cb1e0"
+          },
+          {
+            "kind": "metric",
+            "id": "M-STU-D14-N01-T01I3-full_score_ratio",
+            "run_id": "run-7151b4307fd54f9cb1e0"
+          },
+          {
+            "kind": "metric",
+            "id": "M-STU-D14-N01-T01I3-observed_response_ratio",
+            "run_id": "run-7151b4307fd54f9cb1e0"
+          },
+          {
+            "kind": "metric",
+            "id": "M-STU-D14-N01-T01I3-item_coverage",
+            "run_id": "run-7151b4307fd54f9cb1e0"
+          },
+          {
+            "kind": "metric",
+            "id": "M-STU-D14-N01-T02I1-valid_score_ratio",
+            "run_id": "run-7151b4307fd54f9cb1e0"
+          },
+          {
+            "kind": "metric",
+            "id": "M-STU-D14-N01-T02I1-full_score_ratio",
+            "run_id": "run-7151b4307fd54f9cb1e0"
+          },
+          {
+            "kind": "metric",
+            "id": "M-STU-D14-N01-T02I1-observed_response_ratio",
+            "run_id": "run-7151b4307fd54f9cb1e0"
+          },
+          {
+            "kind": "metric",
+            "id": "M-STU-D14-N01-T02I1-item_coverage",
+            "run_id": "run-7151b4307fd54f9cb1e0"
+          }
+        ]
+      }
+    ],
+    "fact_check": {
+      "status": "passed",
+      "issues": [],
+      "checked_evidence": [
+        "M-STU-D14-N01-T01I1-full_score_ratio",
+        "M-STU-D14-N01-T01I1-item_coverage",
+        "M-STU-D14-N01-T01I1-observed_response_ratio",
+        "M-STU-D14-N01-T01I1-valid_score_ratio",
+        "M-STU-D14-N01-T01I2-full_score_ratio",
+        "M-STU-D14-N01-T01I2-item_coverage",
+        "M-STU-D14-N01-T01I2-observed_response_ratio",
+        "M-STU-D14-N01-T01I2-valid_score_ratio",
+        "M-STU-D14-N01-T01I3-full_score_ratio",
+        "M-STU-D14-N01-T01I3-item_coverage",
+        "M-STU-D14-N01-T01I3-observed_response_ratio",
+        "M-STU-D14-N01-T01I3-valid_score_ratio",
+        "M-STU-D14-N01-T02I1-full_score_ratio",
+        "M-STU-D14-N01-T02I1-item_coverage",
+        "M-STU-D14-N01-T02I1-observed_response_ratio",
+        "M-STU-D14-N01-T02I1-valid_score_ratio"
+      ],
+      "checked_numbers": [
+        "01",
+        "02",
+        "1",
+        "1.00",
+        "10",
+        "14",
+        "2",
+        "3",
+        "5"
+      ],
+      "limitations": [
+        "只核对证据编号与数字来源，不判断解释是否正确"
+      ]
+    },
+    "warnings": [],
+    "stopped_reason": "model_finished",
+    "prompt_version": "router-v1+task-student-progress-v1+teacher-style-v1",
+    "evidence_refs": [
+      {
+        "kind": "metric",
+        "id": "M-STU-D14-N01-T01I1-valid_score_ratio",
+        "run_id": "run-7151b4307fd54f9cb1e0"
+      },
+      {
+        "kind": "metric",
+        "id": "M-STU-D14-N01-T01I1-full_score_ratio",
+        "run_id": "run-7151b4307fd54f9cb1e0"
+      },
+      {
+        "kind": "metric",
+        "id": "M-STU-D14-N01-T01I1-observed_response_ratio",
+        "run_id": "run-7151b4307fd54f9cb1e0"
+      },
+      {
+        "kind": "metric",
+        "id": "M-STU-D14-N01-T01I1-item_coverage",
+        "run_id": "run-7151b4307fd54f9cb1e0"
+      },
+      {
+        "kind": "metric",
+        "id": "M-STU-D14-N01-T01I2-valid_score_ratio",
+        "run_id": "run-7151b4307fd54f9cb1e0"
+      },
+      {
+        "kind": "metric",
+        "id": "M-STU-D14-N01-T01I2-full_score_ratio",
+        "run_id": "run-7151b4307fd54f9cb1e0"
+      },
+      {
+        "kind": "metric",
+        "id": "M-STU-D14-N01-T01I2-observed_response_ratio",
+        "run_id": "run-7151b4307fd54f9cb1e0"
+      },
+      {
+        "kind": "metric",
+        "id": "M-STU-D14-N01-T01I2-item_coverage",
+        "run_id": "run-7151b4307fd54f9cb1e0"
+      },
+      {
+        "kind": "metric",
+        "id": "M-STU-D14-N01-T01I3-valid_score_ratio",
+        "run_id": "run-7151b4307fd54f9cb1e0"
+      },
+      {
+        "kind": "metric",
+        "id": "M-STU-D14-N01-T01I3-full_score_ratio",
+        "run_id": "run-7151b4307fd54f9cb1e0"
+      },
+      {
+        "kind": "metric",
+        "id": "M-STU-D14-N01-T01I3-observed_response_ratio",
+        "run_id": "run-7151b4307fd54f9cb1e0"
+      },
+      {
+        "kind": "metric",
+        "id": "M-STU-D14-N01-T01I3-item_coverage",
+        "run_id": "run-7151b4307fd54f9cb1e0"
+      },
+      {
+        "kind": "metric",
+        "id": "M-STU-D14-N01-T02I1-valid_score_ratio",
+        "run_id": "run-7151b4307fd54f9cb1e0"
+      },
+      {
+        "kind": "metric",
+        "id": "M-STU-D14-N01-T02I1-full_score_ratio",
+        "run_id": "run-7151b4307fd54f9cb1e0"
+      },
+      {
+        "kind": "metric",
+        "id": "M-STU-D14-N01-T02I1-observed_response_ratio",
+        "run_id": "run-7151b4307fd54f9cb1e0"
+      },
+      {
+        "kind": "metric",
+        "id": "M-STU-D14-N01-T02I1-item_coverage",
+        "run_id": "run-7151b4307fd54f9cb1e0"
+      }
+    ],
+    "task_type": "student_progress",
+    "route_source": "model",
+    "segments": [
+      {
+        "kind": "explanation",
+        "text": "## D14 · N01 节点案例摘要\n\n**一句话结论**：这个学生最值得肯定的，是在已观测充分的题组上稳定达到满分——基础层面有扎实的证据支撑，并非“碰巧做对”。\n\n**强项（两项指标，证据充分）**\n\n1. 题组 T01I2：得分率 1.00（5 分得分的题全部拿到，5/5）；满分题比例 1.00（3/3 题满分）；有效不同样题 3 道，达到判定下限。判定为已掌握。\n判定为已掌握，是本节点观测面最广的一块。\n\n两块合起来看，学生在 10 道有效题上拿到 10 分和 5 分记分口径的接近满分，做题表现稳定，已出现的作答记录基本没有空答（已出现记录中的作答率 1.00）。\n\n**证据不足、不能判掌握的部分**\n\n- 题组 T01I1：只有 1 道有效不同样题，低于 3 道的判定下限；虽然这 1 道得分率 1.00，但样本太薄，不能据此说掌握。\n\n这两处若被当作“已掌握”并入结论，会把观测不足误当成能力结论，故单列待观察。另需说明：本节点只有一次正式分析，没有可比的基线与历史版本，**不能判断进步或退步**，只能描述当前这一次的快照。\n\n**一条变式或迁移建议**\n\n在 T02I1 上安排一小组换情境、换表征的迁移题（而非同型重复题）：本节点该题组的分析已标记出“迁移困难”这一类信号，说明常规题型做对不等于新情境下能调用。所以此处值得投入的是变化题目外壳，而不是再刷同类。同理，T01I1、T01I3 需要的是补足观测题量（各补到 3 道以上不同样题），而不是把已满分的那 1 道反复做——重复刷题既不新增信息，也占掉补观测的时间。\n\n**限制与未完成项**\n\n- 当前环境未提供方案读取工具（get_student_plan 不可用），因此未能核对已发布方案内容；分析结果本身也处于未发布状态，故本摘要只覆盖学情侧。\n- 未逐条读取作答过程与评分细节，具体某题的解法步骤、错在哪一步，本摘要不作判断。\n- 该学生在多个节点都有记录，节点间教学范围不同，不可拿总分横向比较。\n\n限制：回答里有一部分数字没有在本轮工具结果中找到出处，已删去。",
+        "evidence_refs": [
+          {
+            "kind": "metric",
+            "id": "M-STU-D14-N01-T01I1-valid_score_ratio",
+            "run_id": "run-7151b4307fd54f9cb1e0"
+          },
+          {
+            "kind": "metric",
+            "id": "M-STU-D14-N01-T01I1-full_score_ratio",
+            "run_id": "run-7151b4307fd54f9cb1e0"
+          },
+          {
+            "kind": "metric",
+            "id": "M-STU-D14-N01-T01I1-observed_response_ratio",
+            "run_id": "run-7151b4307fd54f9cb1e0"
+          },
+          {
+            "kind": "metric",
+            "id": "M-STU-D14-N01-T01I1-item_coverage",
+            "run_id": "run-7151b4307fd54f9cb1e0"
+          },
+          {
+            "kind": "metric",
+            "id": "M-STU-D14-N01-T01I2-valid_score_ratio",
+            "run_id": "run-7151b4307fd54f9cb1e0"
+          },
+          {
+            "kind": "metric",
+            "id": "M-STU-D14-N01-T01I2-full_score_ratio",
+            "run_id": "run-7151b4307fd54f9cb1e0"
+          },
+          {
+            "kind": "metric",
+            "id": "M-STU-D14-N01-T01I2-observed_response_ratio",
+            "run_id": "run-7151b4307fd54f9cb1e0"
+          },
+          {
+            "kind": "metric",
+            "id": "M-STU-D14-N01-T01I2-item_coverage",
+            "run_id": "run-7151b4307fd54f9cb1e0"
+          },
+          {
+            "kind": "metric",
+            "id": "M-STU-D14-N01-T01I3-valid_score_ratio",
+            "run_id": "run-7151b4307fd54f9cb1e0"
+          },
+          {
+            "kind": "metric",
+            "id": "M-STU-D14-N01-T01I3-full_score_ratio",
+            "run_id": "run-7151b4307fd54f9cb1e0"
+          },
+          {
+            "kind": "metric",
+            "id": "M-STU-D14-N01-T01I3-observed_response_ratio",
+            "run_id": "run-7151b4307fd54f9cb1e0"
+          },
+          {
+            "kind": "metric",
+            "id": "M-STU-D14-N01-T01I3-item_coverage",
+            "run_id": "run-7151b4307fd54f9cb1e0"
+          },
+          {
+            "kind": "metric",
+            "id": "M-STU-D14-N01-T02I1-valid_score_ratio",
+            "run_id": "run-7151b4307fd54f9cb1e0"
+          },
+          {
+            "kind": "metric",
+            "id": "M-STU-D14-N01-T02I1-full_score_ratio",
+            "run_id": "run-7151b4307fd54f9cb1e0"
+          },
+          {
+            "kind": "metric",
+            "id": "M-STU-D14-N01-T02I1-observed_response_ratio",
+            "run_id": "run-7151b4307fd54f9cb1e0"
+          },
+          {
+            "kind": "metric",
+            "id": "M-STU-D14-N01-T02I1-item_coverage",
+            "run_id": "run-7151b4307fd54f9cb1e0"
+          }
+        ]
+      }
+    ],
+    "proposals": [],
+    "conversation_id": "conv-aec715046613482baceb",
+    "message_id": "msg-9e2770c8d0b447259589",
+    "status": "completed",
+    "operation_results": []
+  },
+  "warnings": []
+}
