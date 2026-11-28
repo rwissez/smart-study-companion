@@ -1,21 +1,17 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useNavigate, useSearchParams } from "react-router-dom";
-import { errorCode, errorRequestId, toErrorMessage, ApiError } from "../../api/client";
+import { errorCode, errorRequestId, toErrorMessage } from "../../api/client";
 import {
   confirmProposal,
   createProposal,
   getCatalog,
   getConversationMessages,
   listConversations,
-  sendChat,
-  streamChat,
   type ChatProgressStep,
-  type ChatStreamEvent,
 } from "../../api/service";
 import type {
   ChatMessageRecord,
-  ChatReply,
   ChatSegment,
   ConfirmationResult,
   ConversationSummary,
@@ -26,6 +22,7 @@ import { useSession } from "../../app/session";
 import { formatDate } from "../../lib/format";
 import { ModelStatus } from "./ModelStatus";
 import { SafeMarkdown } from "./SafeMarkdown";
+import { chatStreamStore, type ChatScopeIdentity } from "./chatStreamStore";
 import { StatePanel } from "../feedback/StatePanel";
 import { IconAlert, IconCheck } from "../icons";
 
@@ -120,44 +117,6 @@ function StepTimeline({ steps, live }: { steps: ChatProgressStep[]; live: boolea
   );
 }
 
-function mergeStep(previous: ChatProgressStep[], incoming: ChatProgressStep): ChatProgressStep[] {
-  const next = [...previous];
-  if (incoming.kind === "tool" && incoming.call_id) {
-    const index = next.findIndex((item) => item.kind === "tool" && item.call_id === incoming.call_id);
-    if (index >= 0) {
-      next[index] = incoming;
-      return next;
-    }
-  }
-  if (
-    incoming.kind === "model" &&
-    next.length > 0 &&
-    next[next.length - 1].kind === "model" &&
-    next[next.length - 1].status === "running"
-  ) {
-    next[next.length - 1] = incoming;
-    return next;
-  }
-  next.push(incoming);
-  return next;
-}
-
-function toStep(raw: Record<string, unknown>): ChatProgressStep | null {
-  const label = typeof raw.label === "string" ? raw.label : "";
-  if (!label) return null;
-  const status = raw.status === "running" || raw.status === "failed" ? raw.status : "succeeded";
-  const kind =
-    raw.kind === "status" || raw.kind === "model" || raw.kind === "tool" || raw.kind === "limit" ? raw.kind : "status";
-  return {
-    kind,
-    status,
-    label,
-    message: typeof raw.message === "string" ? raw.message : undefined,
-    tool_name: typeof raw.tool_name === "string" ? raw.tool_name : null,
-    call_id: typeof raw.call_id === "string" ? raw.call_id : null,
-  };
-}
-
 /**
  * 师生共用对话面板：中间是主要回答区，历史在左侧；模型状态缩成右上角标记。
  * 发送后优先读取 POST /chat/stream 的 SSE：工具进度来自 AgentLoop 真实事件，
@@ -170,22 +129,46 @@ export function ChatPanel({ role, context, onConfigure, initialConversationId }:
   const [searchParams, setSearchParams] = useSearchParams();
   const [selectedId, setSelectedId] = useState<string | null>(initialConversationId ?? null);
   const [draft, setDraft] = useState("");
-  const [busy, setBusy] = useState(false);
   const [composing, setComposing] = useState(false);
-  const [error, setError] = useState<{ text: string; requestId: string | null; details: Array<{ field?: string; reason?: string }> } | null>(null);
   const [proposal, setProposal] = useState<ProposalResponse | null>(null);
   const [proposalBusy, setProposalBusy] = useState(false);
   const [proposalError, setProposalError] = useState<string | null>(null);
   const [decisionResult, setDecisionResult] = useState<ConfirmationResult | null>(null);
-  const [liveText, setLiveText] = useState("");
-  const [liveSteps, setLiveSteps] = useState<ChatProgressStep[]>([]);
-  const [liveMode, setLiveMode] = useState<"native" | "chunked" | null>(null);
-  const [pendingUser, setPendingUser] = useState<string | null>(null);
-  const [finishedMessageId, setFinishedMessageId] = useState<string | null>(null);
   const logRef = useRef<HTMLDivElement>(null);
   const autoSelectedRef = useRef(false);
   const stickToBottom = useRef(true);
   const [showJump, setShowJump] = useState(false);
+
+  // 活动流按身份键保存在模块级 store：路由切走卸载组件时流继续写，回来再订阅同一份状态。
+  const scopeIdentity = useMemo<ChatScopeIdentity>(
+    () => ({
+      mode: scopeKey.mode,
+      epoch: scopeKey.epoch,
+      datasetId: scopeKey.datasetId,
+      role,
+      studentId: context?.studentId ?? null,
+      nodeId: context?.nodeId ?? null,
+    }),
+    [scopeKey.mode, scopeKey.epoch, scopeKey.datasetId, role, context?.studentId, context?.nodeId],
+  );
+  const subscribeStream = useCallback((listener: () => void) => chatStreamStore.subscribe(listener), []);
+  const readStream = useCallback(
+    () => chatStreamStore.getSnapshot(chatStreamStore.resolveKey(scopeIdentity)),
+    [scopeIdentity],
+  );
+  const stream = useSyncExternalStore(subscribeStream, readStream, readStream);
+  const streamKey = chatStreamStore.resolveKey(scopeIdentity);
+  const streaming = stream.status === "streaming";
+  const busy = streaming;
+  const pendingUser = stream.pendingUser;
+  const liveText = stream.liveText;
+  const liveSteps = stream.liveSteps;
+  const liveMode = stream.liveMode;
+  // 只显示属于当前会话的流：同一学生切到别的会话时，后台完成态不能盖到当前会话上。
+  const streamVisible =
+    stream.status !== "idle" &&
+    (selectedId === null || stream.conversationId === null || stream.conversationId === selectedId);
+  const streamError = stream.status === "error" ? stream.error : null;
 
   const onLogScroll = () => {
     const node = logRef.current;
@@ -266,6 +249,7 @@ export function ChatPanel({ role, context, onConfigure, initialConversationId }:
   }, [conversations.data, selectedId]);
 
   // 身份、角色或数据集变化后旧会话不再属于当前 owner：清掉选择、预览和 URL 参数。
+  // 旧身份上的流不删除、不中止，它留在自己的身份键里，切回去还能看到。
   const ownerIdentity = `${scopeKey.mode}|${scopeKey.epoch}|${scopeKey.datasetId ?? ""}|${role}`;
   const ownerIdentityRef = useRef(ownerIdentity);
   useEffect(() => {
@@ -273,15 +257,9 @@ export function ChatPanel({ role, context, onConfigure, initialConversationId }:
     ownerIdentityRef.current = ownerIdentity;
     autoSelectedRef.current = false;
     setSelectedId(null);
-    setError(null);
     setProposal(null);
     setProposalError(null);
     setDecisionResult(null);
-    setLiveText("");
-    setLiveSteps([]);
-    setLiveMode(null);
-    setPendingUser(null);
-    setFinishedMessageId(null);
     const next = new URLSearchParams(searchParams);
     if (next.has("conversationId")) {
       next.delete("conversationId");
@@ -329,38 +307,66 @@ export function ChatPanel({ role, context, onConfigure, initialConversationId }:
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [messages.isError, messages.error, selectedId]);
 
-  // 新回答已进入服务端历史后再撤掉本地流式预览，避免闪空或重复。
+  // 完成后认领会话：新会话的 conversation_id 只在 done 事件里出现。
   useEffect(() => {
-    if (!finishedMessageId) return;
-    if (messages.data?.some((message) => message.message_id === finishedMessageId)) {
-      setLiveText("");
-      setLiveSteps([]);
-      setLiveMode(null);
-      setPendingUser(null);
-      setFinishedMessageId(null);
+    if (stream.status === "idle" || !stream.conversationId) return;
+    if (selectedId !== null || initialConversationId) return;
+    autoSelectedRef.current = true;
+    setSelectedId(stream.conversationId);
+  }, [stream.status, stream.conversationId, selectedId, initialConversationId]);
+
+  // 完成或失败后刷新会话列表与消息，让服务端历史进入缓存；
+  // 卸载期间完成的话，重新挂载时补做一次。
+  const streamInvalidatedRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (stream.status !== "done" && stream.status !== "error") return;
+    const marker = `${streamKey}|${stream.status}|${stream.conversationId ?? ""}|${stream.finishedMessageId ?? ""}`;
+    if (streamInvalidatedRef.current === marker) return;
+    streamInvalidatedRef.current = marker;
+    void queryClient.invalidateQueries({ queryKey: queryKeys.conversations(scopeKey) });
+    if (stream.conversationId) {
+      void queryClient.invalidateQueries({
+        queryKey: queryKeys.conversationMessages(scopeKey, stream.conversationId),
+      });
     }
-  }, [finishedMessageId, messages.data]);
+  }, [stream.status, stream.conversationId, stream.finishedMessageId, streamKey, queryClient, scopeKey]);
+
+  // 历史里真的出现这条回答后再撤掉本地预览：避免闪空或同一条消息显示两遍。
+  useEffect(() => {
+    if (stream.status !== "done") return;
+    if (!stream.finishedMessageId || !stream.conversationId) {
+      chatStreamStore.clear(streamKey);
+      return;
+    }
+    if (messages.data?.some((message) => message.message_id === stream.finishedMessageId)) {
+      chatStreamStore.clear(streamKey);
+    }
+  }, [stream.status, stream.finishedMessageId, stream.conversationId, messages.data, streamKey]);
+
+  // 失败后把用户原话放回输入框；只在输入框为空时恢复，不覆盖用户新输入。
+  useEffect(() => {
+    if (stream.status !== "error" || !stream.draftText) return;
+    const restore = stream.draftText;
+    setDraft((previous) => (previous ? previous : restore));
+  }, [stream.status, stream.draftText]);
 
   const selectConversation = (conversationId: string) => {
     autoSelectedRef.current = true;
     setSelectedId(conversationId);
-    setError(null);
     setDecisionResult(null);
+    // 只清掉失败提示；完成态要等历史落地，不能因为点了会话就先闪空。
+    if (stream.status === "error") chatStreamStore.clear(streamKey);
   };
 
   const startNew = () => {
     autoSelectedRef.current = true;
     setSelectedId(null);
     setDraft("");
-    setError(null);
     setProposal(null);
     setDecisionResult(null);
     setProposalError(null);
-    setLiveText("");
-    setLiveSteps([]);
-    setLiveMode(null);
-    setPendingUser(null);
-    setFinishedMessageId(null);
+    // 用户显式开始新对话：放弃这一身份下尚未认领的完成态，避免它盖在新对话上。
+    chatStreamStore.clear(streamKey);
     const next = new URLSearchParams(searchParams);
     next.delete("conversationId");
     setSearchParams(next, { replace: true });
@@ -417,166 +423,17 @@ export function ChatPanel({ role, context, onConfigure, initialConversationId }:
     }
   };
 
-  const applyDone = useCallback(
-    async (done: ChatReply, fallbackText: string) => {
-      const conversationId = typeof done.conversation_id === "string" ? done.conversation_id : selectedId;
-      const messageId = typeof done.message_id === "string" ? done.message_id : null;
-      if (!done.text && fallbackText) {
-        setLiveText((previous) => previous || fallbackText);
-      }
-      if (conversationId) {
-        autoSelectedRef.current = true;
-        setSelectedId(conversationId);
-        if (messageId) {
-          setFinishedMessageId(messageId);
-        } else {
-          setLiveText("");
-          setLiveSteps([]);
-          setLiveMode(null);
-          setPendingUser(null);
-        }
-        await queryClient.invalidateQueries({ queryKey: queryKeys.conversations(scopeKey) });
-        await queryClient.invalidateQueries({
-          queryKey: queryKeys.conversationMessages(scopeKey, conversationId),
-        });
-      } else {
-        // 演示模式或旧服务没有返回会话编号：仍然刷新历史与消息。
-        await queryClient.invalidateQueries({ queryKey: queryKeys.conversations(scopeKey) });
-        setLiveText("");
-        setLiveSteps([]);
-        setPendingUser(null);
-      }
-    },
-    [queryClient, scopeKey, selectedId],
-  );
-
-  const send = async () => {
+  // 发送只负责把请求交给 store：流由 store 持续接收，组件卸载不影响。
+  const send = () => {
     const text = draft.trim();
     if (!text || busy) return;
-    const previousConversation = selectedId;
-    setError(null);
-    setBusy(true);
     setDraft("");
-    setPendingUser(text);
-    setLiveText("");
-    setLiveSteps([]);
-    setLiveMode(null);
-    setFinishedMessageId(null);
-
-    let accumulated = "";
-    let finished = false;
-    let pendingText = "";
-    let pendingMode: "native" | "chunked" = "native";
-    let flushTimer: number | null = null;
-    const flushLive = () => {
-      if (!pendingText) return;
-      const chunk = pendingText;
-      pendingText = "";
-      setLiveText((previous) => previous + chunk);
-      setLiveMode(pendingMode);
-    };
-    const scheduleFlush = () => {
-      if (flushTimer !== null) return;
-      flushTimer = window.setTimeout(() => {
-        flushTimer = null;
-        flushLive();
-      }, 40);
-    };
-
-    const handleEvent = async (event: ChatStreamEvent) => {
-      if (event.event === "step") {
-        const step = toStep(event.data);
-        if (step) {
-          setLiveSteps((previous) => mergeStep(previous, step));
-        }
-        return;
-      }
-      if (event.event === "delta") {
-        const chunk = typeof event.data.text === "string" ? event.data.text : "";
-        accumulated += chunk;
-        pendingText += chunk;
-        pendingMode = event.data.mode === "chunked" ? "chunked" : "native";
-        // 原生流可能逐字到达；合并到约 25 帧/秒刷新，避免每个字符重排整段 Markdown。
-        scheduleFlush();
-        return;
-      }
-      if (event.event === "discard") {
-        accumulated = "";
-        pendingText = "";
-        setLiveText("");
-        return;
-      }
-      if (event.event === "error") {
-        const code = typeof event.data.code === "string" ? event.data.code : "UNKNOWN";
-        throw new ApiError(
-          code,
-          typeof event.data.message === "string" ? event.data.message : "流式回答失败。",
-          0,
-        );
-      }
-      if (event.event === "done") {
-        finished = true;
-        flushLive();
-        await applyDone(event.data as unknown as ChatReply, accumulated);
-      }
-    };
-
-    try {
-      for await (const event of streamChat({
-        message: text,
-        conversation_id: previousConversation,
-        node_id: context?.nodeId ?? null,
-        student_id: context?.studentId ?? null,
-      })) {
-        await handleEvent(event);
-      }
-      if (!finished) {
-        throw new ApiError("STREAM_INTERRUPTED", "流式连接提前结束，回答可能未完成。", 0);
-      }
-    } catch (reason) {
-      const code = errorCode(reason);
-      const streamMissing = code === "HTTP_404" || code === "HTTP_405";
-      if (streamMissing) {
-        // 旧后端没有 SSE 端点：退回旧 POST /chat，工具进度只在完成后由真实 tool_trace 展示。
-        try {
-          const reply = await sendChat({
-            messages: [{ role: "user", content: text }],
-            conversation_id: previousConversation,
-            node_id: context?.nodeId ?? null,
-            student_id: context?.studentId ?? null,
-          });
-          await applyDone(reply, reply.text);
-          return;
-        } catch (legacyReason) {
-          setError({
-            text: toErrorMessage(legacyReason),
-            requestId: errorRequestId(legacyReason),
-            details: (legacyReason as { details?: Array<{ field?: string; reason?: string }> }).details ?? [],
-          });
-        }
-      } else {
-        setError({
-          text: toErrorMessage(reason),
-          requestId: errorRequestId(reason),
-          details: (reason as { details?: Array<{ field?: string; reason?: string }> }).details ?? [],
-        });
-      }
-      setDraft(text);
-      pendingText = "";
-      setLiveText("");
-      setLiveSteps([]);
-      setLiveMode(null);
-      setPendingUser(null);
-      setFinishedMessageId(null);
-    } finally {
-      if (flushTimer !== null) window.clearTimeout(flushTimer);
-      setBusy(false);
-    }
+    chatStreamStore.start({ identity: scopeIdentity, text, conversationId: selectedId });
   };
 
   const items = messages.data ?? [];
-  const streaming = busy;
-  const liveActive = Boolean(pendingUser) || Boolean(liveText) || liveSteps.length > 0;
+  const liveActive =
+    streamVisible && (Boolean(pendingUser) || Boolean(liveText) || liveSteps.length > 0);
   const canPropose = role === "teacher" && Boolean(context?.studentId && context?.nodeId);
 
   return (
@@ -695,7 +552,7 @@ export function ChatPanel({ role, context, onConfigure, initialConversationId }:
             );
           })}
 
-          {pendingUser ? (
+          {streamVisible && pendingUser ? (
             <article className="chatMsg chatMsg-user chatMsgLive">
               <div className="chatRole">
                 <span>我</span>
@@ -707,7 +564,7 @@ export function ChatPanel({ role, context, onConfigure, initialConversationId }:
             </article>
           ) : null}
 
-          {liveText || liveSteps.length ? (
+          {streamVisible && (liveText || liveSteps.length) ? (
             <article className="chatMsg chatMsg-assistant chatMsgLive">
               <div className="chatRole">
                 <span>湛知</span>
@@ -847,12 +704,12 @@ export function ChatPanel({ role, context, onConfigure, initialConversationId }:
               </button>
             </span>
           </div>
-          {error ? (
+          {streamError ? (
             <div className="fieldError" role="alert">
-              {error.text}
-              {error.requestId ? `（请求编号 ${error.requestId}）` : ""}
-              {error.details.length ? (
-                <ul>{error.details.map((detail, index) => <li key={index} className="small">{detail.field ? `${detail.field}：` : ""}{detail.reason}</li>)}</ul>
+              {streamError.text}
+              {streamError.requestId ? `（请求编号 ${streamError.requestId}）` : ""}
+              {streamError.details.length ? (
+                <ul>{streamError.details.map((detail, index) => <li key={index} className="small">{detail.field ? `${detail.field}：` : ""}{detail.reason}</li>)}</ul>
               ) : null}
             </div>
           ) : null}
