@@ -56,17 +56,23 @@ TABLE_WIDTHS: dict[tuple[str, ...], tuple[int, ...]] = {
     ("环节", "谁定值", "谁释义"): (42, 30, 28),
     ("步骤", "做什么", "40 人数据实测"): (14, 56, 30),
     ("评委会问", "系统怎么回答", "在哪能核"): (30, 42, 28),
-    ("页面", "回答什么问题", "打开后看到什么"): (14, 36, 50),
+    ("页面", "回答什么问题", "打开后看到什么"): (14, 39, 47),
     ("能做什么", "教师", "学生"): (46, 27, 27),
-    ("组件", "做什么", "检查什么"): (12, 28, 60),
+    ("组件", "做什么", "检查什么"): (17, 24, 59),
     ("包内文件", "装了什么", "对应哪道题"): (46, 38, 16),
     ("产出", "数量", "一句话说明"): (22, 14, 64),
     ("对象", "问题与处置"): (28, 72),
-    ("层次", "实测", "证明什么"): (16, 34, 50),
+    ("层次", "实测", "证明什么"): (20, 35, 45),
     ("项目", "实测"): (30, 70),
     ("结论", "依据", "怎么核"): (34, 28, 38),
     ("限制", "具体表现", "怎么理解"): (16, 50, 34),
+    ("类型", "学生", "节点", "主要依据"): (13, 9, 8, 70),
 }
+
+
+def mark_code_paragraphs(body: str) -> str:
+    """含行内代码的段落改为左对齐，避免两端对齐把字距拉散。"""
+    return re.sub(r"<p>(?=(?:(?!</p>).)*?<code>)", '<p class="code-p">', body, flags=re.S)
 
 
 def tune_tables(body: str) -> str:
@@ -126,6 +132,7 @@ def build_html() -> None:
         [PANDOC, str(SRC), "-f", "gfm", "-t", "html5", "--wrap=none"],
         capture_output=True,
     ).stdout.decode("utf-8")
+    body = mark_code_paragraphs(body)
     body = tune_tables(body)
     css = CSS.read_text(encoding="utf-8")
     html = f"""<!DOCTYPE html>
@@ -215,7 +222,7 @@ def stamp(raw: Path) -> int:
             label,
             fontname="pgnum",
             fontsize=8.5,
-            color=(0.42, 0.47, 0.44),
+            color=(0.0, 0.0, 0.0),
         )
     doc.set_metadata(
         {
