@@ -478,6 +478,15 @@ def confirm_import(
                 applied = True
         if not applied:
             raise DomainError("NOT_FOUND", "映射引用的文件或工作表不存在")
+        persisted_rows = db.scalars(
+            select(models.ImportFileRow).where(
+                models.ImportFileRow.import_id == import_id,
+                models.ImportFileRow.file_id == file_id,
+                models.ImportFileRow.sheet_name == sheet_name,
+            )
+        ).all()
+        for persisted_row in persisted_rows:
+            persisted_row.role = role
         for slot, item in by_slot.items():
             if item.get("file_id") == file_id and item.get("sheet_name") == sheet_name:
                 item["role"] = role
