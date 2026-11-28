@@ -56,7 +56,7 @@ const TABS = [
 type TabKey = (typeof TABS)[number]["key"];
 type ImportIntent = "new_family" | "append_to_family" | "auto_detect";
 
-const ROLE_OPTIONS = ["requirements", "materials", "students", "nodes", "records", "dictionary"];
+const ROLE_OPTIONS = ["requirements", "materials", "students", "nodes", "records", "dictionary", "textbook", "standard"];
 const MAX_FILE_BYTES = 32 * 1024 * 1024;
 const ALLOWED_EXT = [".csv", ".xlsx", ".pdf"];
 
@@ -506,6 +506,9 @@ export function DataPage() {
                     </tbody>
                   </table>
                 </div>
+                <p className="small muted" style={{ marginTop: 8 }}>
+                  教材 PDF 请把角色选为“教材”；课程标准等其它 PDF 选“课程标准”，不参与教材抽取。
+                </p>
                 {receipt.classification_status === "needs_confirmation" ? (
                   <div className="row" style={{ marginTop: 12 }}>
                     <button type="button" className="btn btnPrimary" onClick={() => void submitConfirm()} disabled={busy}>

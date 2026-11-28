@@ -795,7 +795,12 @@ def _attach_error_types(
 def _textbook_candidates(
     db: Session, dataset_id: str, catalog
 ) -> tuple[list[Any], dict[str, int]]:
-    """从本数据集导入的教材 PDF 抽取规则候选与页面统计；没有 PDF 就返回空。"""
+    """从本数据集导入的教材 PDF 抽取规则候选与页面统计；没有 PDF 就返回空。
+
+    只把角色为教材（textbook）的 PDF 当作教材来源。历史导入里 PDF 常按默认角色
+    （standard）落库，此时仍沿用旧行为参与抽取，并在限制说明里提示重新标注，
+    避免教材抽取静默变成 0 页。
+    """
 
     from study_companion.knowledge.candidates import (
         dedupe_candidates,
@@ -805,17 +810,27 @@ def _textbook_candidates(
     from study_companion.knowledge.scope_plan import page_stats, plan_scope, split_chapters
     from study_companion.library import blobs
 
-    files = db.scalars(
-        select(models.FileObject)
+    rows = db.execute(
+        select(models.FileObject, models.ImportFileRow.role)
         .join(models.ImportFileRow, models.ImportFileRow.file_id == models.FileObject.file_id)
         .join(models.ImportRecord, models.ImportRecord.import_id == models.ImportFileRow.import_id)
         .where(
             models.ImportRecord.dataset_id == dataset_id,
             models.FileObject.media_type == "application/pdf",
-            models.ImportFileRow.role == "textbook",
         )
         .distinct()
     ).all()
+    textbook_files = [file_row for file_row, role in rows if role == "textbook"]
+    notes: list[str] = []
+    if textbook_files:
+        files = textbook_files
+    else:
+        files = [file_row for file_row, _role in rows]
+        if files:
+            notes.append(
+                f"教材抽取：本数据集有 {len(files)} 份 PDF，但没有标注为教材的文件，"
+                "已按历史行为全部参与抽取；再次导入时请把教材 PDF 的角色设为教材。"
+            )
     if not files:
         return [], {}
     topics: list[str] = []
@@ -879,11 +894,10 @@ def _textbook_candidates(
                 collected.extend(rule_batch)
         except DomainError:
             continue
+    totals["model_notes"] = [*notes, *model_notes]  # type: ignore[assignment]
     if not collected:
-        totals["model_notes"] = model_notes  # type: ignore[assignment]
         return [], totals
     if model_used:
-        totals["model_notes"] = model_notes  # type: ignore[assignment]
         return collected, totals
     deduped, _ = dedupe_candidates(collected)
     return deduped, totals

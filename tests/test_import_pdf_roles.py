@@ -84,6 +84,52 @@ def test_confirmed_pdf_roles_are_persisted_and_only_textbooks_are_extracted(
 
         monkeypatch.setattr("study_companion.knowledge.pdf_reader.read_pdf", reject_after_recording)
         catalog = SimpleNamespace(topics=[], indicators=[], materials=[])
-        _textbook_candidates(db, dataset_id, catalog)
+        candidates, stats = _textbook_candidates(db, dataset_id, catalog)
 
     assert seen == [pdfs["B01_教材切片.pdf"]["file_id"]]
+    assert candidates == []
+    assert not stats.get("model_notes")
+
+
+def test_pdf_left_on_default_role_still_extracts_and_says_so(client: TestClient, monkeypatch) -> None:
+    """历史与默认导入里 PDF 的角色是 standard：仍参与抽取，但在限制说明里提示。"""
+
+    headers = {"Authorization": f"Bearer {_teacher_token(client)}"}
+    files = [
+        ("files", (f"{name}.csv", (FIXTURES / f"{name}.csv").read_bytes(), "text/csv"))
+        for name in TABLES
+    ]
+    files.append(("files", ("B02_教材切片.pdf", b"%PDF-1.4\ntextbook", "application/pdf")))
+    created = client.post(
+        "/api/v1/imports",
+        headers=headers,
+        files=files,
+        data={"metadata": '{"intent":"new_family"}'},
+    )
+    assert created.status_code == 202, created.text
+    receipt = created.json()["data"]
+    pdf = next(item for item in receipt["files"] if item["format"] == "pdf")
+
+    confirmed = client.post(
+        f"/api/v1/imports/{receipt['import_id']}/confirm",
+        headers=headers,
+        json={"intent": "new_family", "file_mappings": []},
+    )
+    assert confirmed.status_code == 202, confirmed.text
+    dataset_id = confirmed.json()["data"]["dataset_id"]
+    assert dataset_id
+
+    seen: list[str] = []
+
+    def reject_after_recording(file_id: str, _data: bytes):
+        seen.append(file_id)
+        raise DomainError("UNPROCESSABLE", "test stop")
+
+    monkeypatch.setattr("study_companion.knowledge.pdf_reader.read_pdf", reject_after_recording)
+    with get_sessionmaker()() as db:
+        catalog = SimpleNamespace(topics=[], indicators=[], materials=[])
+        _candidates, stats = _textbook_candidates(db, dataset_id, catalog)
+
+    assert seen == [pdf["file_id"]]
+    notes = " ".join(stats.get("model_notes") or [])
+    assert "没有标注为教材" in notes

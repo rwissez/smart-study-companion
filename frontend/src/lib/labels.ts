@@ -158,6 +158,8 @@ const TABLE_LABELS: Record<string, string> = {
   nodes: "测验节点",
   records: "作答记录",
   dictionary: "字典表",
+  standard: "课程标准",
+  textbook: "教材",
 };
 
 export function tableLabel(table: string): string {
