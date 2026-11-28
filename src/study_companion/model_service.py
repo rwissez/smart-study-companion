@@ -132,6 +132,8 @@ def assert_external_model_allowed(settings: Any) -> None:
     """
 
     url = getattr(settings, "model_base_url", "") or ""
+    if not url:
+        return
     if _is_locally_trusted(url):
         return
     if getattr(settings, "allow_external_model_input", False):
@@ -170,7 +172,7 @@ class ModelService:
 
     @property
     def configured(self) -> bool:
-        return self._settings.model_configured
+        return self._provider is not None or self._settings.model_configured
 
     def describe(self) -> dict[str, Any]:
         return {
