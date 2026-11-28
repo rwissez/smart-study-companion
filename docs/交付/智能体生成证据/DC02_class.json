@@ -1,0 +1,709 @@
+{
+  "schema_version": "1.1",
+  "request_id": "req-84cac833b22e4f6c",
+  "data": {
+    "text": "## DC02｜N01 班级共性分析（run-7151b4307fd54f9cb1e0）\n\n**一、一句话结论**\n先处理 T02I1（得分率 0.43）和 T01I1（得分率 0.48）这两处；T01I2 排在第三步；T01I3、T02I3、T03I1 证据不足，本周先不安排。\n\n**二、分析链条**\n样本口径：名册 19 人，19 人都有作答记录（19/19），但题目覆盖不均匀，各指标有效样题不同。\n\n1. T02I1：得分 33/76（0.43），满分题 20/52（0.38），有效样题 8 道。已观测 11 人全部需要加强（共性问题 cf-DC02-N01-T02I1，证据充分）。这是覆盖人数最多、得分率最低的一处。\n2. T01I1：得分 31/64（0.48），满分题 19/40（0.47），有效样题 6 道；已观测 8 人中 7 人需要加强（cf-DC02-N01-T01I1，证据充分）。\n3. T01I2：得分 61/93（0.66），满分题 37/65（0.57），有效样题 10 道；已观测 14 人中 10 人需要加强（cf-DC02-N01-T01I2，证据充分）。失分面广，但程度比前两项轻。\n4. 证据不足：T01I3（有效样题 2 道）、T02I3（1 道）、T03I1（1 道），均低于 3 道下限，系统未判定为班级共性。\n\n需要说明的是，T02I1 与 T01I1 的失分是两类知识点，还是同一操作习惯在两类题上重复出现，现有记录里没有过程性诊断明细，无法回答。\n\n**三、教学安排**\n- 先做：T02I1 的 8 道已布置原题重做，重点看错误是否集中在同一步骤；同时在记录列表里选那道原错题让学生重做，无需另找题。\n- 再做：T01I1 取 6 道原题加一组变式，同一类错误一次补完，这两项本周一起安排。\n- 暂缓：T01I2 放到下周，避免一次背太多。\n- 后续观察：先补 T01I3、T02I3、T03I1 的题量到 3 道以上，再安排复评；届时看这两项的满分题比例是否上到 0.8 附近。\n\n**四、不能下的结论**\n不能说这三个证据不足的知识点没有共性问题，只能说目前看不出来；不能从这份班级汇总推断任何单个学生的情况，个人的卡点仍需回看该生自己的作答记录；也不能仅凭得分率判定具体错法。",
+    "tool_trace": [
+      {
+        "call_id": "call_00_vkwm5gfyjhxjefms2veeqn0a",
+        "tool_name": "get_class_analysis",
+        "stage": "",
+        "status": "succeeded",
+        "message": "",
+        "evidence_refs": [
+          {
+            "kind": "metric",
+            "id": "M-CLS-DC02-N01-T01I1-valid_score_ratio",
+            "run_id": "run-7151b4307fd54f9cb1e0"
+          },
+          {
+            "kind": "metric",
+            "id": "M-CLS-DC02-N01-T01I1-full_score_ratio",
+            "run_id": "run-7151b4307fd54f9cb1e0"
+          },
+          {
+            "kind": "metric",
+            "id": "M-CLS-DC02-N01-T01I1-observed_response_ratio",
+            "run_id": "run-7151b4307fd54f9cb1e0"
+          },
+          {
+            "kind": "metric",
+            "id": "M-CLS-DC02-N01-T01I1-item_coverage",
+            "run_id": "run-7151b4307fd54f9cb1e0"
+          },
+          {
+            "kind": "metric",
+            "id": "M-CLS-DC02-N01-T01I1-student_observation_rate",
+            "run_id": "run-7151b4307fd54f9cb1e0"
+          },
+          {
+            "kind": "metric",
+            "id": "M-CLS-DC02-N01-T01I2-valid_score_ratio",
+            "run_id": "run-7151b4307fd54f9cb1e0"
+          },
+          {
+            "kind": "metric",
+            "id": "M-CLS-DC02-N01-T01I2-full_score_ratio",
+            "run_id": "run-7151b4307fd54f9cb1e0"
+          },
+          {
+            "kind": "metric",
+            "id": "M-CLS-DC02-N01-T01I2-observed_response_ratio",
+            "run_id": "run-7151b4307fd54f9cb1e0"
+          },
+          {
+            "kind": "metric",
+            "id": "M-CLS-DC02-N01-T01I2-item_coverage",
+            "run_id": "run-7151b4307fd54f9cb1e0"
+          },
+          {
+            "kind": "metric",
+            "id": "M-CLS-DC02-N01-T01I2-student_observation_rate",
+            "run_id": "run-7151b4307fd54f9cb1e0"
+          },
+          {
+            "kind": "metric",
+            "id": "M-CLS-DC02-N01-T01I3-valid_score_ratio",
+            "run_id": "run-7151b4307fd54f9cb1e0"
+          },
+          {
+            "kind": "metric",
+            "id": "M-CLS-DC02-N01-T01I3-full_score_ratio",
+            "run_id": "run-7151b4307fd54f9cb1e0"
+          },
+          {
+            "kind": "metric",
+            "id": "M-CLS-DC02-N01-T01I3-observed_response_ratio",
+            "run_id": "run-7151b4307fd54f9cb1e0"
+          },
+          {
+            "kind": "metric",
+            "id": "M-CLS-DC02-N01-T01I3-item_coverage",
+            "run_id": "run-7151b4307fd54f9cb1e0"
+          },
+          {
+            "kind": "metric",
+            "id": "M-CLS-DC02-N01-T01I3-student_observation_rate",
+            "run_id": "run-7151b4307fd54f9cb1e0"
+          },
+          {
+            "kind": "metric",
+            "id": "M-CLS-DC02-N01-T02I1-valid_score_ratio",
+            "run_id": "run-7151b4307fd54f9cb1e0"
+          },
+          {
+            "kind": "metric",
+            "id": "M-CLS-DC02-N01-T02I1-full_score_ratio",
+            "run_id": "run-7151b4307fd54f9cb1e0"
+          },
+          {
+            "kind": "metric",
+            "id": "M-CLS-DC02-N01-T02I1-observed_response_ratio",
+            "run_id": "run-7151b4307fd54f9cb1e0"
+          },
+          {
+            "kind": "metric",
+            "id": "M-CLS-DC02-N01-T02I1-item_coverage",
+            "run_id": "run-7151b4307fd54f9cb1e0"
+          },
+          {
+            "kind": "metric",
+            "id": "M-CLS-DC02-N01-T02I1-student_observation_rate",
+            "run_id": "run-7151b4307fd54f9cb1e0"
+          },
+          {
+            "kind": "metric",
+            "id": "M-CLS-DC02-N01-T02I3-valid_score_ratio",
+            "run_id": "run-7151b4307fd54f9cb1e0"
+          },
+          {
+            "kind": "metric",
+            "id": "M-CLS-DC02-N01-T02I3-full_score_ratio",
+            "run_id": "run-7151b4307fd54f9cb1e0"
+          },
+          {
+            "kind": "metric",
+            "id": "M-CLS-DC02-N01-T02I3-observed_response_ratio",
+            "run_id": "run-7151b4307fd54f9cb1e0"
+          },
+          {
+            "kind": "metric",
+            "id": "M-CLS-DC02-N01-T02I3-item_coverage",
+            "run_id": "run-7151b4307fd54f9cb1e0"
+          },
+          {
+            "kind": "metric",
+            "id": "M-CLS-DC02-N01-T02I3-student_observation_rate",
+            "run_id": "run-7151b4307fd54f9cb1e0"
+          },
+          {
+            "kind": "metric",
+            "id": "M-CLS-DC02-N01-T03I1-valid_score_ratio",
+            "run_id": "run-7151b4307fd54f9cb1e0"
+          },
+          {
+            "kind": "metric",
+            "id": "M-CLS-DC02-N01-T03I1-full_score_ratio",
+            "run_id": "run-7151b4307fd54f9cb1e0"
+          },
+          {
+            "kind": "metric",
+            "id": "M-CLS-DC02-N01-T03I1-observed_response_ratio",
+            "run_id": "run-7151b4307fd54f9cb1e0"
+          },
+          {
+            "kind": "metric",
+            "id": "M-CLS-DC02-N01-T03I1-item_coverage",
+            "run_id": "run-7151b4307fd54f9cb1e0"
+          },
+          {
+            "kind": "metric",
+            "id": "M-CLS-DC02-N01-T03I1-student_observation_rate",
+            "run_id": "run-7151b4307fd54f9cb1e0"
+          }
+        ]
+      },
+      {
+        "call_id": "call_00_s8avy316wmc9m3ntjtmej699",
+        "tool_name": "resolve_evidence",
+        "stage": "",
+        "status": "failed",
+        "message": "",
+        "evidence_refs": []
+      },
+      {
+        "call_id": "call_00_h4im9cj4wdgnnqnnr8q1ipfd",
+        "tool_name": "resolve_evidence",
+        "stage": "",
+        "status": "succeeded",
+        "message": "",
+        "evidence_refs": [
+          {
+            "kind": "metric",
+            "id": "M-CLS-DC02-N01-T02I1-valid_score_ratio",
+            "run_id": "run-7151b4307fd54f9cb1e0",
+            "catalog_version": null,
+            "dataset_id": null,
+            "knowledge_version": null,
+            "analysis_version": null,
+            "plan_version": null,
+            "material_id": null,
+            "attempt_id": null,
+            "curriculum_type": null
+          },
+          {
+            "kind": "metric",
+            "id": "M-CLS-DC02-N01-T01I1-valid_score_ratio",
+            "run_id": "run-7151b4307fd54f9cb1e0",
+            "catalog_version": null,
+            "dataset_id": null,
+            "knowledge_version": null,
+            "analysis_version": null,
+            "plan_version": null,
+            "material_id": null,
+            "attempt_id": null,
+            "curriculum_type": null
+          },
+          {
+            "kind": "metric",
+            "id": "M-CLS-DC02-N01-T01I2-valid_score_ratio",
+            "run_id": "run-7151b4307fd54f9cb1e0",
+            "catalog_version": null,
+            "dataset_id": null,
+            "knowledge_version": null,
+            "analysis_version": null,
+            "plan_version": null,
+            "material_id": null,
+            "attempt_id": null,
+            "curriculum_type": null
+          }
+        ]
+      },
+      {
+        "call_id": "call_01_silro3g7chnc4oggsgly1343",
+        "tool_name": "resolve_evidence",
+        "stage": "",
+        "status": "failed",
+        "message": "",
+        "evidence_refs": []
+      }
+    ],
+    "fact_check": {
+      "status": "passed",
+      "issues": [],
+      "checked_evidence": [
+        "M-CLS-DC02-N01-T01I1-full_score_ratio",
+        "M-CLS-DC02-N01-T01I1-item_coverage",
+        "M-CLS-DC02-N01-T01I1-observed_response_ratio",
+        "M-CLS-DC02-N01-T01I1-student_observation_rate",
+        "M-CLS-DC02-N01-T01I1-valid_score_ratio",
+        "M-CLS-DC02-N01-T01I2-full_score_ratio",
+        "M-CLS-DC02-N01-T01I2-item_coverage",
+        "M-CLS-DC02-N01-T01I2-observed_response_ratio",
+        "M-CLS-DC02-N01-T01I2-student_observation_rate",
+        "M-CLS-DC02-N01-T01I2-valid_score_ratio",
+        "M-CLS-DC02-N01-T01I3-full_score_ratio",
+        "M-CLS-DC02-N01-T01I3-item_coverage",
+        "M-CLS-DC02-N01-T01I3-observed_response_ratio",
+        "M-CLS-DC02-N01-T01I3-student_observation_rate",
+        "M-CLS-DC02-N01-T01I3-valid_score_ratio",
+        "M-CLS-DC02-N01-T02I1-full_score_ratio",
+        "M-CLS-DC02-N01-T02I1-item_coverage",
+        "M-CLS-DC02-N01-T02I1-observed_response_ratio",
+        "M-CLS-DC02-N01-T02I1-student_observation_rate",
+        "M-CLS-DC02-N01-T02I1-valid_score_ratio",
+        "M-CLS-DC02-N01-T02I3-full_score_ratio",
+        "M-CLS-DC02-N01-T02I3-item_coverage",
+        "M-CLS-DC02-N01-T02I3-observed_response_ratio",
+        "M-CLS-DC02-N01-T02I3-student_observation_rate",
+        "M-CLS-DC02-N01-T02I3-valid_score_ratio",
+        "M-CLS-DC02-N01-T03I1-full_score_ratio",
+        "M-CLS-DC02-N01-T03I1-item_coverage",
+        "M-CLS-DC02-N01-T03I1-observed_response_ratio",
+        "M-CLS-DC02-N01-T03I1-student_observation_rate",
+        "M-CLS-DC02-N01-T03I1-valid_score_ratio"
+      ],
+      "checked_numbers": [
+        "-7151",
+        "0",
+        "0.38",
+        "0.43",
+        "0.47",
+        "0.48",
+        "0.57",
+        "0.66",
+        "0.8",
+        "01",
+        "02",
+        "03",
+        "1",
+        "10",
+        "11",
+        "14",
+        "19",
+        "2",
+        "20",
+        "3",
+        "31",
+        "33",
+        "37",
+        "4",
+        "40",
+        "4307",
+        "52",
+        "54",
+        "6",
+        "61",
+        "64",
+        "65",
+        "7",
+        "76",
+        "8",
+        "9",
+        "93"
+      ],
+      "limitations": [
+        "只核对证据编号与数字来源，不判断解释是否正确"
+      ]
+    },
+    "warnings": [],
+    "stopped_reason": "model_finished",
+    "prompt_version": "task-class-analysis-v1+teacher-style-v1",
+    "evidence_refs": [
+      {
+        "kind": "metric",
+        "id": "M-CLS-DC02-N01-T01I1-valid_score_ratio",
+        "run_id": "run-7151b4307fd54f9cb1e0"
+      },
+      {
+        "kind": "metric",
+        "id": "M-CLS-DC02-N01-T01I1-full_score_ratio",
+        "run_id": "run-7151b4307fd54f9cb1e0"
+      },
+      {
+        "kind": "metric",
+        "id": "M-CLS-DC02-N01-T01I1-observed_response_ratio",
+        "run_id": "run-7151b4307fd54f9cb1e0"
+      },
+      {
+        "kind": "metric",
+        "id": "M-CLS-DC02-N01-T01I1-item_coverage",
+        "run_id": "run-7151b4307fd54f9cb1e0"
+      },
+      {
+        "kind": "metric",
+        "id": "M-CLS-DC02-N01-T01I1-student_observation_rate",
+        "run_id": "run-7151b4307fd54f9cb1e0"
+      },
+      {
+        "kind": "metric",
+        "id": "M-CLS-DC02-N01-T01I2-valid_score_ratio",
+        "run_id": "run-7151b4307fd54f9cb1e0"
+      },
+      {
+        "kind": "metric",
+        "id": "M-CLS-DC02-N01-T01I2-full_score_ratio",
+        "run_id": "run-7151b4307fd54f9cb1e0"
+      },
+      {
+        "kind": "metric",
+        "id": "M-CLS-DC02-N01-T01I2-observed_response_ratio",
+        "run_id": "run-7151b4307fd54f9cb1e0"
+      },
+      {
+        "kind": "metric",
+        "id": "M-CLS-DC02-N01-T01I2-item_coverage",
+        "run_id": "run-7151b4307fd54f9cb1e0"
+      },
+      {
+        "kind": "metric",
+        "id": "M-CLS-DC02-N01-T01I2-student_observation_rate",
+        "run_id": "run-7151b4307fd54f9cb1e0"
+      },
+      {
+        "kind": "metric",
+        "id": "M-CLS-DC02-N01-T01I3-valid_score_ratio",
+        "run_id": "run-7151b4307fd54f9cb1e0"
+      },
+      {
+        "kind": "metric",
+        "id": "M-CLS-DC02-N01-T01I3-full_score_ratio",
+        "run_id": "run-7151b4307fd54f9cb1e0"
+      },
+      {
+        "kind": "metric",
+        "id": "M-CLS-DC02-N01-T01I3-observed_response_ratio",
+        "run_id": "run-7151b4307fd54f9cb1e0"
+      },
+      {
+        "kind": "metric",
+        "id": "M-CLS-DC02-N01-T01I3-item_coverage",
+        "run_id": "run-7151b4307fd54f9cb1e0"
+      },
+      {
+        "kind": "metric",
+        "id": "M-CLS-DC02-N01-T01I3-student_observation_rate",
+        "run_id": "run-7151b4307fd54f9cb1e0"
+      },
+      {
+        "kind": "metric",
+        "id": "M-CLS-DC02-N01-T02I1-valid_score_ratio",
+        "run_id": "run-7151b4307fd54f9cb1e0"
+      },
+      {
+        "kind": "metric",
+        "id": "M-CLS-DC02-N01-T02I1-full_score_ratio",
+        "run_id": "run-7151b4307fd54f9cb1e0"
+      },
+      {
+        "kind": "metric",
+        "id": "M-CLS-DC02-N01-T02I1-observed_response_ratio",
+        "run_id": "run-7151b4307fd54f9cb1e0"
+      },
+      {
+        "kind": "metric",
+        "id": "M-CLS-DC02-N01-T02I1-item_coverage",
+        "run_id": "run-7151b4307fd54f9cb1e0"
+      },
+      {
+        "kind": "metric",
+        "id": "M-CLS-DC02-N01-T02I1-student_observation_rate",
+        "run_id": "run-7151b4307fd54f9cb1e0"
+      },
+      {
+        "kind": "metric",
+        "id": "M-CLS-DC02-N01-T02I3-valid_score_ratio",
+        "run_id": "run-7151b4307fd54f9cb1e0"
+      },
+      {
+        "kind": "metric",
+        "id": "M-CLS-DC02-N01-T02I3-full_score_ratio",
+        "run_id": "run-7151b4307fd54f9cb1e0"
+      },
+      {
+        "kind": "metric",
+        "id": "M-CLS-DC02-N01-T02I3-observed_response_ratio",
+        "run_id": "run-7151b4307fd54f9cb1e0"
+      },
+      {
+        "kind": "metric",
+        "id": "M-CLS-DC02-N01-T02I3-item_coverage",
+        "run_id": "run-7151b4307fd54f9cb1e0"
+      },
+      {
+        "kind": "metric",
+        "id": "M-CLS-DC02-N01-T02I3-student_observation_rate",
+        "run_id": "run-7151b4307fd54f9cb1e0"
+      },
+      {
+        "kind": "metric",
+        "id": "M-CLS-DC02-N01-T03I1-valid_score_ratio",
+        "run_id": "run-7151b4307fd54f9cb1e0"
+      },
+      {
+        "kind": "metric",
+        "id": "M-CLS-DC02-N01-T03I1-full_score_ratio",
+        "run_id": "run-7151b4307fd54f9cb1e0"
+      },
+      {
+        "kind": "metric",
+        "id": "M-CLS-DC02-N01-T03I1-observed_response_ratio",
+        "run_id": "run-7151b4307fd54f9cb1e0"
+      },
+      {
+        "kind": "metric",
+        "id": "M-CLS-DC02-N01-T03I1-item_coverage",
+        "run_id": "run-7151b4307fd54f9cb1e0"
+      },
+      {
+        "kind": "metric",
+        "id": "M-CLS-DC02-N01-T03I1-student_observation_rate",
+        "run_id": "run-7151b4307fd54f9cb1e0"
+      },
+      {
+        "kind": "metric",
+        "id": "M-CLS-DC02-N01-T02I1-valid_score_ratio",
+        "run_id": "run-7151b4307fd54f9cb1e0",
+        "catalog_version": null,
+        "dataset_id": null,
+        "knowledge_version": null,
+        "analysis_version": null,
+        "plan_version": null,
+        "material_id": null,
+        "attempt_id": null,
+        "curriculum_type": null
+      },
+      {
+        "kind": "metric",
+        "id": "M-CLS-DC02-N01-T01I1-valid_score_ratio",
+        "run_id": "run-7151b4307fd54f9cb1e0",
+        "catalog_version": null,
+        "dataset_id": null,
+        "knowledge_version": null,
+        "analysis_version": null,
+        "plan_version": null,
+        "material_id": null,
+        "attempt_id": null,
+        "curriculum_type": null
+      },
+      {
+        "kind": "metric",
+        "id": "M-CLS-DC02-N01-T01I2-valid_score_ratio",
+        "run_id": "run-7151b4307fd54f9cb1e0",
+        "catalog_version": null,
+        "dataset_id": null,
+        "knowledge_version": null,
+        "analysis_version": null,
+        "plan_version": null,
+        "material_id": null,
+        "attempt_id": null,
+        "curriculum_type": null
+      }
+    ],
+    "task_type": "class_analysis",
+    "route_source": "rule",
+    "segments": [
+      {
+        "kind": "explanation",
+        "text": "## DC02｜N01 班级共性分析（run-7151b4307fd54f9cb1e0）\n\n**一、一句话结论**\n先处理 T02I1（得分率 0.43）和 T01I1（得分率 0.48）这两处；T01I2 排在第三步；T01I3、T02I3、T03I1 证据不足，本周先不安排。\n\n**二、分析链条**\n样本口径：名册 19 人，19 人都有作答记录（19/19），但题目覆盖不均匀，各指标有效样题不同。\n\n1. T02I1：得分 33/76（0.43），满分题 20/52（0.38），有效样题 8 道。已观测 11 人全部需要加强（共性问题 cf-DC02-N01-T02I1，证据充分）。这是覆盖人数最多、得分率最低的一处。\n2. T01I1：得分 31/64（0.48），满分题 19/40（0.47），有效样题 6 道；已观测 8 人中 7 人需要加强（cf-DC02-N01-T01I1，证据充分）。\n3. T01I2：得分 61/93（0.66），满分题 37/65（0.57），有效样题 10 道；已观测 14 人中 10 人需要加强（cf-DC02-N01-T01I2，证据充分）。失分面广，但程度比前两项轻。\n4. 证据不足：T01I3（有效样题 2 道）、T02I3（1 道）、T03I1（1 道），均低于 3 道下限，系统未判定为班级共性。\n\n需要说明的是，T02I1 与 T01I1 的失分是两类知识点，还是同一操作习惯在两类题上重复出现，现有记录里没有过程性诊断明细，无法回答。\n\n**三、教学安排**\n- 先做：T02I1 的 8 道已布置原题重做，重点看错误是否集中在同一步骤；同时在记录列表里选那道原错题让学生重做，无需另找题。\n- 再做：T01I1 取 6 道原题加一组变式，同一类错误一次补完，这两项本周一起安排。\n- 暂缓：T01I2 放到下周，避免一次背太多。\n- 后续观察：先补 T01I3、T02I3、T03I1 的题量到 3 道以上，再安排复评；届时看这两项的满分题比例是否上到 0.8 附近。\n\n**四、不能下的结论**\n不能说这三个证据不足的知识点没有共性问题，只能说目前看不出来；不能从这份班级汇总推断任何单个学生的情况，个人的卡点仍需回看该生自己的作答记录；也不能仅凭得分率判定具体错法。",
+        "evidence_refs": [
+          {
+            "kind": "metric",
+            "id": "M-CLS-DC02-N01-T01I1-valid_score_ratio",
+            "run_id": "run-7151b4307fd54f9cb1e0"
+          },
+          {
+            "kind": "metric",
+            "id": "M-CLS-DC02-N01-T01I1-full_score_ratio",
+            "run_id": "run-7151b4307fd54f9cb1e0"
+          },
+          {
+            "kind": "metric",
+            "id": "M-CLS-DC02-N01-T01I1-observed_response_ratio",
+            "run_id": "run-7151b4307fd54f9cb1e0"
+          },
+          {
+            "kind": "metric",
+            "id": "M-CLS-DC02-N01-T01I1-item_coverage",
+            "run_id": "run-7151b4307fd54f9cb1e0"
+          },
+          {
+            "kind": "metric",
+            "id": "M-CLS-DC02-N01-T01I1-student_observation_rate",
+            "run_id": "run-7151b4307fd54f9cb1e0"
+          },
+          {
+            "kind": "metric",
+            "id": "M-CLS-DC02-N01-T01I2-valid_score_ratio",
+            "run_id": "run-7151b4307fd54f9cb1e0"
+          },
+          {
+            "kind": "metric",
+            "id": "M-CLS-DC02-N01-T01I2-full_score_ratio",
+            "run_id": "run-7151b4307fd54f9cb1e0"
+          },
+          {
+            "kind": "metric",
+            "id": "M-CLS-DC02-N01-T01I2-observed_response_ratio",
+            "run_id": "run-7151b4307fd54f9cb1e0"
+          },
+          {
+            "kind": "metric",
+            "id": "M-CLS-DC02-N01-T01I2-item_coverage",
+            "run_id": "run-7151b4307fd54f9cb1e0"
+          },
+          {
+            "kind": "metric",
+            "id": "M-CLS-DC02-N01-T01I2-student_observation_rate",
+            "run_id": "run-7151b4307fd54f9cb1e0"
+          },
+          {
+            "kind": "metric",
+            "id": "M-CLS-DC02-N01-T01I3-valid_score_ratio",
+            "run_id": "run-7151b4307fd54f9cb1e0"
+          },
+          {
+            "kind": "metric",
+            "id": "M-CLS-DC02-N01-T01I3-full_score_ratio",
+            "run_id": "run-7151b4307fd54f9cb1e0"
+          },
+          {
+            "kind": "metric",
+            "id": "M-CLS-DC02-N01-T01I3-observed_response_ratio",
+            "run_id": "run-7151b4307fd54f9cb1e0"
+          },
+          {
+            "kind": "metric",
+            "id": "M-CLS-DC02-N01-T01I3-item_coverage",
+            "run_id": "run-7151b4307fd54f9cb1e0"
+          },
+          {
+            "kind": "metric",
+            "id": "M-CLS-DC02-N01-T01I3-student_observation_rate",
+            "run_id": "run-7151b4307fd54f9cb1e0"
+          },
+          {
+            "kind": "metric",
+            "id": "M-CLS-DC02-N01-T02I1-valid_score_ratio",
+            "run_id": "run-7151b4307fd54f9cb1e0"
+          },
+          {
+            "kind": "metric",
+            "id": "M-CLS-DC02-N01-T02I1-full_score_ratio",
+            "run_id": "run-7151b4307fd54f9cb1e0"
+          },
+          {
+            "kind": "metric",
+            "id": "M-CLS-DC02-N01-T02I1-observed_response_ratio",
+            "run_id": "run-7151b4307fd54f9cb1e0"
+          },
+          {
+            "kind": "metric",
+            "id": "M-CLS-DC02-N01-T02I1-item_coverage",
+            "run_id": "run-7151b4307fd54f9cb1e0"
+          },
+          {
+            "kind": "metric",
+            "id": "M-CLS-DC02-N01-T02I1-student_observation_rate",
+            "run_id": "run-7151b4307fd54f9cb1e0"
+          },
+          {
+            "kind": "metric",
+            "id": "M-CLS-DC02-N01-T02I3-valid_score_ratio",
+            "run_id": "run-7151b4307fd54f9cb1e0"
+          },
+          {
+            "kind": "metric",
+            "id": "M-CLS-DC02-N01-T02I3-full_score_ratio",
+            "run_id": "run-7151b4307fd54f9cb1e0"
+          },
+          {
+            "kind": "metric",
+            "id": "M-CLS-DC02-N01-T02I3-observed_response_ratio",
+            "run_id": "run-7151b4307fd54f9cb1e0"
+          },
+          {
+            "kind": "metric",
+            "id": "M-CLS-DC02-N01-T02I3-item_coverage",
+            "run_id": "run-7151b4307fd54f9cb1e0"
+          },
+          {
+            "kind": "metric",
+            "id": "M-CLS-DC02-N01-T02I3-student_observation_rate",
+            "run_id": "run-7151b4307fd54f9cb1e0"
+          },
+          {
+            "kind": "metric",
+            "id": "M-CLS-DC02-N01-T03I1-valid_score_ratio",
+            "run_id": "run-7151b4307fd54f9cb1e0"
+          },
+          {
+            "kind": "metric",
+            "id": "M-CLS-DC02-N01-T03I1-full_score_ratio",
+            "run_id": "run-7151b4307fd54f9cb1e0"
+          },
+          {
+            "kind": "metric",
+            "id": "M-CLS-DC02-N01-T03I1-observed_response_ratio",
+            "run_id": "run-7151b4307fd54f9cb1e0"
+          },
+          {
+            "kind": "metric",
+            "id": "M-CLS-DC02-N01-T03I1-item_coverage",
+            "run_id": "run-7151b4307fd54f9cb1e0"
+          },
+          {
+            "kind": "metric",
+            "id": "M-CLS-DC02-N01-T03I1-student_observation_rate",
+            "run_id": "run-7151b4307fd54f9cb1e0"
+          },
+          {
+            "kind": "metric",
+            "id": "M-CLS-DC02-N01-T02I1-valid_score_ratio",
+            "run_id": "run-7151b4307fd54f9cb1e0",
+            "catalog_version": null,
+            "dataset_id": null,
+            "knowledge_version": null,
+            "analysis_version": null,
+            "plan_version": null,
+            "material_id": null,
+            "attempt_id": null,
+            "curriculum_type": null
+          },
+          {
+            "kind": "metric",
+            "id": "M-CLS-DC02-N01-T01I1-valid_score_ratio",
+            "run_id": "run-7151b4307fd54f9cb1e0",
+            "catalog_version": null,
+            "dataset_id": null,
+            "knowledge_version": null,
+            "analysis_version": null,
+            "plan_version": null,
+            "material_id": null,
+            "attempt_id": null,
+            "curriculum_type": null
+          },
+          {
+            "kind": "metric",
+            "id": "M-CLS-DC02-N01-T01I2-valid_score_ratio",
+            "run_id": "run-7151b4307fd54f9cb1e0",
+            "catalog_version": null,
+            "dataset_id": null,
+            "knowledge_version": null,
+            "analysis_version": null,
+            "plan_version": null,
+            "material_id": null,
+            "attempt_id": null,
+            "curriculum_type": null
+          }
+        ]
+      }
+    ],
+    "proposals": [],
+    "conversation_id": "conv-577e6e40f4434566a591",
+    "message_id": "msg-6b3de43d35c849a6b593",
+    "status": "completed",
+    "operation_results": []
+  },
+  "warnings": []
+}

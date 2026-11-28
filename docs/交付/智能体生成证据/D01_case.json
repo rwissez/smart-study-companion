@@ -1,0 +1,617 @@
+{
+  "schema_version": "1.1",
+  "request_id": "req-b45c2a057b944ea6",
+  "data": {
+    "text": "## D01（N01 节点）学情案例报告\n\n先说明数据边界：本次只拿到 D01 的 N01 节点作答记录与指标，**没有返回班级层面的对比数据**，所以下面不做横向排名或班级位置判断；方案也显示为未发布，因此第 3 部分是我按证据整理的安排草案，不是系统已经下发的任务。\n\n### 一、答题分析\n\n**Q014（记录 DR0005，列式题）0/3**\n学生原句：\"1. 女生 2(x-3)=2x-6。2. x+2x-6=3x-6。\" 最终作答\"3x-6人\"。\n错在第一步的文字转译：题目说\"女生人数比男生人数的 2 倍少 3 人\"，正确关系是先乘 2 再减 3，学生写成了 2(x-3)，等于先减 3 再乘 2，多减了一次。第二步相加本身没错，但起点错了，三个评分点 Q014P1–P3 全为 0。这一处语义诊断置信度 0.80，但无法确认是读题理解偏差还是列式时手误，也没有口头说明。\n\n**Q022（记录 DR0007，解方程）1/3**\n学生原句：\"1. 3x-6=2x+5。2. 3x-2x=5-6。3. x=-1。\"\n错在移项变号：-6 从左边移到右边应变成 +6，学生写成 5-6，于是得到 x=-1。第一个评分点 Q022P1 得 1 分（方程整理正确），Q022P2、Q022P3 为 0。这处诊断置信度 0.92。\n\n**另外三道只写答案的题**：Q002（DR0006）0/1，作答\"14\"；Q019（DR0004）0/1，作答\"-5\"；Q021（DR0011）0/1，作答\"D\"。三题都未提供过程，现有证据不足以定位错在哪一步，只能列入观察。\n\n**答得完整的题**：Q025（DR0003）3/3，过程含合并同类项、求解和代回检验；Q013（DR0010）1/1。说明这个孩子在解方程的基本流程上是走得通的，问题集中在个别步骤。\n\n### 二、学情诊断\n\n**证据充分、可以定论的：**\n- 用字母表示数量关系（T01I1）：得分率 0.20（1/5），满分题比例 0.33，有效不同样题 3 道（M-STU-D01-N01-T01I1-valid_score_ratio、-full_score_ratio）。表现为需要再练，主要卡点是 Q014 的\"几倍少几\"列式（F-STU-D01-N01-T01I1）。\n- 解一元一次方程（T02I1）：得分率 0.56（5/9），满分题比例 0.40，有效样题 5 道（M-STU-D01-N01-T02I1-valid_score_ratio、-full_score_ratio）。5 道题里 2 道满分，错的那道集中在移项变号（F-STU-D01-N01-T02I1）。\n\n**证据不足、本轮不下结论的：**\n- T01I2 只有 1 道有效样题（下限 3 道，观测覆盖 1/11），虽有一处\"过程写 4a-7b、答案写 4a+7b\"的不一致（DR0001），但无法排除是誊写问题。\n- T01I3 只有 2 道有效样题（下限 3 道），Q011（DR0012）、Q018（DR0009）都是\"过程算对了、最后一句结论没写\"，看不出是漏答还是不理解\"3 的倍数\"\"与 x 无关\"这类说法。\n- T02I3 只有 1 道样题（DR0002，1/1 满分），证据单薄，不动。\n\n这三处本轮先不安排专项，原因就是样题数量不够，多讲反而会盖过真正的主要问题；这周先集中补\"列式\"和\"移项\"两处，其余下周用补充题再跟。\n\n### 三、教学建议（草案，供您调整）\n\n**顺序建议：先移项（证据最硬、样题最多），再列式，最后练\"把话说完\"。**\n\n1. **移项专项**：用 Q022（DR0007）原题重做，再配 2–3 道同类移项题。三层提示：第一层，让学生把\"从哪边移到哪边\"圈出来；第二层，只提醒\"过等号要变号\"，不写答案；第三层，要求把求出的 x 代回原方程验一遍——Q025（DR0003）第 5 步他就是这样做的，可以直接拿这道满分题当范例。\n2. **列式专项**：用 Q014（DR0005）原题重做。第一层，读题时把\"比……2 倍少 3 人\"划出来，问一句\"先乘还是先减\"；第二层，先把\"2 倍\"写成 2x，再谈少 3；第三层，让他用自己的话把\"女生人数\"这句关系说一遍，再动笔。不要直接给 2x-3。\n3. **把过程写到收尾**：拿 Q015（DR0001）、Q011（DR0012）、Q018（DR0009）重做，只加一个要求——过程最后一行和最终答案必须一致，应用题和应用说理题补一句结论。\n4. **补过程重做**：Q002、Q019、Q021 三题让他把过程补上再交，作为观察材料，不急着判掌握。\n\n**后续观察点**：移项时是否稳定变号；\"少几\"处是否还会多套一层括号；是否愿意写结论句。等这几道重做结果回来，再看 T01I2、T01I3 能否凑够样题、能不能定论。以上安排您可以直接关掉或调整顺序。",
+    "tool_trace": [
+      {
+        "call_id": "call_00_93qedwqyc2b160jvwk3hwqq3",
+        "tool_name": "get_student_analysis",
+        "stage": "",
+        "status": "succeeded",
+        "message": "",
+        "evidence_refs": [
+          {
+            "kind": "metric",
+            "id": "M-STU-D01-N01-T01I1-valid_score_ratio",
+            "run_id": "run-7151b4307fd54f9cb1e0"
+          },
+          {
+            "kind": "metric",
+            "id": "M-STU-D01-N01-T01I1-full_score_ratio",
+            "run_id": "run-7151b4307fd54f9cb1e0"
+          },
+          {
+            "kind": "metric",
+            "id": "M-STU-D01-N01-T01I1-observed_response_ratio",
+            "run_id": "run-7151b4307fd54f9cb1e0"
+          },
+          {
+            "kind": "metric",
+            "id": "M-STU-D01-N01-T01I1-item_coverage",
+            "run_id": "run-7151b4307fd54f9cb1e0"
+          },
+          {
+            "kind": "metric",
+            "id": "M-STU-D01-N01-T01I2-valid_score_ratio",
+            "run_id": "run-7151b4307fd54f9cb1e0"
+          },
+          {
+            "kind": "metric",
+            "id": "M-STU-D01-N01-T01I2-full_score_ratio",
+            "run_id": "run-7151b4307fd54f9cb1e0"
+          },
+          {
+            "kind": "metric",
+            "id": "M-STU-D01-N01-T01I2-observed_response_ratio",
+            "run_id": "run-7151b4307fd54f9cb1e0"
+          },
+          {
+            "kind": "metric",
+            "id": "M-STU-D01-N01-T01I2-item_coverage",
+            "run_id": "run-7151b4307fd54f9cb1e0"
+          },
+          {
+            "kind": "metric",
+            "id": "M-STU-D01-N01-T01I3-valid_score_ratio",
+            "run_id": "run-7151b4307fd54f9cb1e0"
+          },
+          {
+            "kind": "metric",
+            "id": "M-STU-D01-N01-T01I3-full_score_ratio",
+            "run_id": "run-7151b4307fd54f9cb1e0"
+          },
+          {
+            "kind": "metric",
+            "id": "M-STU-D01-N01-T01I3-observed_response_ratio",
+            "run_id": "run-7151b4307fd54f9cb1e0"
+          },
+          {
+            "kind": "metric",
+            "id": "M-STU-D01-N01-T01I3-item_coverage",
+            "run_id": "run-7151b4307fd54f9cb1e0"
+          },
+          {
+            "kind": "metric",
+            "id": "M-STU-D01-N01-T02I1-valid_score_ratio",
+            "run_id": "run-7151b4307fd54f9cb1e0"
+          },
+          {
+            "kind": "metric",
+            "id": "M-STU-D01-N01-T02I1-full_score_ratio",
+            "run_id": "run-7151b4307fd54f9cb1e0"
+          },
+          {
+            "kind": "metric",
+            "id": "M-STU-D01-N01-T02I1-observed_response_ratio",
+            "run_id": "run-7151b4307fd54f9cb1e0"
+          },
+          {
+            "kind": "metric",
+            "id": "M-STU-D01-N01-T02I1-item_coverage",
+            "run_id": "run-7151b4307fd54f9cb1e0"
+          },
+          {
+            "kind": "metric",
+            "id": "M-STU-D01-N01-T02I3-valid_score_ratio",
+            "run_id": "run-7151b4307fd54f9cb1e0"
+          },
+          {
+            "kind": "metric",
+            "id": "M-STU-D01-N01-T02I3-full_score_ratio",
+            "run_id": "run-7151b4307fd54f9cb1e0"
+          },
+          {
+            "kind": "metric",
+            "id": "M-STU-D01-N01-T02I3-observed_response_ratio",
+            "run_id": "run-7151b4307fd54f9cb1e0"
+          },
+          {
+            "kind": "metric",
+            "id": "M-STU-D01-N01-T02I3-item_coverage",
+            "run_id": "run-7151b4307fd54f9cb1e0"
+          }
+        ]
+      },
+      {
+        "call_id": "call_00_1b9evlkkq8q4n3j30oqwooc3",
+        "tool_name": "get_answer_evidence",
+        "stage": "",
+        "status": "succeeded",
+        "message": "",
+        "evidence_refs": [
+          {
+            "kind": "record",
+            "id": "DR0001",
+            "run_id": "run-7151b4307fd54f9cb1e0"
+          },
+          {
+            "kind": "record",
+            "id": "DR0002",
+            "run_id": "run-7151b4307fd54f9cb1e0"
+          },
+          {
+            "kind": "record",
+            "id": "DR0003",
+            "run_id": "run-7151b4307fd54f9cb1e0"
+          },
+          {
+            "kind": "record",
+            "id": "DR0004",
+            "run_id": "run-7151b4307fd54f9cb1e0"
+          },
+          {
+            "kind": "record",
+            "id": "DR0005",
+            "run_id": "run-7151b4307fd54f9cb1e0"
+          },
+          {
+            "kind": "record",
+            "id": "DR0006",
+            "run_id": "run-7151b4307fd54f9cb1e0"
+          },
+          {
+            "kind": "record",
+            "id": "DR0007",
+            "run_id": "run-7151b4307fd54f9cb1e0"
+          },
+          {
+            "kind": "record",
+            "id": "DR0008",
+            "run_id": "run-7151b4307fd54f9cb1e0"
+          },
+          {
+            "kind": "record",
+            "id": "DR0009",
+            "run_id": "run-7151b4307fd54f9cb1e0"
+          },
+          {
+            "kind": "record",
+            "id": "DR0010",
+            "run_id": "run-7151b4307fd54f9cb1e0"
+          },
+          {
+            "kind": "record",
+            "id": "DR0011",
+            "run_id": "run-7151b4307fd54f9cb1e0"
+          },
+          {
+            "kind": "record",
+            "id": "DR0012",
+            "run_id": "run-7151b4307fd54f9cb1e0"
+          }
+        ]
+      }
+    ],
+    "fact_check": {
+      "status": "passed",
+      "issues": [],
+      "checked_evidence": [
+        "DR0001",
+        "DR0002",
+        "DR0003",
+        "DR0004",
+        "DR0005",
+        "DR0006",
+        "DR0007",
+        "DR0008",
+        "DR0009",
+        "DR0010",
+        "DR0011",
+        "DR0012",
+        "M-STU-D01-N01-T01I1-full_score_ratio",
+        "M-STU-D01-N01-T01I1-item_coverage",
+        "M-STU-D01-N01-T01I1-observed_response_ratio",
+        "M-STU-D01-N01-T01I1-valid_score_ratio",
+        "M-STU-D01-N01-T01I2-full_score_ratio",
+        "M-STU-D01-N01-T01I2-item_coverage",
+        "M-STU-D01-N01-T01I2-observed_response_ratio",
+        "M-STU-D01-N01-T01I2-valid_score_ratio",
+        "M-STU-D01-N01-T01I3-full_score_ratio",
+        "M-STU-D01-N01-T01I3-item_coverage",
+        "M-STU-D01-N01-T01I3-observed_response_ratio",
+        "M-STU-D01-N01-T01I3-valid_score_ratio",
+        "M-STU-D01-N01-T02I1-full_score_ratio",
+        "M-STU-D01-N01-T02I1-item_coverage",
+        "M-STU-D01-N01-T02I1-observed_response_ratio",
+        "M-STU-D01-N01-T02I1-valid_score_ratio",
+        "M-STU-D01-N01-T02I3-full_score_ratio",
+        "M-STU-D01-N01-T02I3-item_coverage",
+        "M-STU-D01-N01-T02I3-observed_response_ratio",
+        "M-STU-D01-N01-T02I3-valid_score_ratio"
+      ],
+      "checked_numbers": [
+        "-1",
+        "-2",
+        "-3",
+        "-5",
+        "-6",
+        "-7",
+        "0",
+        "0.20",
+        "0.33",
+        "0.40",
+        "0.56",
+        "0.80",
+        "0.92",
+        "0001",
+        "0002",
+        "0003",
+        "0004",
+        "0005",
+        "0006",
+        "0007",
+        "0009",
+        "0010",
+        "0011",
+        "0012",
+        "002",
+        "01",
+        "011",
+        "013",
+        "014",
+        "015",
+        "018",
+        "019",
+        "02",
+        "021",
+        "022",
+        "025",
+        "1",
+        "11",
+        "14",
+        "2",
+        "3",
+        "4",
+        "5",
+        "6",
+        "7",
+        "9"
+      ],
+      "limitations": [
+        "只核对证据编号与数字来源，不判断解释是否正确"
+      ]
+    },
+    "warnings": [],
+    "stopped_reason": "model_finished",
+    "prompt_version": "router-v1+task-student-loss-v1+teacher-style-v1",
+    "evidence_refs": [
+      {
+        "kind": "metric",
+        "id": "M-STU-D01-N01-T01I1-valid_score_ratio",
+        "run_id": "run-7151b4307fd54f9cb1e0"
+      },
+      {
+        "kind": "metric",
+        "id": "M-STU-D01-N01-T01I1-full_score_ratio",
+        "run_id": "run-7151b4307fd54f9cb1e0"
+      },
+      {
+        "kind": "metric",
+        "id": "M-STU-D01-N01-T01I1-observed_response_ratio",
+        "run_id": "run-7151b4307fd54f9cb1e0"
+      },
+      {
+        "kind": "metric",
+        "id": "M-STU-D01-N01-T01I1-item_coverage",
+        "run_id": "run-7151b4307fd54f9cb1e0"
+      },
+      {
+        "kind": "metric",
+        "id": "M-STU-D01-N01-T01I2-valid_score_ratio",
+        "run_id": "run-7151b4307fd54f9cb1e0"
+      },
+      {
+        "kind": "metric",
+        "id": "M-STU-D01-N01-T01I2-full_score_ratio",
+        "run_id": "run-7151b4307fd54f9cb1e0"
+      },
+      {
+        "kind": "metric",
+        "id": "M-STU-D01-N01-T01I2-observed_response_ratio",
+        "run_id": "run-7151b4307fd54f9cb1e0"
+      },
+      {
+        "kind": "metric",
+        "id": "M-STU-D01-N01-T01I2-item_coverage",
+        "run_id": "run-7151b4307fd54f9cb1e0"
+      },
+      {
+        "kind": "metric",
+        "id": "M-STU-D01-N01-T01I3-valid_score_ratio",
+        "run_id": "run-7151b4307fd54f9cb1e0"
+      },
+      {
+        "kind": "metric",
+        "id": "M-STU-D01-N01-T01I3-full_score_ratio",
+        "run_id": "run-7151b4307fd54f9cb1e0"
+      },
+      {
+        "kind": "metric",
+        "id": "M-STU-D01-N01-T01I3-observed_response_ratio",
+        "run_id": "run-7151b4307fd54f9cb1e0"
+      },
+      {
+        "kind": "metric",
+        "id": "M-STU-D01-N01-T01I3-item_coverage",
+        "run_id": "run-7151b4307fd54f9cb1e0"
+      },
+      {
+        "kind": "metric",
+        "id": "M-STU-D01-N01-T02I1-valid_score_ratio",
+        "run_id": "run-7151b4307fd54f9cb1e0"
+      },
+      {
+        "kind": "metric",
+        "id": "M-STU-D01-N01-T02I1-full_score_ratio",
+        "run_id": "run-7151b4307fd54f9cb1e0"
+      },
+      {
+        "kind": "metric",
+        "id": "M-STU-D01-N01-T02I1-observed_response_ratio",
+        "run_id": "run-7151b4307fd54f9cb1e0"
+      },
+      {
+        "kind": "metric",
+        "id": "M-STU-D01-N01-T02I1-item_coverage",
+        "run_id": "run-7151b4307fd54f9cb1e0"
+      },
+      {
+        "kind": "metric",
+        "id": "M-STU-D01-N01-T02I3-valid_score_ratio",
+        "run_id": "run-7151b4307fd54f9cb1e0"
+      },
+      {
+        "kind": "metric",
+        "id": "M-STU-D01-N01-T02I3-full_score_ratio",
+        "run_id": "run-7151b4307fd54f9cb1e0"
+      },
+      {
+        "kind": "metric",
+        "id": "M-STU-D01-N01-T02I3-observed_response_ratio",
+        "run_id": "run-7151b4307fd54f9cb1e0"
+      },
+      {
+        "kind": "metric",
+        "id": "M-STU-D01-N01-T02I3-item_coverage",
+        "run_id": "run-7151b4307fd54f9cb1e0"
+      },
+      {
+        "kind": "record",
+        "id": "DR0001",
+        "run_id": "run-7151b4307fd54f9cb1e0"
+      },
+      {
+        "kind": "record",
+        "id": "DR0002",
+        "run_id": "run-7151b4307fd54f9cb1e0"
+      },
+      {
+        "kind": "record",
+        "id": "DR0003",
+        "run_id": "run-7151b4307fd54f9cb1e0"
+      },
+      {
+        "kind": "record",
+        "id": "DR0004",
+        "run_id": "run-7151b4307fd54f9cb1e0"
+      },
+      {
+        "kind": "record",
+        "id": "DR0005",
+        "run_id": "run-7151b4307fd54f9cb1e0"
+      },
+      {
+        "kind": "record",
+        "id": "DR0006",
+        "run_id": "run-7151b4307fd54f9cb1e0"
+      },
+      {
+        "kind": "record",
+        "id": "DR0007",
+        "run_id": "run-7151b4307fd54f9cb1e0"
+      },
+      {
+        "kind": "record",
+        "id": "DR0008",
+        "run_id": "run-7151b4307fd54f9cb1e0"
+      },
+      {
+        "kind": "record",
+        "id": "DR0009",
+        "run_id": "run-7151b4307fd54f9cb1e0"
+      },
+      {
+        "kind": "record",
+        "id": "DR0010",
+        "run_id": "run-7151b4307fd54f9cb1e0"
+      },
+      {
+        "kind": "record",
+        "id": "DR0011",
+        "run_id": "run-7151b4307fd54f9cb1e0"
+      },
+      {
+        "kind": "record",
+        "id": "DR0012",
+        "run_id": "run-7151b4307fd54f9cb1e0"
+      }
+    ],
+    "task_type": "student_loss_explanation",
+    "route_source": "model",
+    "segments": [
+      {
+        "kind": "explanation",
+        "text": "## D01（N01 节点）学情案例报告\n\n先说明数据边界：本次只拿到 D01 的 N01 节点作答记录与指标，**没有返回班级层面的对比数据**，所以下面不做横向排名或班级位置判断；方案也显示为未发布，因此第 3 部分是我按证据整理的安排草案，不是系统已经下发的任务。\n\n### 一、答题分析\n\n**Q014（记录 DR0005，列式题）0/3**\n学生原句：\"1. 女生 2(x-3)=2x-6。2. x+2x-6=3x-6。\" 最终作答\"3x-6人\"。\n错在第一步的文字转译：题目说\"女生人数比男生人数的 2 倍少 3 人\"，正确关系是先乘 2 再减 3，学生写成了 2(x-3)，等于先减 3 再乘 2，多减了一次。第二步相加本身没错，但起点错了，三个评分点 Q014P1–P3 全为 0。这一处语义诊断置信度 0.80，但无法确认是读题理解偏差还是列式时手误，也没有口头说明。\n\n**Q022（记录 DR0007，解方程）1/3**\n学生原句：\"1. 3x-6=2x+5。2. 3x-2x=5-6。3. x=-1。\"\n错在移项变号：-6 从左边移到右边应变成 +6，学生写成 5-6，于是得到 x=-1。第一个评分点 Q022P1 得 1 分（方程整理正确），Q022P2、Q022P3 为 0。这处诊断置信度 0.92。\n\n**另外三道只写答案的题**：Q002（DR0006）0/1，作答\"14\"；Q019（DR0004）0/1，作答\"-5\"；Q021（DR0011）0/1，作答\"D\"。三题都未提供过程，现有证据不足以定位错在哪一步，只能列入观察。\n\n**答得完整的题**：Q025（DR0003）3/3，过程含合并同类项、求解和代回检验；Q013（DR0010）1/1。说明这个孩子在解方程的基本流程上是走得通的，问题集中在个别步骤。\n\n### 二、学情诊断\n\n**证据充分、可以定论的：**\n- 用字母表示数量关系（T01I1）：得分率 0.20（1/5），满分题比例 0.33，有效不同样题 3 道（M-STU-D01-N01-T01I1-valid_score_ratio、-full_score_ratio）。表现为需要再练，主要卡点是 Q014 的\"几倍少几\"列式（F-STU-D01-N01-T01I1）。\n- 解一元一次方程（T02I1）：得分率 0.56（5/9），满分题比例 0.40，有效样题 5 道（M-STU-D01-N01-T02I1-valid_score_ratio、-full_score_ratio）。5 道题里 2 道满分，错的那道集中在移项变号（F-STU-D01-N01-T02I1）。\n\n**证据不足、本轮不下结论的：**\n- T01I2 只有 1 道有效样题（下限 3 道，观测覆盖 1/11），虽有一处\"过程写 4a-7b、答案写 4a+7b\"的不一致（DR0001），但无法排除是誊写问题。\n- T01I3 只有 2 道有效样题（下限 3 道），Q011（DR0012）、Q018（DR0009）都是\"过程算对了、最后一句结论没写\"，看不出是漏答还是不理解\"3 的倍数\"\"与 x 无关\"这类说法。\n- T02I3 只有 1 道样题（DR0002，1/1 满分），证据单薄，不动。\n\n这三处本轮先不安排专项，原因就是样题数量不够，多讲反而会盖过真正的主要问题；这周先集中补\"列式\"和\"移项\"两处，其余下周用补充题再跟。\n\n### 三、教学建议（草案，供您调整）\n\n**顺序建议：先移项（证据最硬、样题最多），再列式，最后练\"把话说完\"。**\n\n1. **移项专项**：用 Q022（DR0007）原题重做，再配 2–3 道同类移项题。三层提示：第一层，让学生把\"从哪边移到哪边\"圈出来；第二层，只提醒\"过等号要变号\"，不写答案；第三层，要求把求出的 x 代回原方程验一遍——Q025（DR0003）第 5 步他就是这样做的，可以直接拿这道满分题当范例。\n2. **列式专项**：用 Q014（DR0005）原题重做。第一层，读题时把\"比……2 倍少 3 人\"划出来，问一句\"先乘还是先减\"；第二层，先把\"2 倍\"写成 2x，再谈少 3；第三层，让他用自己的话把\"女生人数\"这句关系说一遍，再动笔。不要直接给 2x-3。\n3. **把过程写到收尾**：拿 Q015（DR0001）、Q011（DR0012）、Q018（DR0009）重做，只加一个要求——过程最后一行和最终答案必须一致，应用题和应用说理题补一句结论。\n4. **补过程重做**：Q002、Q019、Q021 三题让他把过程补上再交，作为观察材料，不急着判掌握。\n\n**后续观察点**：移项时是否稳定变号；\"少几\"处是否还会多套一层括号；是否愿意写结论句。等这几道重做结果回来，再看 T01I2、T01I3 能否凑够样题、能不能定论。以上安排您可以直接关掉或调整顺序。",
+        "evidence_refs": [
+          {
+            "kind": "metric",
+            "id": "M-STU-D01-N01-T01I1-valid_score_ratio",
+            "run_id": "run-7151b4307fd54f9cb1e0"
+          },
+          {
+            "kind": "metric",
+            "id": "M-STU-D01-N01-T01I1-full_score_ratio",
+            "run_id": "run-7151b4307fd54f9cb1e0"
+          },
+          {
+            "kind": "metric",
+            "id": "M-STU-D01-N01-T01I1-observed_response_ratio",
+            "run_id": "run-7151b4307fd54f9cb1e0"
+          },
+          {
+            "kind": "metric",
+            "id": "M-STU-D01-N01-T01I1-item_coverage",
+            "run_id": "run-7151b4307fd54f9cb1e0"
+          },
+          {
+            "kind": "metric",
+            "id": "M-STU-D01-N01-T01I2-valid_score_ratio",
+            "run_id": "run-7151b4307fd54f9cb1e0"
+          },
+          {
+            "kind": "metric",
+            "id": "M-STU-D01-N01-T01I2-full_score_ratio",
+            "run_id": "run-7151b4307fd54f9cb1e0"
+          },
+          {
+            "kind": "metric",
+            "id": "M-STU-D01-N01-T01I2-observed_response_ratio",
+            "run_id": "run-7151b4307fd54f9cb1e0"
+          },
+          {
+            "kind": "metric",
+            "id": "M-STU-D01-N01-T01I2-item_coverage",
+            "run_id": "run-7151b4307fd54f9cb1e0"
+          },
+          {
+            "kind": "metric",
+            "id": "M-STU-D01-N01-T01I3-valid_score_ratio",
+            "run_id": "run-7151b4307fd54f9cb1e0"
+          },
+          {
+            "kind": "metric",
+            "id": "M-STU-D01-N01-T01I3-full_score_ratio",
+            "run_id": "run-7151b4307fd54f9cb1e0"
+          },
+          {
+            "kind": "metric",
+            "id": "M-STU-D01-N01-T01I3-observed_response_ratio",
+            "run_id": "run-7151b4307fd54f9cb1e0"
+          },
+          {
+            "kind": "metric",
+            "id": "M-STU-D01-N01-T01I3-item_coverage",
+            "run_id": "run-7151b4307fd54f9cb1e0"
+          },
+          {
+            "kind": "metric",
+            "id": "M-STU-D01-N01-T02I1-valid_score_ratio",
+            "run_id": "run-7151b4307fd54f9cb1e0"
+          },
+          {
+            "kind": "metric",
+            "id": "M-STU-D01-N01-T02I1-full_score_ratio",
+            "run_id": "run-7151b4307fd54f9cb1e0"
+          },
+          {
+            "kind": "metric",
+            "id": "M-STU-D01-N01-T02I1-observed_response_ratio",
+            "run_id": "run-7151b4307fd54f9cb1e0"
+          },
+          {
+            "kind": "metric",
+            "id": "M-STU-D01-N01-T02I1-item_coverage",
+            "run_id": "run-7151b4307fd54f9cb1e0"
+          },
+          {
+            "kind": "metric",
+            "id": "M-STU-D01-N01-T02I3-valid_score_ratio",
+            "run_id": "run-7151b4307fd54f9cb1e0"
+          },
+          {
+            "kind": "metric",
+            "id": "M-STU-D01-N01-T02I3-full_score_ratio",
+            "run_id": "run-7151b4307fd54f9cb1e0"
+          },
+          {
+            "kind": "metric",
+            "id": "M-STU-D01-N01-T02I3-observed_response_ratio",
+            "run_id": "run-7151b4307fd54f9cb1e0"
+          },
+          {
+            "kind": "metric",
+            "id": "M-STU-D01-N01-T02I3-item_coverage",
+            "run_id": "run-7151b4307fd54f9cb1e0"
+          },
+          {
+            "kind": "record",
+            "id": "DR0001",
+            "run_id": "run-7151b4307fd54f9cb1e0"
+          },
+          {
+            "kind": "record",
+            "id": "DR0002",
+            "run_id": "run-7151b4307fd54f9cb1e0"
+          },
+          {
+            "kind": "record",
+            "id": "DR0003",
+            "run_id": "run-7151b4307fd54f9cb1e0"
+          },
+          {
+            "kind": "record",
+            "id": "DR0004",
+            "run_id": "run-7151b4307fd54f9cb1e0"
+          },
+          {
+            "kind": "record",
+            "id": "DR0005",
+            "run_id": "run-7151b4307fd54f9cb1e0"
+          },
+          {
+            "kind": "record",
+            "id": "DR0006",
+            "run_id": "run-7151b4307fd54f9cb1e0"
+          },
+          {
+            "kind": "record",
+            "id": "DR0007",
+            "run_id": "run-7151b4307fd54f9cb1e0"
+          },
+          {
+            "kind": "record",
+            "id": "DR0008",
+            "run_id": "run-7151b4307fd54f9cb1e0"
+          },
+          {
+            "kind": "record",
+            "id": "DR0009",
+            "run_id": "run-7151b4307fd54f9cb1e0"
+          },
+          {
+            "kind": "record",
+            "id": "DR0010",
+            "run_id": "run-7151b4307fd54f9cb1e0"
+          },
+          {
+            "kind": "record",
+            "id": "DR0011",
+            "run_id": "run-7151b4307fd54f9cb1e0"
+          },
+          {
+            "kind": "record",
+            "id": "DR0012",
+            "run_id": "run-7151b4307fd54f9cb1e0"
+          }
+        ]
+      }
+    ],
+    "proposals": [],
+    "conversation_id": "conv-1d7f58da628240a5873b",
+    "message_id": "msg-e14f68c1c6c04ff0a7bc",
+    "status": "completed",
+    "operation_results": []
+  },
+  "warnings": []
+}
