@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useSearchParams } from "react-router-dom";
 import { errorCode, errorRequestId, newIdempotencyKey, toErrorMessage } from "../../api/client";
@@ -17,6 +17,7 @@ import {
   listQuality,
   listRuns,
   listStudents,
+  normalizeCaseStudentIds,
   preflightExport,
 } from "../../api/service";
 import type { ExportItem, ExportPreflight, ImportReceipt, JobDetail, QualityIssue } from "../../api/types";
@@ -110,6 +111,10 @@ export function DataPage() {
   const run = runs.data?.find((item) => item.status === "succeeded") ?? runs.data?.[0] ?? null;
   const selectedJobId = searchParams.get("jobId") ?? jobs.data?.items[0]?.job_id ?? null;
 
+  // 预检、查询键与正式导出共用这一组归一化后的案例学生，避免两次请求指向不同集合。
+  const caseSelection = useMemo(() => normalizeCaseStudentIds(selectedCases), [selectedCases]);
+  const caseSelectionKey = caseSelection.join(",");
+
   const analysisQuality = useQuery({
     queryKey: queryKeys.analysisQuality(scopeKey, run?.run_id ?? "", run?.node_ids[0] ?? "", null),
     queryFn: () => getAnalysisQuality(run!.run_id, { nodeId: run!.node_ids[0] }),
@@ -135,15 +140,10 @@ export function DataPage() {
   });
 
   const preflight = useQuery<ExportPreflight>({
-    queryKey: queryKeys.exportPreflight(
-      scopeKey,
-      run?.run_id ?? "",
-      "all",
-      [...selectedCases].sort().join(","),
-    ),
+    queryKey: queryKeys.exportPreflight(scopeKey, run?.run_id ?? "", "all", caseSelectionKey),
     queryFn: () =>
       preflightExport(run!.run_id, {
-        caseStudentIds: selectedCases.length ? selectedCases : undefined,
+        caseStudentIds: caseSelection.length ? caseSelection : undefined,
       }),
     enabled: Boolean(run) && tab === "exports" && canExport,
   });
@@ -166,7 +166,7 @@ export function DataPage() {
     if (job.status !== "succeeded") return;
     void queryClient.invalidateQueries({ queryKey: queryKeys.runs(scopeKey) });
     void queryClient.invalidateQueries({ queryKey: queryKeys.exports(scopeKey, run?.run_id ?? "") });
-    void queryClient.invalidateQueries({ queryKey: queryKeys.exportPreflight(scopeKey, run?.run_id ?? "", "all", [...selectedCases].sort().join(",")) });
+    void queryClient.invalidateQueries({ queryKey: queryKeys.exportPreflight(scopeKey, run?.run_id ?? "", "all", caseSelectionKey) });
     void queryClient.invalidateQueries({ queryKey: queryKeys.recommendationsQuality(scopeKey, run?.run_id ?? "", run?.node_ids[0] ?? "", null) });
     void queryClient.invalidateQueries({ queryKey: queryKeys.datasets(scopeKey) });
   };
@@ -249,8 +249,13 @@ export function DataPage() {
     }
     setExportBusy(true);
     setExportError(null);
+    // 以点击导出时的选中集合为准：导出过程中再改勾选不会改变本次请求。
+    const caseStudentIds = [...caseSelection];
     try {
-      const created = await createExport(run.run_id);
+      const created = await createExport(
+        run.run_id,
+        caseStudentIds.length ? { caseStudentIds } : undefined,
+      );
       setExportJobId(created.job_id);
       void queryClient.invalidateQueries({ queryKey: queryKeys.exports(scopeKey, run.run_id) });
     } catch (reason) {
