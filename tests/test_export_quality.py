@@ -10,6 +10,7 @@ import hashlib
 import io
 import json
 import zipfile
+from collections import Counter
 from pathlib import Path
 from typing import Any
 
@@ -676,4 +677,260 @@ def test_build_files_refuses_missing_frozen_version(
         and item["object_key"] == "ban-missing-after-freeze"
         for item in raised.value.details
     )
+
+
+# --------------------------------------------------------------------------- #
+# S1-C 版本链：历史学情依赖必须显式披露
+# --------------------------------------------------------------------------- #
+
+
+def _current_plan(
+    session: Session, dataset: models.Dataset, student_id: str, node_id: str
+) -> models.Version:
+    version = repo.read_formal(
+        session,
+        repo.FormalKey(
+            family_id=dataset.family_id or "",
+            dataset_id=dataset.id,
+            kind="plan",
+            node_key=node_id,
+            target_key=student_id,
+        ),
+    )
+    assert version is not None
+    return version
+
+
+def test_plan_analysis_currency_is_disclosed(
+    client: TestClient, session: Session
+) -> None:
+    """方案引用历史学情时标 analysis_current=false 并给出可读原因；当前学情不误报。"""
+
+    receipt = _import(client)
+    dataset = session.get(models.Dataset, receipt["dataset_id"])
+    assert dataset is not None
+    headers = _teacher(client, dataset.id)
+    run_id = _run_id(client, dataset.id, headers)
+
+    # 基线：当前方案都引用当前正式学情，不能误报历史依赖。
+    _export_id, detail, archive = _export(client, headers, run_id)
+    with archive:
+        plans = _items(archive, "recommendations.json")
+        readme = archive.read("README.md").decode("utf-8")
+    current_plans = [plan for plan in plans if plan["current"]]
+    assert current_plans
+    for plan in current_plans:
+        assert plan["analysis_current"] is True
+        assert plan["basis_warnings"] == []
+        assert plan["origin_analysis_version"] == plan["current_analysis_version"]
+    chain = detail["manifest"]["version_chain"]
+    assert chain["analysis_basis"]["current_plans_with_historical_analysis"] == 0
+    assert chain["analysis_basis"]["historical_dependencies"] == []
+    assert "版本链说明" in readme
+    assert "均引用当前正式学生学情" in readme
+
+    # 发布一份不再作为正式头的学情版本，并让当前方案引用它。
+    analysis = repo.read_formal(
+        session,
+        repo.FormalKey(
+            family_id=dataset.family_id or "",
+            dataset_id=dataset.id,
+            kind="student_analysis",
+            run_key=run_id,
+            node_key="N01",
+            target_key="S01",
+        ),
+    )
+    assert analysis is not None
+    old_id = "ban-export-history-probe"
+    old_payload = json.loads(json.dumps(analysis.payload_json))
+    repo.create_version(
+        session,
+        kind="student_analysis",
+        key=repo.FormalKey(
+            family_id=dataset.family_id or "",
+            dataset_id=dataset.id,
+            kind="student_analysis",
+            run_key=run_id,
+            node_key="N01",
+            target_key="S01",
+        ),
+        payload=old_payload,
+        rule_version="b-rules-1",
+        version_id=old_id,
+    )
+    session.add(
+        models.Publication(
+            publication_id="pub-export-history-probe",
+            version_id=old_id,
+            previous_version_id=None,
+            review_id="",
+            path="system_auto",
+            basis="automatic_review",
+            published_at=repo.now_iso(),
+        )
+    )
+    plan = _current_plan(session, dataset, "S01", "N01")
+    plan_payload = json.loads(json.dumps(plan.payload_json))
+    plan_payload["analysis_version"] = old_id
+    plan.payload_json = plan_payload
+    session.commit()
+
+    _export_id2, detail2, archive2 = _export(client, headers, run_id)
+    with archive2:
+        plans2 = _items(archive2, "recommendations.json")
+        students2 = _items(archive2, "student_analysis.json")
+        readme2 = archive2.read("README.md").decode("utf-8")
+    record = next(
+        item
+        for item in plans2
+        if item["current"]
+        and item["student_id"] == "S01"
+        and item["node_id"] == "N01"
+    )
+    assert record["analysis_current"] is False
+    assert record["analysis_basis"] == "historical"
+    assert record["origin_analysis_version"] == old_id
+    assert record["current_analysis_version"] == analysis.version_id
+    assert record["basis_warnings"]
+    assert any(
+        "历史" in warning and old_id in warning and analysis.version_id in warning
+        for warning in record["basis_warnings"]
+    ), "历史学情依赖必须给出可读的版本对比原因"
+
+    # 历史学情本身仍作为可追溯记录保留，current=false 而不是被删除或改成 current。
+    historical = next(
+        item for item in students2 if item["analysis_version"] == old_id
+    )
+    assert historical["current"] is False
+
+    chain2 = detail2["manifest"]["version_chain"]["analysis_basis"]
+    assert chain2["current_plans_with_historical_analysis"] >= 1
+    entry = next(
+        item
+        for item in chain2["historical_dependencies"]
+        if item["student_id"] == "S01" and item["node_id"] == "N01"
+    )
+    assert entry["plan_version"] == plan.version_id
+    assert entry["plan_current"] is True
+    assert entry["analysis_version"] == old_id
+    assert entry["current_analysis_version"] == analysis.version_id
+    assert entry["reason"]
+    assert any(
+        "版本链" in item and "S01/N01" in item
+        for item in detail2["manifest"]["limitations"]
+    )
+    assert "版本链说明" in readme2
+    assert "S01/N01" in readme2
+    assert old_id in readme2 and analysis.version_id in readme2
+    assert "不是最新学情依据" in readme2
+
+
+# --------------------------------------------------------------------------- #
+# S1-D 内容生成与复核方式分开统计
+# --------------------------------------------------------------------------- #
+
+
+def test_plan_content_and_review_methods_are_separated(
+    client: TestClient, session: Session
+) -> None:
+    """推荐内容 rule、复核 hybrid 时，统计必须分开，不能把方案说成模型生成。"""
+
+    receipt = _import(client)
+    dataset = session.get(models.Dataset, receipt["dataset_id"])
+    assert dataset is not None
+    plan = _current_plan(session, dataset, "S01", "N01")
+    payload = json.loads(json.dumps(plan.payload_json))
+    payload["review_info"] = {
+        "status": "validated",
+        "method": "hybrid",
+        "checks": [],
+        "prompt_version": None,
+    }
+    plan.payload_json = payload
+    session.commit()
+
+    headers = _teacher(client, dataset.id)
+    run_id = _run_id(client, dataset.id, headers)
+    _export_id, detail, archive = _export(client, headers, run_id)
+    with archive:
+        plans = _items(archive, "recommendations.json")
+        readme = archive.read("README.md").decode("utf-8")
+
+    manifest = detail["manifest"]
+    source = manifest["generation_sources"]["plan"]
+    recommendation_count = sum(len(item["recommendations"]) for item in plans)
+    assert source["method"] == "rule"
+    assert source["content_method"] == "rule"
+    assert source["content_methods"] == ["rule"]
+    assert source["content_counts"] == {"rule": recommendation_count}
+    assert "hybrid" in source["review_methods"]
+    assert source["review_counts"]["hybrid"] == 1
+    assert source["review_method"] == "hybrid"
+    assert "model" not in manifest["generation_method"], (
+        "复核 hybrid 不能把推荐内容统计成模型生成"
+    )
+    checks = manifest["content_checks"]
+    assert checks["recommendation_content_methods"] == {"rule": recommendation_count}
+    assert checks["plan_review_methods"] == source["review_counts"]
+    assert checks["recommendations"] == recommendation_count
+
+    assert "推荐内容" in readme and "复核" in readme
+    assert f"规则（rule） {recommendation_count} 条" in readme
+    assert "hybrid" in readme
+    assert "C 学习方案 | 规则+模型（hybrid）" not in readme, (
+        "README 不能把方案内容与复核混成一个 hybrid 结论"
+    )
+
+
+def test_readme_method_counts_match_manifest_statistics(
+    client: TestClient,
+) -> None:
+    """README 写出的内容/复核计数必须与 manifest 和版本载荷逐项一致。"""
+
+    receipt = _import(client)
+    headers = _teacher(client, receipt["dataset_id"])
+    run_id = _run_id(client, receipt["dataset_id"], headers)
+    _export_id, detail, archive = _export(client, headers, run_id)
+    with archive:
+        readme = archive.read("README.md").decode("utf-8")
+        plans = _items(archive, "recommendations.json")
+        lessons = _items(archive, "micro_lessons.json")
+
+    manifest = detail["manifest"]
+    plan_source = manifest["generation_sources"]["plan"]
+    lesson_source = manifest["generation_sources"]["micro_lesson"]
+    checks = manifest["content_checks"]
+
+    recommendation_counts = Counter(
+        recommendation["generation_method"]
+        for plan in plans
+        for recommendation in plan["recommendations"]
+    )
+    lesson_counts = Counter(lesson["creation_method"] for lesson in lessons)
+    lesson_review_counts = Counter(lesson["review_method"] for lesson in lessons)
+
+    assert plan_source["content_counts"] == dict(recommendation_counts)
+    assert lesson_source["content_counts"] == dict(lesson_counts)
+    assert lesson_source["review_counts"] == dict(lesson_review_counts)
+    assert checks["recommendation_content_methods"] == dict(recommendation_counts)
+    assert checks["lesson_content_methods"] == dict(lesson_counts)
+    assert checks["lesson_review_methods"] == dict(lesson_review_counts)
+
+    labels = {
+        "rule": "规则",
+        "model": "模型",
+        "hybrid": "规则+模型",
+        "human": "教师修订/确认",
+        "unknown": "未知",
+    }
+    for method, count in recommendation_counts.items():
+        assert f"{labels[method]}（{method}） {count} 条" in readme
+    for method, count in lesson_counts.items():
+        assert f"{labels[method]}（{method}） {count} 份" in readme
+    for method, count in lesson_review_counts.items():
+        assert f"{labels[method]}（{method}） {count} 份" in readme
+    # 微课堂不能用 hybrid 概括正文生成方式。
+    if set(lesson_counts) == {"rule"}:
+        assert "hybrid" not in readme.split("C 微课堂", 1)[1].split("\n", 1)[0]
 
