@@ -1209,6 +1209,16 @@ def _module_method(methods: set[str]) -> str:
     return "rule"
 
 
+def _counts_text(counts: dict[str, int], unit: str) -> str:
+    """把方法计数写成可读文本；键保留原始枚举值，便于和载荷逐项核对。"""
+
+    if not counts:
+        return "无记录"
+    return "、".join(
+        f"{method} {count} {unit}" for method, count in sorted(counts.items())
+    )
+
+
 def _project_material_source(
     enriched: EnrichedSource,
     *,
@@ -1999,7 +2009,38 @@ def build_files(db: Session, export: models.Export) -> dict[str, bytes]:
     groups_current = 0
     groups_missing_teacher_reason_current = 0
     groups_missing_primary_strategy_current = 0
-    plan_methods: set[str] = set()
+    plan_content_methods: set[str] = set()
+    plan_content_counts: dict[str, int] = {}
+    plan_review_methods: set[str] = set()
+    plan_review_counts: dict[str, int] = {}
+
+    def _current_analysis_version(student_id: str, node_id: str) -> str:
+        """该学生该节点当前正式学生学情的版本号。
+
+        导出范围里已冻结的版本优先；范围外节点回查正式指针，再退化到最近发布，
+        与预检使用同一套口径，避免把历史方案引用的版本误当成当前依据。
+        """
+
+        version_id = versions["student"].get(student_id, {}).get(node_id)
+        if version_id:
+            return str(version_id)
+        row = repo.read_formal(
+            db,
+            repo.FormalKey(
+                family_id=dataset.family_id or "",
+                dataset_id=dataset.id,
+                kind="student_analysis",
+                run_key=selection["run_id"],
+                node_key=node_id,
+                target_key=student_id,
+            ),
+        )
+        if row is None:
+            row = _latest_published(
+                db, dataset.id, "student_analysis", node_id, student_id
+            )
+        return row.version_id if row is not None else ""
+
     for version_id, meta in sorted(plan_entries.items()):
         student_id = str(meta.get("student_id") or "")
         payload = _load(db, version_id)
@@ -2007,14 +2048,33 @@ def build_files(db: Session, export: models.Export) -> dict[str, bytes]:
         publication = _publication_record(db, version_id)
         publication_counts["plan"][publication["status"]] += 1
         for recommendation in plan.recommendations:
-            plan_methods.add(str(recommendation.generation_method))
+            method = str(recommendation.generation_method or "unknown")
+            plan_content_methods.add(method)
+            plan_content_counts[method] = plan_content_counts.get(method, 0) + 1
         node_id = plan.node_id or str(meta.get("node_id") or "")
         current = bool(meta.get("current"))
         origin_version = plan.analysis_version or ""
-        current_version = (
-            versions["student"].get(student_id, {}).get(node_id)
-            or versions["student"].get(student_id, {}).get(node_ids[0], "")
-        )
+        current_version = _current_analysis_version(student_id, node_id)
+        analysis_current = bool(origin_version) and origin_version == current_version
+        if not origin_version:
+            basis_warnings = [
+                "方案载荷未记录 analysis_version，无法确认是否基于当前正式学生学情"
+            ]
+            analysis_basis = "unknown"
+        elif not current_version:
+            basis_warnings = [
+                f"无法读取该学生该节点的当前正式学生学情，方案记录的学情版本 {origin_version} 不能确认是最新依据"
+            ]
+            analysis_basis = "unknown"
+        elif not analysis_current:
+            basis_warnings = [
+                f"方案基于历史学生学情版本 {origin_version}，当前正式学生学情为 {current_version}；"
+                "内容可追溯，但不是最新学情依据"
+            ]
+            analysis_basis = "historical"
+        else:
+            basis_warnings = []
+            analysis_basis = "current"
         groups = [group.model_dump(mode="json") for group in plan.task_groups]
         recommendation_items = [
             {
@@ -2093,6 +2153,11 @@ def build_files(db: Session, export: models.Export) -> dict[str, bytes]:
                 "current_analysis_key": f"student:{current_version}:{student_id}"
                 if current_version
                 else "",
+                "origin_analysis_version": origin_version,
+                "current_analysis_version": current_version,
+                "analysis_current": analysis_current,
+                "analysis_basis": analysis_basis,
+                "basis_warnings": basis_warnings,
                 "knowledge_version": plan.knowledge_version,
                 "catalog_version": plan.catalog_version,
                 "review_status": (plan.review_info.status if plan.review_info else "validated"),
@@ -2380,7 +2445,10 @@ def build_files(db: Session, export: models.Export) -> dict[str, bytes]:
     micro_lessons: list[dict[str, Any]] = []
     lessons_without_source = 0
     lessons_with_unresolved_citation = 0
-    lesson_methods: set[str] = set()
+    lesson_content_methods: set[str] = set()
+    lesson_content_counts: dict[str, int] = {}
+    lesson_review_methods: set[str] = set()
+    lesson_review_counts: dict[str, int] = {}
     for version_id in sorted(content_ids):
         version = db.get(models.Version, version_id)
         if version is None:
@@ -2471,17 +2539,31 @@ def build_files(db: Session, export: models.Export) -> dict[str, bytes]:
             or (payload.get("review_info") or {}).get("method")
             or "unknown"
         )
-        lesson_methods.add(creation_method)
+        lesson_content_methods.add(creation_method)
+        lesson_content_counts[creation_method] = (
+            lesson_content_counts.get(creation_method, 0) + 1
+        )
+        review_method = str((payload.get("review_info") or {}).get("method") or "unknown")
+        lesson_review_methods.add(review_method)
+        lesson_review_counts[review_method] = lesson_review_counts.get(review_method, 0) + 1
+        lesson_plan_version = payload.get("origin_plan_version") or link.get(
+            "plan_version", ""
+        )
+        lesson_plan_meta = plan_entries.get(lesson_plan_version)
+        plan_current = (
+            bool(lesson_plan_meta.get("current")) if lesson_plan_meta else None
+        )
         micro_lessons.append(
             {
                 "key": f"content:{version_id}",
                 "content_id": payload.get("content_id"),
                 "content_version": version_id,
                 "activity_id": link.get("activity_id", ""),
-                "plan_version": payload.get("origin_plan_version")
-                or link.get("plan_version", ""),
+                "plan_version": lesson_plan_version,
+                "plan_current": plan_current,
                 "body": payload.get("body"),
                 "creation_method": creation_method,
+                "review_method": review_method,
                 "review_status": (payload.get("review_info") or {}).get("status"),
                 "publication": publication,
                 "publication_status": publication["status"],
@@ -2493,6 +2575,81 @@ def build_files(db: Session, export: models.Export) -> dict[str, bytes]:
                 "limitations": limitations,
             }
         )
+
+    # 版本链披露：方案载荷记录的 analysis_version 可能指向历史学情。
+    # 这里只派生标注，不改写载荷、不把历史版本改成 current。
+    plan_basis_entries = [
+        {
+            "student_id": record["student_id"],
+            "node_id": record["node_id"],
+            "plan_version": record["plan_version"],
+            "plan_current": record["current"],
+            "analysis_version": record["origin_analysis_version"],
+            "current_analysis_version": record["current_analysis_version"],
+            "analysis_basis": record["analysis_basis"],
+            "reason": "；".join(record["basis_warnings"]),
+        }
+        for record in plan_records
+        if not record["analysis_current"]
+    ]
+    current_plan_history = [
+        entry for entry in plan_basis_entries if entry["plan_current"]
+    ]
+    lesson_plan_states = {"current": 0, "historical": 0, "unknown": 0}
+    historical_plan_lessons: list[dict[str, str]] = []
+    model_lessons_on_historical_plan: list[dict[str, str]] = []
+    for lesson in micro_lessons:
+        if lesson["plan_current"] is True:
+            lesson_plan_states["current"] += 1
+        elif lesson["plan_current"] is False:
+            lesson_plan_states["historical"] += 1
+            historical_plan_lessons.append(
+                {
+                    "content_version": str(lesson["content_version"]),
+                    "plan_version": str(lesson["plan_version"]),
+                    "creation_method": str(lesson["creation_method"]),
+                }
+            )
+            if lesson["creation_method"] == "model":
+                model_lessons_on_historical_plan.append(
+                    {
+                        "content_version": str(lesson["content_version"]),
+                        "plan_version": str(lesson["plan_version"]),
+                    }
+                )
+        else:
+            lesson_plan_states["unknown"] += 1
+    version_chain = {
+        "analysis_basis": {
+            "plan_records": len(plan_records),
+            "current_plan_records": sum(1 for record in plan_records if record["current"]),
+            "records_with_current_analysis": sum(
+                1 for record in plan_records if record["analysis_current"]
+            ),
+            "records_with_historical_analysis": len(plan_basis_entries),
+            "current_plans_with_historical_analysis": len(current_plan_history),
+            "historical_dependencies": current_plan_history,
+            "note": (
+                "当前方案依赖历史学生学情时，逐条列出学生、节点、方案版本与分析版本；"
+                "这些内容可追溯，但不是最新学情依据。导出不改写版本，也不删除历史记录"
+            ),
+        },
+        "micro_lessons": {
+            "total": len(micro_lessons),
+            "on_current_plan": lesson_plan_states["current"],
+            "on_historical_plan": lesson_plan_states["historical"],
+            "plan_unknown": lesson_plan_states["unknown"],
+            "model_lessons": sum(
+                1 for lesson in micro_lessons if lesson["creation_method"] == "model"
+            ),
+            "historical_plan_lessons": historical_plan_lessons,
+            "model_lessons_on_historical_plan": model_lessons_on_historical_plan,
+            "note": (
+                "微课堂的 plan_version 取自正式版本载荷；plan_current=false 表示该微课堂挂在历史方案版本，"
+                "可追溯但不是当前方案内容"
+            ),
+        },
+    }
 
     # 证据闭包：凡是本包当前/历史记录引用到的原始记录，都要在 evidence_records.json
     # 里可解析；事件分页只决定展示顺序，不能决定证据是否存在。
@@ -2628,23 +2785,42 @@ def build_files(db: Session, export: models.Export) -> dict[str, bytes]:
     for version_id in plan_entries:
         payload = _load(db, version_id)
         review = payload.get("review_info") or {}
-        if review.get("method"):
-            plan_methods.add(str(review["method"]))
+        review_method = str(review.get("method") or "unknown")
+        plan_review_methods.add(review_method)
+        plan_review_counts[review_method] = plan_review_counts.get(review_method, 0) + 1
         if review.get("prompt_version"):
             plan_prompts.add(str(review["prompt_version"]))
 
-    plan_method = _module_method(plan_methods)
-    if plan_method == "rule":
-        plan_note = "方案建议由规则生成并审核"
-    elif "model" in plan_methods or "hybrid" in plan_methods:
-        plan_note = "方案版本载荷记录了模型参与；以载荷为准，本次导出不调用模型"
+    plan_content_method = _module_method(plan_content_methods)
+    plan_review_method = _module_method(plan_review_methods)
+    if plan_content_method == "rule":
+        plan_note = (
+            f"推荐内容由规则生成（{_counts_text(plan_content_counts, '条')}）；"
+            f"复核记录为 {_counts_text(plan_review_counts, '份')}。"
+            "复核方式单独记录，不等于推荐内容由模型生成"
+        )
+    elif "model" in plan_content_methods or "hybrid" in plan_content_methods:
+        plan_note = (
+            f"推荐内容载荷记录了模型参与（{_counts_text(plan_content_counts, '条')}）；"
+            f"复核记录为 {_counts_text(plan_review_counts, '份')}；"
+            "以载荷为准，本次导出不调用模型"
+        )
     else:
-        plan_note = "部分方案版本由教师修订或确认（generation_method=human）；以载荷为准"
+        plan_note = (
+            "部分推荐内容由教师修订或确认（generation_method=human）；"
+            f"复核记录为 {_counts_text(plan_review_counts, '份')}；以载荷为准"
+        )
     plan_generation = {
-        "method": plan_method,
-        "methods": sorted(plan_methods),
+        "method": plan_content_method,
+        "methods": sorted(plan_content_methods),
+        "content_method": plan_content_method,
+        "content_methods": sorted(plan_content_methods),
+        "content_counts": dict(sorted(plan_content_counts.items())),
+        "review_method": plan_review_method,
+        "review_methods": sorted(plan_review_methods),
+        "review_counts": dict(sorted(plan_review_counts.items())),
         "prompt_versions": sorted(plan_prompts),
-        "provenance": "正式方案版本载荷 recommendation.generation_method / review_info",
+        "provenance": "正式方案版本载荷 recommendation.generation_method（内容生成）与 review_info.method（复核）",
         "note": plan_note,
     }
     knowledge_generation = {
@@ -2678,13 +2854,23 @@ def build_files(db: Session, export: models.Export) -> dict[str, bytes]:
             )
         ),
     }
+    lesson_content_method = _module_method(lesson_content_methods)
+    lesson_review_method = _module_method(lesson_review_methods)
     lesson_generation = {
-        "method": _module_method(lesson_methods),
-        "methods": sorted(lesson_methods),
-        "provenance": "正式微课堂版本载荷 creation_method / review_info",
-        "note": "微课堂正文由规则模板生成"
-        if _module_method(lesson_methods) == "rule"
-        else "微课堂版本载荷记录了模型参与；以载荷为准",
+        "method": lesson_content_method,
+        "methods": sorted(lesson_content_methods),
+        "content_method": lesson_content_method,
+        "content_methods": sorted(lesson_content_methods),
+        "content_counts": dict(sorted(lesson_content_counts.items())),
+        "review_method": lesson_review_method,
+        "review_methods": sorted(lesson_review_methods),
+        "review_counts": dict(sorted(lesson_review_counts.items())),
+        "provenance": "正式微课堂版本载荷 creation_method（正文生成）与 review_info.method（复核）",
+        "note": (
+            f"微课堂正文生成方式：{_counts_text(lesson_content_counts, '份')}；"
+            f"复核记录：{_counts_text(lesson_review_counts, '份')}；"
+            "正文生成方式与复核方式分开记录"
+        ),
     }
     generation_sources = {
         "export": {
@@ -2875,6 +3061,26 @@ def build_files(db: Session, export: models.Export) -> dict[str, bytes]:
             f"包内有 {unpublished_analysis} 份学情版本没有正式发布记录，"
             "result.publication_status 按真实状态保留为 unpublished"
         )
+    if current_plan_history:
+        chain_preview = "、".join(
+            f"{entry['student_id']}/{entry['node_id']}" for entry in current_plan_history
+        )
+        manifest_limitations.append(
+            f"版本链：{len(current_plan_history)} 份当前方案基于历史学生学情版本（{chain_preview}）。"
+            "这些方案与分析版本可追溯，但不是最新学情依据；"
+            "recommendations.json 用 analysis_current=false 与 basis_warnings 标注，"
+            "导出不改写版本，也不删除历史记录"
+        )
+    if historical_plan_lessons:
+        model_note = (
+            f"，其中模型生成 {len(model_lessons_on_historical_plan)} 份"
+            if model_lessons_on_historical_plan
+            else ""
+        )
+        manifest_limitations.append(
+            f"版本链：{len(historical_plan_lessons)} 份微课堂挂在历史方案版本{model_note}；"
+            "micro_lessons.json 用 plan_current=false 标注，可追溯但不是当前方案内容"
+        )
     data_origin_limitations = list(data_origin["limitations"])
     content_issues: list[str] = []
     if activity_material_missing:
@@ -2982,6 +3188,15 @@ def build_files(db: Session, export: models.Export) -> dict[str, bytes]:
             "lessons": len(micro_lessons),
             "lessons_without_source_refs": lessons_without_source,
             "lessons_with_unresolved_citation": lessons_with_unresolved_citation,
+            "recommendations": sum(plan_content_counts.values()),
+            "recommendation_content_methods": dict(
+                sorted(plan_content_counts.items())
+            ),
+            "plan_review_methods": dict(sorted(plan_review_counts.items())),
+            "plans_with_historical_analysis": len(plan_basis_entries),
+            "current_plans_with_historical_analysis": len(current_plan_history),
+            "lesson_content_methods": dict(sorted(lesson_content_counts.items())),
+            "lesson_review_methods": dict(sorted(lesson_review_counts.items())),
             "records": len(evidence),
             "records_covered_students": len(record_students),
             "records_with_source_row": sum(
@@ -3038,6 +3253,7 @@ def build_files(db: Session, export: models.Export) -> dict[str, bytes]:
             "cases": len(case_ids),
             "limitations": data_origin_limitations,
         },
+        "version_chain": version_chain,
         "files": [],
         "validation": {
             "preflight": "passed",
@@ -3249,13 +3465,53 @@ def _field_dictionary(payloads: dict[str, bytes]) -> dict[str, Any]:
                 "example": "null",
             },
             {
+                "key": "recommendations.json:analysis_current",
+                "file": "recommendations.json",
+                "field_path": "analysis_current",
+                "type": "bool",
+                "required": True,
+                "nullable": False,
+                "meaning": "方案载荷 analysis_version 是否等于该学生该节点的当前正式学生学情；false 表示方案基于历史学情，可追溯但不是最新依据",
+                "example": "false",
+            },
+            {
+                "key": "recommendations.json:basis_warnings",
+                "file": "recommendations.json",
+                "field_path": "basis_warnings",
+                "type": "list",
+                "required": True,
+                "nullable": False,
+                "meaning": "学情依据的可读说明；analysis_current=true 时为空数组，false 时写明历史学情版本与当前正式学情版本",
+                "example": '["方案基于历史学生学情版本 ban-...，当前正式学生学情为 ban-..."]',
+            },
+            {
+                "key": "manifest.json:version_chain",
+                "file": "manifest.json",
+                "field_path": "version_chain",
+                "type": "dict",
+                "required": True,
+                "nullable": False,
+                "meaning": "版本链说明：逐条列出当前方案依赖的历史学情（学生/节点/方案版本/分析版本），并统计微课堂挂在当前还是历史方案；只做派生披露，不改写载荷",
+                "example": '{"analysis_basis": {"current_plans_with_historical_analysis": 0}, "micro_lessons": {"total": 160}}',
+            },
+            {
+                "key": "micro_lessons.json:plan_current",
+                "file": "micro_lessons.json",
+                "field_path": "plan_current",
+                "type": "bool",
+                "required": False,
+                "nullable": True,
+                "meaning": "微课堂 payload.origin_plan_version 是否为当前方案版本；false 表示挂在历史方案版本，null 表示该方案版本不在本包闭包内，无法确认",
+                "example": "false",
+            },
+            {
                 "key": "manifest.json:generation_sources",
                 "file": "manifest.json",
                 "field_path": "generation_sources",
                 "type": "dict",
                 "required": True,
                 "nullable": False,
-                "meaning": "按模块记录版本载荷里的生成/复核来源；知识或微课堂的 model 标记可能来自历史版本创建，不代表本次导出调用模型",
+                "meaning": "按模块记录版本载荷里的生成与复核来源；plan/micro_lesson 分列 content_method（内容生成）与 review_methods（复核），知识或微课堂的 model 标记可能来自历史版本创建，不代表本次导出调用模型",
                 "example": '{"export": {"method": "rule"}, "knowledge": {"method": "rule"}}',
             },
             {
@@ -3334,13 +3590,54 @@ def _readme(manifest: dict[str, Any], dataset: models.Dataset) -> str:
         "plan": "C 学习方案",
         "micro_lesson": "C 微课堂",
     }
+    def _method_label(method: str) -> str:
+        return f"{method_names.get(method, method)}（{method}）"
+
+    def _readme_counts(counts: dict[str, int], unit: str) -> str:
+        if not counts:
+            return "无记录"
+        return "、".join(
+            f"{_method_label(method)} {count} {unit}"
+            for method, count in sorted(counts.items())
+        )
+
     rows = []
     for module in ("export", "knowledge", "student_analysis", "plan", "micro_lesson"):
         item = dict(sources.get(module) or {})
-        method = str(item.get("method") or "unknown")
+        content_method = str(
+            item.get("content_method") or item.get("method") or "unknown"
+        )
+        content_counts = dict(item.get("content_counts") or {})
+        review_counts = dict(item.get("review_counts") or {})
+        review_methods = list(item.get("review_methods") or [])
+        if content_counts:
+            content_text = _readme_counts(
+                content_counts, "条" if module == "plan" else "份"
+            )
+        else:
+            content_text = _method_label(content_method)
+        if review_counts:
+            review_text = _readme_counts(review_counts, "份")
+        elif review_methods:
+            review_text = "、".join(_method_label(str(method)) for method in review_methods)
+        else:
+            review_text = "未单独记录"
         rows.append(
-            f"| {module_names[module]} | {method_names.get(method, method)}（{method}） "
+            f"| {module_names[module]} | {content_text} | {review_text} "
             f"| {item.get('note') or ''} |"
+        )
+    plan_source = dict(sources.get("plan") or {})
+    lesson_source = dict(sources.get("micro_lesson") or {})
+    plan_content_counts = dict(plan_source.get("content_counts") or {})
+    plan_review_counts = dict(plan_source.get("review_counts") or {})
+    lesson_content_counts = dict(lesson_source.get("content_counts") or {})
+    lesson_review_counts = dict(lesson_source.get("review_counts") or {})
+    plan_rule_hybrid_sentence = ""
+    if set(plan_content_counts) == {"rule"} and "hybrid" in plan_review_counts:
+        plan_rule_hybrid_sentence = (
+            f"本包推荐内容 {plan_content_counts['rule']} 条全部由规则生成"
+            f"（generation_method=rule），复核记录中 hybrid {plan_review_counts['hybrid']} 份；"
+            "复核方式不等于内容生成方式，不能把方案笼统称为模型生成。"
         )
     limitations = [str(item) for item in manifest.get("limitations") or []]
     limitations_text = (
@@ -3361,6 +3658,68 @@ def _readme(manifest: dict[str, Any], dataset: models.Dataset) -> str:
     ) or "未包含正式知识版本"
     versions = dict(manifest.get("versions") or {})
     dependency_count = len(manifest.get("dependency_edges") or [])
+    version_chain = dict(manifest.get("version_chain") or {})
+    analysis_chain = dict(version_chain.get("analysis_basis") or {})
+    lesson_chain = dict(version_chain.get("micro_lessons") or {})
+    historical_dependencies = list(analysis_chain.get("historical_dependencies") or [])
+    if historical_dependencies:
+        chain_lines = "\n".join(
+            f"- {entry.get('student_id')}/{entry.get('node_id')}：方案 {entry.get('plan_version')}"
+            f"（{'当前方案' if entry.get('plan_current') else '历史方案'}），"
+            f"引用学情 {entry.get('analysis_version')}；"
+            f"当前正式学情 {entry.get('current_analysis_version')}。"
+            "内容可追溯，但不是最新学情依据。"
+            for entry in historical_dependencies
+        )
+        analysis_chain_text = (
+            f"- 当前方案 {analysis_chain.get('current_plan_records', 0)} 份，其中 "
+            f"{analysis_chain.get('current_plans_with_historical_analysis', 0)} 份依赖历史学生学情版本：\n"
+            f"{chain_lines}\n"
+            "- 以上内容可追溯，但不是最新学情依据；`recommendations.json` 用 "
+            "`analysis_current=false` 与 `basis_warnings` 标注，"
+            "导出不改写版本，也不删除记录。"
+        )
+    else:
+        analysis_chain_text = (
+            "- 本包当前方案均引用当前正式学生学情版本，`analysis_current=true`，"
+            "`basis_warnings` 为空。"
+        )
+    lesson_chain_text = (
+        f"- 微课堂 {lesson_chain.get('total', 0)} 份：挂当前方案 "
+        f"{lesson_chain.get('on_current_plan', 0)} 份、挂历史方案 "
+        f"{lesson_chain.get('on_historical_plan', 0)} 份、方案版本无法确认 "
+        f"{lesson_chain.get('plan_unknown', 0)} 份；模型生成 "
+        f"{lesson_chain.get('model_lessons', 0)} 份。`micro_lessons.json` 的 "
+        "`plan_current` 标明微课堂挂在当前还是历史方案版本。"
+    )
+    model_lessons_on_history = list(
+        lesson_chain.get("model_lessons_on_historical_plan") or []
+    )
+    historical_plan_lessons = list(lesson_chain.get("historical_plan_lessons") or [])
+    if historical_plan_lessons:
+        lesson_preview = "、".join(
+            f"{item.get('content_version')}（{item.get('creation_method')}，"
+            f"方案 {item.get('plan_version')}）"
+            for item in historical_plan_lessons[:12]
+        )
+        suffix = (
+            f" 等 {len(historical_plan_lessons)} 份"
+            if len(historical_plan_lessons) > 12
+            else ""
+        )
+        lesson_chain_text += (
+            f"\n- 挂在历史方案版本的微课堂：{lesson_preview}{suffix}；"
+            "可追溯，但不是当前方案内容。"
+        )
+    if model_lessons_on_history:
+        lesson_chain_text += (
+            "\n- 其中挂在历史方案版本的模型微课堂："
+            + "、".join(
+                f"{item.get('content_version')}（方案 {item.get('plan_version')}）"
+                for item in model_lessons_on_history
+            )
+            + "；可追溯，但不是当前方案内容。"
+        )
     return f"""# 湛知正式成果包
 
 - 数据集：{dataset.id}（系列 {dataset.family_id}）
@@ -3373,12 +3732,17 @@ def _readme(manifest: dict[str, Any], dataset: models.Dataset) -> str:
 
 ## 生成方式（按模块记录）
 
-| 模块 | 实际来源 | 说明 |
-| --- | --- | --- |
+| 模块 | 内容生成方式 | 复核方式 | 说明 |
+| --- | --- | --- | --- |
 {chr(10).join(rows)}
 
-模块来源取自正式版本载荷里的 `generation_method`、`creation_method` 与 `review_info`；
-知识或微课堂中的 `model` 标记可能来自版本创建或独立复核，不代表本次导出调用模型。
+模块来源取自正式版本载荷里的 `generation_method`、`creation_method` 与 `review_info`。
+方案推荐内容按 `recommendation.generation_method` 统计，复核按 `review_info.method` 单独统计：
+- C 学习方案：推荐内容 {_readme_counts(plan_content_counts, '条')}；复核记录 {_readme_counts(plan_review_counts, '份')}。
+  {plan_rule_hybrid_sentence or '推荐内容与复核方式按版本载荷分别统计；复核方式不等于内容生成方式，不能把方案笼统称为模型生成。'}
+- C 微课堂：正文 {_readme_counts(lesson_content_counts, '份')}；复核记录 {_readme_counts(lesson_review_counts, '份')}。
+  正文生成方式按 `creation_method` 逐份统计，不用 hybrid 概括；知识或微课堂中的 `model` 标记
+  可能来自版本创建或独立复核，不代表本次导出调用模型。
 导出层只读冻结版本，不调用模型，也不把历史模型标记改写成规则。
 
 ## 数据来源
@@ -3398,6 +3762,11 @@ def _readme(manifest: dict[str, Any], dataset: models.Dataset) -> str:
 - 知识图谱：{knowledge_checks.get('points', 0)} 个知识点、{knowledge_checks.get('relations', 0)} 条关系、{knowledge_checks.get('annotations', 0)} 条标注；`knowledge_graph.json` 的每条记录用 `knowledge_version` 区分版本，`current=false` 为历史依赖
 - 冻结版本：学生学情 {len(versions.get('student') or [])}、班级学情 {len(versions.get('class') or [])}、学习方案 {len(versions.get('plans') or [])}、微课堂 {len(versions.get('content') or [])}
 - 依赖边：{dependency_count} 条（`manifest.json` 的 `dependency_edges`）
+
+## 版本链说明
+
+{analysis_chain_text}
+{lesson_chain_text}
 
 ## 三项任务对应文件
 
