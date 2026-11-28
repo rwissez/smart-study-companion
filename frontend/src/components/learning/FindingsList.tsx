@@ -1,12 +1,15 @@
 import type { EvidenceRef, Finding } from "../../api/types";
 import { evidenceStatusLabel, performanceLabel } from "../../lib/format";
-import { evidenceRefLabel } from "../../lib/labels";
+import { EvidenceRefsButton } from "../evidence/EvidenceRefsButton";
+import type { EvidenceContext } from "../evidence/types";
 
 interface Props {
   findings: Finding[];
   names: Record<string, string>;
   onEvidence?: (ref: EvidenceRef) => void;
   emptyText?: string;
+  evidenceContext?: EvidenceContext;
+  materialNames?: Record<string, string>;
 }
 
 const PERFORMANCE_TONE: Record<string, string> = {
@@ -38,7 +41,14 @@ function diagnosticText(value: Finding["diagnostic_details"]): string[] {
   });
 }
 
-export function FindingsList({ findings, names, onEvidence, emptyText = "本次分析没有返回诊断发现。" }: Props) {
+export function FindingsList({
+  findings,
+  names,
+  onEvidence,
+  emptyText = "本次分析没有返回诊断发现。",
+  evidenceContext,
+  materialNames,
+}: Props) {
   if (findings.length === 0) {
     return <p className="muted small">{emptyText}</p>;
   }
@@ -68,11 +78,12 @@ export function FindingsList({ findings, names, onEvidence, emptyText = "本次�
           )}
           {finding.evidence_refs.length && onEvidence ? (
             <div className="row" style={{ marginTop: 8 }}>
-              {finding.evidence_refs.slice(0, 3).map((ref) => (
-                <button key={`${ref.kind}:${ref.id}`} type="button" className="btn btnSm btnGhost" onClick={() => onEvidence(ref)}>
-                  查看依据 · {evidenceRefLabel(ref.kind, ref.id)}
-                </button>
-              ))}
+              <EvidenceRefsButton
+                refs={finding.evidence_refs}
+                onOpen={onEvidence}
+                context={evidenceContext}
+                materialNames={materialNames}
+              />
             </div>
           ) : null}
         </article>

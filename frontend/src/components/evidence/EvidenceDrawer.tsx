@@ -6,10 +6,11 @@ import { formatDate, formatPercent, formatScore } from "../../lib/format";
 import { metricNameLabel, unitLabel } from "../../lib/labels";
 import { IconArrowLeft, IconClose } from "../icons";
 import { StatePanel } from "../feedback/StatePanel";
+import { evidenceRefKey, type EvidenceContext } from "./types";
 
 interface Props {
   refItem: EvidenceRef | null;
-  context?: { student_id?: string | null; class_id?: string | null; activity_id?: string | null; plan_version?: string | null };
+  context?: EvidenceContext;
   onClose: () => void;
 }
 
@@ -46,10 +47,6 @@ function refVersion(ref: EvidenceRef): string {
   ];
   const parts = entries.filter(([, value]) => Boolean(value)).map(([label, value]) => `${label} ${value}`);
   return parts.length ? parts.join(" · ") : "未附版本";
-}
-
-function refKey(ref: EvidenceRef): string {
-  return `${ref.kind}:${ref.id}:${ref.run_id ?? ""}:${ref.analysis_version ?? ""}:${ref.catalog_version ?? ""}:${ref.knowledge_version ?? ""}:${ref.plan_version ?? ""}`;
 }
 
 /** 证据抽屉：按 detail_type 渲染服务端投影，不展示整份 JSON。 */
@@ -104,7 +101,7 @@ export function EvidenceDrawer({ refItem, context, onClose }: Props) {
   const push = useCallback(
     (ref: EvidenceRef) => {
       setStack((previous) => {
-        if (previous.some((item) => refKey(item) === refKey(ref))) return previous;
+        if (previous.some((item) => evidenceRefKey(item) === evidenceRefKey(ref))) return previous;
         return [...previous, ref];
       });
     },
@@ -193,7 +190,7 @@ function EvidenceBody({ detail, onOpenRelated }: { detail: EvidenceDetail; onOpe
           <div className="refList">
             {detail.related_refs.map((ref, index) => (
               <button
-                key={refKey(ref)}
+                key={evidenceRefKey(ref)}
                 type="button"
                 className="btn btnSm"
                 onClick={() => onOpenRelated(ref)}

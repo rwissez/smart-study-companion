@@ -8,6 +8,7 @@ import { useSession } from "../../app/session";
 import { queryKeys } from "../../lib/queryKeys";
 import { StatePanel } from "../../components/feedback/StatePanel";
 import { EvidenceDrawer } from "../../components/evidence/EvidenceDrawer";
+import { EvidenceRefsButton } from "../../components/evidence/EvidenceRefsButton";
 import { IndicatorRadar } from "../../components/learning/IndicatorRadar";
 import { ProgressView } from "../../components/learning/ProgressView";
 import { performanceLabel } from "../../lib/format";
@@ -50,6 +51,13 @@ export function StudentProfilePage() {
     return map;
   }, [catalog.data]);
   const order = useMemo(() => (catalog.data?.indicators ?? []).map((indicator) => indicator.indicator_id), [catalog.data]);
+  const materialNames = useMemo(() => {
+    const map: Record<string, string> = {};
+    (catalog.data?.materials ?? []).forEach((material) => {
+      map[material.material_id] = material.source_label || material.content.slice(0, 18);
+    });
+    return map;
+  }, [catalog.data]);
 
   const result = profile.data?.result;
   const suggestion = plan.data?.plan.recommendations[0];
@@ -112,13 +120,12 @@ export function StudentProfilePage() {
                       <p className="prose">{finding.description}</p>
                       {finding.limitations.length ? <p className="xs muted">限制：{finding.limitations.join("；")}</p> : null}
                       {finding.evidence_refs.length ? (
-                        <button
-                          type="button"
-                          className="btn btnSm btnGhost"
-                          onClick={() => setEvidence(finding.evidence_refs[0])}
-                        >
-                          查看依据
-                        </button>
+                        <EvidenceRefsButton
+                          refs={finding.evidence_refs}
+                          onOpen={setEvidence}
+                          context={{ student_id: studentId }}
+                          materialNames={materialNames}
+                        />
                       ) : null}
                     </li>
                   ))}
@@ -164,7 +171,15 @@ export function StudentProfilePage() {
             {progress.isError ? (
               <StatePanel kind="error" title="进展读取失败" message={toErrorMessage(progress.error)} />
             ) : null}
-            {progress.data ? <ProgressView items={progress.data.items} names={names} onEvidence={setEvidence} /> : null}
+            {progress.data ? (
+              <ProgressView
+                items={progress.data.items}
+                names={names}
+                onEvidence={setEvidence}
+                evidenceContext={{ student_id: studentId }}
+                materialNames={materialNames}
+              />
+            ) : null}
           </section>
         </>
       ) : null}

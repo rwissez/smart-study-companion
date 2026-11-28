@@ -1,10 +1,14 @@
 import type { EvidenceRef, ProgressComparison } from "../../api/types";
 import { formatPercent, progressLabel } from "../../lib/format";
+import { EvidenceRefsButton } from "../evidence/EvidenceRefsButton";
+import type { EvidenceContext } from "../evidence/types";
 
 interface Props {
   items: ProgressComparison[];
   names: Record<string, string>;
   onEvidence?: (ref: EvidenceRef) => void;
+  evidenceContext?: EvidenceContext;
+  materialNames?: Record<string, string>;
 }
 
 const TONE: Record<string, string> = {
@@ -15,7 +19,7 @@ const TONE: Record<string, string> = {
 };
 
 /** 只展示 B 返回的 classification 与 comparable；不可比时不画趋势与差值。 */
-export function ProgressView({ items, names, onEvidence }: Props) {
+export function ProgressView({ items, names, onEvidence, evidenceContext, materialNames }: Props) {
   if (items.length === 0) {
     return <p className="muted small">暂无进展比较。需要至少两次同口径分析才会产生。</p>;
   }
@@ -47,9 +51,12 @@ export function ProgressView({ items, names, onEvidence }: Props) {
               </td>
               <td>
                 {item.evidence_refs.length && onEvidence ? (
-                  <button type="button" className="btn btnSm btnGhost" onClick={() => onEvidence(item.evidence_refs[0])}>
-                    查看依据
-                  </button>
+                  <EvidenceRefsButton
+                    refs={item.evidence_refs}
+                    onOpen={onEvidence}
+                    context={evidenceContext}
+                    materialNames={materialNames}
+                  />
                 ) : (
                   <span className="xs muted">无引用</span>
                 )}
