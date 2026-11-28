@@ -65,6 +65,7 @@ def test_confirmed_pdf_roles_are_persisted_and_only_textbooks_are_extracted(
     assert confirmed.status_code == 202, confirmed.text
     dataset_id = confirmed.json()["data"]["dataset_id"]
     assert dataset_id
+    assert confirmed.json()["data"]["job_id"], "确认导入后必须返回已排队的导入任务"
 
     with get_sessionmaker()() as db:
         rows = db.execute(

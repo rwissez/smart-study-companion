@@ -510,7 +510,10 @@ def confirm_import(
     if not missing:
         _materialize(db, settings, record, files, receipt)
         db.flush()
+        job_id = receipt.job_id
         receipt = _receipt_from_record(db, record)
+        if job_id:
+            receipt.job_id = job_id
     db.flush()
     return receipt
 
