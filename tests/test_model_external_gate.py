@@ -3,10 +3,11 @@
 from __future__ import annotations
 
 import pytest
+from pydantic import BaseModel
 
 from study_companion.config import Settings
 from study_companion.contracts import DomainError
-from study_companion.model_service import assert_external_model_allowed
+from study_companion.model_service import ModelService, ModelTaskRequest, assert_external_model_allowed
 
 
 def _settings(url: str, allow: bool = False) -> Settings:
@@ -43,3 +44,50 @@ def test_unconfigured_model_does_not_trigger_external_gate() -> None:
     )
 
     assert_external_model_allowed(settings)
+
+
+class _Payload(BaseModel):
+    value: int
+
+
+class _Provider:
+    name = "fake"
+    model = "fake-model"
+
+    def __init__(self) -> None:
+        self.called = False
+
+    def generate(self, messages, tools=None, response_schema=None):  # noqa: ANN001
+        self.called = True
+        return type("Turn", (), {"text": '{"value":1}', "usage": None})()
+
+
+def test_task_disallowing_external_input_blocks_remote_provider_even_when_globally_enabled(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    provider = _Provider()
+    service = ModelService(settings=_settings("https://llm.example.com/v1", allow=True))
+    monkeypatch.setattr(service, "_load_provider", lambda: provider)
+
+    result = service.generate_structured(
+        ModelTaskRequest(task_key="unit", allow_external=False), _Payload
+    )
+
+    assert result.status == "failed"
+    assert result.error and result.error["code"] == "MODEL_EXTERNAL_NOT_ALLOWED"
+    assert provider.called is False
+
+
+def test_task_allowing_external_input_uses_globally_authorized_remote_provider(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    provider = _Provider()
+    service = ModelService(settings=_settings("https://llm.example.com/v1", allow=True))
+    monkeypatch.setattr(service, "_load_provider", lambda: provider)
+
+    result = service.generate_structured(
+        ModelTaskRequest(task_key="unit", allow_external=True), _Payload
+    )
+
+    assert result.status == "succeeded"
+    assert provider.called is True

@@ -812,6 +812,7 @@ def _textbook_candidates(
         .where(
             models.ImportRecord.dataset_id == dataset_id,
             models.FileObject.media_type == "application/pdf",
+            models.ImportFileRow.role == "textbook",
         )
         .distinct()
     ).all()
