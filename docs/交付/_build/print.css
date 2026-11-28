@@ -83,8 +83,8 @@ h2:first-of-type + p {
 
 /* 章标题：每章另起一页 */
 h2 {
-  margin: 0 0 5mm;
-  padding: 0 0 2.2mm;
+  margin: 0 0 4.2mm;
+  padding: 0 0 2mm;
   border-bottom: 1.2pt solid #0e5a43;
   font-family: "Microsoft YaHei", "微软雅黑", sans-serif;
   font-size: 18pt;
@@ -96,13 +96,17 @@ h2 {
   page-break-after: avoid;
 }
 
-/* 摘要之后，第一章另起一页；其余章随文接排，控制在 18 页内 */
+/* 摘要之后，第一章另起一页；末章另起一页，避免章首只剩一行表格 */
 h2:nth-of-type(2) {
   break-before: page;
 }
 
+h2:last-of-type {
+  break-before: page;
+}
+
 h3 {
-  margin: 5mm 0 2mm;
+  margin: 4.2mm 0 1.8mm;
   font-family: "Microsoft YaHei", "微软雅黑", sans-serif;
   font-size: 13.5pt;
   font-weight: 700;
@@ -113,7 +117,7 @@ h3 {
 }
 
 p {
-  margin: 0 0 2.2mm;
+  margin: 0 0 2mm;
   orphans: 3;
   widows: 3;
 }
@@ -144,7 +148,7 @@ blockquote p {
 /* 表格 */
 table {
   width: 100%;
-  margin: 2.5mm 0 4mm;
+  margin: 2.2mm 0 3.4mm;
   border-collapse: collapse;
   border-spacing: 0;
   font-family: "SimSun", "宋体", serif;
@@ -152,7 +156,20 @@ table {
   line-height: 1.42;
   text-align: left;
   text-justify: none;
-  break-inside: auto;
+  break-inside: avoid;
+  page-break-inside: avoid;
+}
+
+/* 章标题后的导语与首个三级标题保持同页，避免标题孤立在页脚 */
+h2 + p {
+  break-after: avoid;
+  page-break-after: avoid;
+}
+
+/* 小节导语与紧随其后的表格/正文保持同页 */
+h3 + p {
+  break-after: avoid;
+  page-break-after: avoid;
 }
 thead {
   display: table-header-group;
@@ -190,8 +207,8 @@ code {
   word-break: break-word;
 }
 pre {
-  margin: 3mm 0 5mm;
-  padding: 3.5mm 4mm;
+  margin: 2.2mm 0 3.2mm;
+  padding: 3mm 4mm;
   background: #f5f8f6;
   border: 0.6pt solid #d3dfd8;
   border-radius: 2pt;
