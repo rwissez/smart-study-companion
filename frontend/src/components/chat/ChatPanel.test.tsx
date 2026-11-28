@@ -3,7 +3,19 @@ import userEvent from "@testing-library/user-event";
 import { MemoryRouter, useLocation } from "react-router-dom";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import type { ReactNode } from "react";
 import type { ChatMessageRecord, ConversationSummary } from "../../api/types";
+
+// 会话恢复在模块求值时读取 sessionStorage，单测里直接固定 scopeKey，
+// 让教师端选择条的数据查询（班级/名册/运行）可用。
+vi.mock("../../app/session", () => ({
+  useSession: () => ({
+    scopeKey: { mode: "api", epoch: 1, datasetId: "ds-chat" },
+    rememberOwnerKey: vi.fn(),
+  }),
+  SessionProvider: ({ children }: { children: ReactNode }) => <>{children}</>,
+}));
+
 import { SessionProvider } from "../../app/session";
 
 const mocks = vi.hoisted(() => ({
@@ -12,6 +24,9 @@ const mocks = vi.hoisted(() => ({
   getCatalog: vi.fn(),
   streamChat: vi.fn(),
   sendChat: vi.fn(),
+  listClasses: vi.fn(),
+  listStudents: vi.fn(),
+  listRuns: vi.fn(),
 }));
 
 vi.mock("../../api/service", () => ({
@@ -23,6 +38,9 @@ vi.mock("../../api/service", () => ({
   getCatalog: (...args: unknown[]) => mocks.getCatalog(...args),
   streamChat: (...args: unknown[]) => mocks.streamChat(...args),
   sendChat: (...args: unknown[]) => mocks.sendChat(...args),
+  listClasses: (...args: unknown[]) => mocks.listClasses(...args),
+  listStudents: (...args: unknown[]) => mocks.listStudents(...args),
+  listRuns: (...args: unknown[]) => mocks.listRuns(...args),
   getModelSettings: vi.fn(async () => ({
     configured: true,
     provider: "openai_compatible",
@@ -37,7 +55,7 @@ vi.mock("../../api/service", () => ({
 
 import { ChatPanel } from "./ChatPanel";
 
-const { listConversations, getConversationMessages, getCatalog, streamChat } = mocks;
+const { listConversations, getConversationMessages, getCatalog, streamChat, listClasses, listStudents, listRuns } = mocks;
 function LocationProbe() {
   const location = useLocation();
   return <output data-testid="location">{location.pathname + location.search}</output>;
@@ -162,5 +180,127 @@ describe("ChatPanel 流式回答与历史刷新", () => {
     await user.click(screen.getByRole("button", { name: "发送" }));
     expect(await screen.findByText(/模型请求超时/)).toBeInTheDocument();
     await waitFor(() => expect(screen.getByLabelText("输入消息")).toHaveValue("解释一下这一步"));
+  });
+});
+
+const classList = [
+  { class_id: "DC01", display_name: "DC01", roster_count: 2 },
+  { class_id: "DC02", display_name: "DC02", roster_count: 1 },
+];
+
+const rosterPage = {
+  items: [
+    { student_id: "S01", class_id: "DC01", grade: "七年级", observed_event_count: 3, graded_event_count: 2 },
+    { student_id: "S02", class_id: "DC01", grade: "七年级", observed_event_count: 1, graded_event_count: 1 },
+  ],
+  total: 2,
+  page: 1,
+  page_size: 50,
+};
+
+const runList = [
+  {
+    run_id: "run-1",
+    status: "succeeded",
+    node_ids: ["N01", "N02"],
+    catalog_version: "v1",
+    knowledge_version: "v1",
+    created_at: "2026-11-28T09:00:00Z",
+  },
+];
+
+function TeacherHarness({ studentId }: { studentId?: string }) {
+  return (
+    <QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>
+      <MemoryRouter initialEntries={["/teacher/chat"]}>
+        <SessionProvider>
+          <ChatPanel role="teacher" context={{ studentId: studentId ?? null, nodeId: "N01" }} />
+        </SessionProvider>
+      </MemoryRouter>
+    </QueryClientProvider>
+  );
+}
+
+describe("教师端分析对象选择条", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    getCatalog.mockResolvedValue({ version: "v1", topics: [], indicators: [], materials: [], links: [] });
+    listConversations.mockResolvedValue({ items: [], total: 0, page: 1, page_size: 20 });
+    getConversationMessages.mockResolvedValue([]);
+    listClasses.mockResolvedValue(classList);
+    listStudents.mockResolvedValue(rosterPage);
+    listRuns.mockResolvedValue(runList);
+    streamChat.mockImplementation(async function* () {
+      yield {
+        event: "done" as const,
+        data: { text: "好的。", conversation_id: "conv-1", message_id: "msg-2", status: "completed" },
+      };
+    });
+  });
+
+  it("默认选中第一个班级；快捷任务按班级携带 task_type 与 target，不混入学生绑定", async () => {
+    const user = userEvent.setup();
+    render(<TeacherHarness />);
+    await waitFor(() => expect(screen.getByLabelText("分析对象班级")).toHaveValue("DC01"));
+    await user.click(screen.getByRole("button", { name: "分析班级共性" }));
+    await waitFor(() => expect(streamChat).toHaveBeenCalledTimes(1));
+    const payload = streamChat.mock.calls[0][0];
+    expect(payload.task_type).toBe("class_analysis");
+    expect(payload.target).toEqual({ type: "class", id: "DC01" });
+    expect(payload.student_id).toBeNull();
+    expect(payload.message).toContain("DC01");
+  });
+
+  it("消息点名其他学生时优先按点名绑定学生", async () => {
+    const user = userEvent.setup();
+    render(<TeacherHarness studentId="S01" />);
+    await screen.findByLabelText("分析对象班级");
+    await user.type(screen.getByLabelText("输入消息"), "S02 这次为什么丢分？");
+    fireEvent.click(screen.getByRole("button", { name: "发送" }));
+    await waitFor(() => expect(streamChat).toHaveBeenCalledTimes(1));
+    const payload = streamChat.mock.calls[0][0];
+    expect(payload.student_id).toBe("S02");
+    expect(payload.target).toBeNull();
+  });
+
+  it("“解释失分原因”在未选择学生时给出引导且不发送", async () => {
+    const user = userEvent.setup();
+    render(<TeacherHarness studentId={undefined} />);
+    await screen.findByLabelText("分析对象班级");
+    await user.click(screen.getByRole("button", { name: "解释失分原因" }));
+    expect(await screen.findByText(/需要指定学生/)).toBeInTheDocument();
+    expect(streamChat).not.toHaveBeenCalled();
+  });
+
+  it("“解释失分原因”在已选学生时携带学生与任务类型", async () => {
+    const user = userEvent.setup();
+    render(<TeacherHarness studentId="S01" />);
+    await screen.findByLabelText("分析对象班级");
+    await user.click(screen.getByRole("button", { name: "解释失分原因" }));
+    await waitFor(() => expect(streamChat).toHaveBeenCalledTimes(1));
+    const payload = streamChat.mock.calls[0][0];
+    expect(payload.task_type).toBe("student_loss_explanation");
+    expect(payload.student_id).toBe("S01");
+    expect(payload.target).toBeNull();
+    expect(payload.message).toContain("S01");
+  });
+
+  it("target 校验错误转为自然语言并给出“选择分析对象”入口", async () => {
+    streamChat.mockImplementation(async function* () {
+      yield {
+        event: "error" as const,
+        data: {
+          code: "VALIDATION_ERROR",
+          message: "这个分析需要指定具体学生：请先在对话页上方选择学生后再提问。",
+        },
+      };
+    });
+    const user = userEvent.setup();
+    render(<TeacherHarness studentId={undefined} />);
+    await screen.findByLabelText("分析对象班级");
+    await user.type(screen.getByLabelText("输入消息"), "解释一下");
+    fireEvent.click(screen.getByRole("button", { name: "发送" }));
+    expect(await screen.findByRole("button", { name: "选择分析对象" })).toBeInTheDocument();
+    expect(screen.getByRole("alert")).toHaveTextContent(/需要指定具体学生/);
   });
 });

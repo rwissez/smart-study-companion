@@ -1,5 +1,10 @@
 import { ApiError, errorCode, errorRequestId, toErrorMessage } from "../../api/client";
-import { sendChat, streamChat, type ChatProgressStep } from "../../api/service";
+import {
+  sendChat,
+  streamChat,
+  type ChatProgressStep,
+  type ChatTargetPayload,
+} from "../../api/service";
 import type { ChatReply } from "../../api/types";
 
 /**
@@ -21,6 +26,13 @@ export interface ChatStreamError {
   text: string;
   requestId: string | null;
   details: Array<{ field?: string; reason?: string }>;
+}
+
+export interface ChatRequestBinding {
+  nodeId: string | null;
+  studentId: string | null;
+  target: ChatTargetPayload | null;
+  taskType: string | null;
 }
 
 export interface ChatStreamState {
@@ -148,7 +160,12 @@ class ChatStreamStore {
   }
 
   /** 开始一次流；同一身份键上已有的状态被替换，旧流的后续写入按流编号丢弃。 */
-  start(input: { identity: ChatScopeIdentity; text: string; conversationId: string | null }): string {
+  start(input: {
+    identity: ChatScopeIdentity;
+    text: string;
+    conversationId: string | null;
+    request?: ChatRequestBinding;
+  }): string {
     const key = chatStreamKey(input.identity);
     const token = ++this.tokenSequence;
     this.runTokens.set(key, token);
@@ -167,7 +184,18 @@ class ChatStreamStore {
       draftText: null,
     });
     this.emit();
-    void this.run(key, token, input.identity, input.text, input.conversationId);
+    void this.run(
+      key,
+      token,
+      input.text,
+      input.conversationId,
+      input.request ?? {
+        nodeId: input.identity.nodeId,
+        studentId: input.identity.studentId,
+        target: null,
+        taskType: null,
+      },
+    );
     return key;
   }
 
@@ -264,9 +292,9 @@ class ChatStreamStore {
   private async run(
     key: string,
     token: number,
-    identity: ChatScopeIdentity,
     text: string,
     conversationId: string | null,
+    request: ChatRequestBinding,
   ): Promise<void> {
     let accumulated = "";
     let finished = false;
@@ -297,8 +325,10 @@ class ChatStreamStore {
       for await (const event of streamChat({
         message: text,
         conversation_id: conversationId,
-        node_id: identity.nodeId,
-        student_id: identity.studentId,
+        node_id: request.nodeId,
+        student_id: request.studentId,
+        target: request.target,
+        task_type: request.taskType,
       })) {
         if (!this.isCurrent(key, token)) return;
         if (event.event === "step") {
@@ -350,8 +380,10 @@ class ChatStreamStore {
           const reply = await sendChat({
             messages: [{ role: "user", content: text }],
             conversation_id: conversationId,
-            node_id: identity.nodeId,
-            student_id: identity.studentId,
+            node_id: request.nodeId,
+            student_id: request.studentId,
+            target: request.target,
+            task_type: request.taskType,
           });
           if (!this.isCurrent(key, token)) return;
           this.finish(key, reply, reply.text);

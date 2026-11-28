@@ -25,9 +25,10 @@ import { useSession } from "../../app/session";
 import { queryKeys } from "../../lib/queryKeys";
 import { StatePanel } from "../../components/feedback/StatePanel";
 import { JobProgress } from "../../components/jobs/JobProgress";
+import { QualityIssueGroups } from "../../components/learning/QualityIssueGroups";
 import { ConfirmDialog } from "../../components/ui/ConfirmDialog";
 import { ModelAccessDialog } from "../../components/settings/ModelAccessDialog";
-import { formatDate, jobStatusLabel } from "../../lib/format";
+import { formatDate, formatTime, jobStatusLabel } from "../../lib/format";
 import {
   countLabel,
   datasetStateLabel,
@@ -101,6 +102,8 @@ export function DataPage() {
     queryKey: queryKeys.jobs(scopeKey),
     queryFn: () => listJobs(datasetId as string, { pageSize: 30 }),
     enabled: Boolean(datasetId),
+    // 任务链在处理中变化最快：15s 自动轮询，页面显示最后更新时间，替代手动刷新。
+    refetchInterval: 15_000,
   });
   const quality = useQuery<{ items: QualityIssue[]; total: number }>({
     queryKey: queryKeys.quality(scopeKey),
@@ -333,7 +336,9 @@ export function DataPage() {
           <button type="button" className="btn" onClick={() => setModelAccessOpen(true)}>
             模型与外发授权
           </button>
-          <button type="button" className="btn" onClick={() => { void datasets.refetch(); void jobs.refetch(); }}>刷新</button>
+          {jobs.dataUpdatedAt ? (
+            <span className="xs muted tabular" title="任务进度每 15 秒自动更新">最后更新 {formatTime(jobs.dataUpdatedAt)}</span>
+          ) : null}
         </div>
       </div>
 
@@ -622,19 +627,7 @@ export function DataPage() {
                 quality.data.items.length === 0 ? (
                   <p className="small muted">这次导入没有质量提示；空列表不代表数据完美。</p>
                 ) : (
-                  <table className="table">
-                    <thead><tr><th scope="col">问题</th><th scope="col">严重度</th><th scope="col">处理</th><th scope="col">说明</th></tr></thead>
-                    <tbody>
-                      {quality.data.items.map((issue) => (
-                        <tr key={issue.issue_id}>
-                          <td className="small">{qualityCodeLabel(issue.code)}</td>
-                          <td className="small">{severityLabel(issue.severity)}</td>
-                          <td className="small">{qualityActionLabel(issue.action)}</td>
-                          <td className="small">{issue.message}</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
+                  <QualityIssueGroups items={quality.data.items} />
                 )
               ) : null}
             </div>
@@ -660,7 +653,14 @@ export function DataPage() {
                       ))}
                   </div>
                   {knowledgeQuality.data.limitations.length ? (
-                    <p className="small muted">限制：{knowledgeQuality.data.limitations.join("；")}</p>
+                    <details>
+                      <summary className="small muted" style={{ cursor: "pointer" }}>
+                        口径与限制（{knowledgeQuality.data.limitations.length}）
+                      </summary>
+                      <p className="small muted" style={{ marginTop: 8 }}>
+                        {knowledgeQuality.data.limitations.join("；")}
+                      </p>
+                    </details>
                   ) : null}
                 </div>
               ) : null}
@@ -683,8 +683,15 @@ export function DataPage() {
                       ))}
                   </div>
                   <p className="small muted">生成时间 {formatDate(String(analysisQuality.data.generated_at ?? ""))}</p>
-                  {Array.isArray(analysisQuality.data.limitations) ? (
-                    <p className="small muted">限制：{(analysisQuality.data.limitations as string[]).join("；")}</p>
+                  {Array.isArray(analysisQuality.data.limitations) && (analysisQuality.data.limitations as string[]).length ? (
+                    <details>
+                      <summary className="small muted" style={{ cursor: "pointer" }}>
+                        口径与限制（{(analysisQuality.data.limitations as string[]).length}）
+                      </summary>
+                      <p className="small muted" style={{ marginTop: 8 }}>
+                        {(analysisQuality.data.limitations as string[]).join("；")}
+                      </p>
+                    </details>
                   ) : null}
                 </div>
               ) : null}
