@@ -27,6 +27,13 @@ from study_companion.contracts import (
     SourceLocator,
     ValidationIssue,
 )
+from study_companion.knowledge.summary import (
+    coverage_item,
+    material_mapping,
+    point_source_states,
+    review_with_source_check,
+    source_resolvability,
+)
 
 
 class KnowledgeConfig(Contract):
@@ -123,13 +130,20 @@ def build_knowledge(
 
     points: list[KnowledgePointDraft] = []
     for indicator in catalog.indicators:
-        locators = [item for item in indicator.textbook_refs]
+        locators = list(indicator.textbook_refs) or [
+            SourceLocator(
+                source_file="课程要求.csv",
+                verification_status="unverified",
+                source_kind="standard",
+            )
+        ]
         verified = any(item.verification_status == "verified" for item in locators)
+        resolution = source_resolvability(locators)
         checks = [
             ReviewCheck(
                 code="SOURCE_RESOLVABLE",
-                passed=True,
-                reason="知识点来源为正式课程指标（目录内可定位）",
+                passed=resolution.passed,
+                reason=resolution.reason,
             ),
             ReviewCheck(
                 code="POINT_SCOPE",
@@ -154,14 +168,7 @@ def build_knowledge(
                 topic_ids=[indicator.topic_id],
                 indicator_ids=[indicator.indicator_id],
                 snippet=indicator.description[:80],
-                source_locators=locators
-                or [
-                    SourceLocator(
-                        source_file="课程要求.csv",
-                        verification_status="unverified",
-                        source_kind="standard",
-                    )
-                ],
+                source_locators=locators,
                 review_info=review,
                 content_hash=_hash(
                     {
@@ -203,12 +210,14 @@ def build_knowledge(
                         source_kind="textbook",
                         file_id=getattr(candidate, "file_id", "") or None,
                         chapter=candidate.chapter_id,
-                        pdf_page=candidate.page,
+                        pdf_page=getattr(candidate, "page", None),
                         verification_status="verified",
                     )
+                    merged_locators = list(point.source_locators) + [locator]
+                    resolution = source_resolvability(merged_locators)
                     points[index] = point.model_copy(
                         update={
-                            "source_locators": list(point.source_locators) + [locator],
+                            "source_locators": merged_locators,
                             "aliases": sorted(
                                 set(point.aliases)
                                 | {candidate.name}
@@ -218,6 +227,9 @@ def build_knowledge(
                                 set(point.indicator_ids)
                                 | set(getattr(candidate, "indicator_ids", []) or [])
                             ),
+                            "review_info": review_with_source_check(
+                                point.review_info, resolution
+                            ),
                         }
                     )
                     break
@@ -226,21 +238,25 @@ def build_knowledge(
                 continue
             existing_names.add(candidate.name)
             validated = getattr(candidate, "review_status", "needs_review") == "validated"
+            candidate_locator = SourceLocator(
+                source_file=getattr(candidate, "file_id", "") or candidate.chapter_id,
+                source_kind="textbook",
+                file_id=getattr(candidate, "file_id", "") or None,
+                chapter=candidate.chapter_id,
+                pdf_page=getattr(candidate, "page", None),
+                verification_status="verified",
+            )
+            resolution = source_resolvability([candidate_locator])
             checks = [
                 ReviewCheck(
                     code="SOURCE_RESOLVABLE",
-                    passed=True,
-                    reason=f"教材页码可定位：第 {candidate.page} 页",
+                    passed=resolution.passed,
+                    reason=resolution.reason,
                 ),
                 ReviewCheck(
                     code="POINT_SCOPE",
                     passed=bool(candidate.definition.strip()),
                     reason="定义句来自教材正文" if candidate.definition.strip() else "定义句为空",
-                ),
-                ReviewCheck(
-                    code="SOURCE_PAGE_IN_RANGE",
-                    passed=True,
-                    reason="来源页码与块范围一致",
                 ),
             ]
             if not validated:
@@ -262,18 +278,13 @@ def build_knowledge(
                     topic_ids=list(getattr(candidate, "topic_ids", []) or []),
                     indicator_ids=list(getattr(candidate, "indicator_ids", []) or []),
                     snippet=candidate.snippet,
-                    source_locators=[
-                        SourceLocator(
-                            source_file=getattr(candidate, "file_id", "") or candidate.chapter_id,
-                            source_kind="textbook",
-                            file_id=getattr(candidate, "file_id", "") or None,
-                            chapter=candidate.chapter_id,
-                            pdf_page=candidate.page,
-                            verification_status="verified",
-                        )
-                    ],
+                    source_locators=[candidate_locator],
                     review_info=ReviewInfo(
-                        status="validated" if validated else "needs_review",
+                        status=(
+                            "validated"
+                            if validated and all(check.passed for check in checks)
+                            else "needs_review"
+                        ),
                         method="model" if validated else "rule",
                         checks=checks,
                         reviewed_at="",
@@ -290,6 +301,9 @@ def build_knowledge(
         limitations.append(
             f"教材候选 {len(textbook_candidates)} 条，其中 {validated_count} 条通过独立复核；"
             "其余需教师逐条确认后才可用于正式方案"
+        )
+        limitations.append(
+            "教材候选只核对页码存在，未核对章节页范围（候选未携带章节页范围），不写 SOURCE_PAGE_IN_RANGE 通过"
         )
     if not points:
         issues.append(
@@ -333,7 +347,6 @@ def build_knowledge(
         )
 
     annotations: list[KnowledgeAnnotationDraft] = []
-    mapped_materials = 0
     for material in catalog.materials:
         targets = [f"kp-{indicator_id}" for indicator_id in material.indicator_ids]
         targets = [item for item in targets if item in point_ids]
@@ -347,7 +360,6 @@ def build_knowledge(
                 )
             )
             continue
-        mapped_materials += 1
         annotations.append(
             KnowledgeAnnotationDraft(
                 annotation_id=f"ann-{material.material_id}",
@@ -394,7 +406,6 @@ def build_knowledge(
                             issue.code == "MAPPING_PARTIAL" and issue.field in resolved_ids
                         )
                     ]
-                    mapped_materials += len(accepted)
             except Exception:
                 limitations.append("映射缺口补充异常，未建立新的题目关联")
 
@@ -490,11 +501,19 @@ def build_knowledge(
         if note and note not in limitations:
             limitations.append(note)
 
-    indicator_total = len(catalog.indicators)
-    covered_indicators = len({point.indicator_ids[0] for point in points if point.indicator_ids})
-    material_total = len([item for item in catalog.materials if item.material_type == "question"])
-    question_total = material_total or 1
-    sourced_points = len([point for point in points if point.source_locators])
+    indicator_ids = {indicator.indicator_id for indicator in catalog.indicators}
+    covered_indicators = {
+        indicator_id
+        for point in points
+        for indicator_id in point.indicator_ids
+        if indicator_id in indicator_ids
+    }
+    question_materials = [item for item in catalog.materials if item.material_type == "question"]
+    card_materials = [item for item in catalog.materials if item.material_type == "card"]
+    textbook_materials = [item for item in catalog.materials if item.material_type == "textbook"]
+    source_states = point_source_states(points)
+    mapping = material_mapping(catalog.materials, annotations, point_ids)
+    mapped_ids = mapping.mapped_material_ids
 
     if not model_configured:
         limitations.append(
@@ -506,8 +525,25 @@ def build_knowledge(
         for material in catalog.materials
         for indicator_id in (material.indicator_ids or [])
     }
-    indicator_ids = {indicator.indicator_id for indicator in catalog.indicators}
-    question_materials = [item for item in catalog.materials if item.material_type == "question"]
+    material_ids = {item.material_id for item in catalog.materials}
+    unclassified_note = (
+        f"{len(mapping.unclassified_material_ids)} 条关联材料不在当前目录，无法归类，未计入任何材料分子："
+        + "、".join(mapping.unclassified_material_ids)
+        if mapping.unclassified_material_ids
+        else ""
+    )
+    verified_sources = source_states["verified"]
+    unresolved_sources = source_states["unverified"] + source_states["missing"]
+    if unresolved_sources:
+        limitations.append(
+            f"{len(unresolved_sources)} 个知识点的来源只有未核验或有核验无页码的定位，"
+            "SOURCE_RESOLVABLE 记 false，已进入教师审核队列，不计入来源可核验率"
+        )
+    if unclassified_note:
+        limitations.append(unclassified_note)
+    limitations.append(
+        "review_summary 在知识构建时计算；教师补来源或部分审核后需重建知识版本才能更新统计"
+    )
     mapping_gaps = {
         "needs_new_point": [item for item in mapping_gap_items if item.get("status") == "needs_review"],
         "unmapped": [item for item in mapping_gap_items if item.get("status") == "unmapped"],
@@ -522,13 +558,39 @@ def build_knowledge(
             for item in question_materials
             if item.question_type == "solution" and not (item.rubric_points or [])
         ),
+        "materials_without_annotation": sorted(material_ids - mapped_ids),
+        "questions_without_annotation": sorted(
+            item.material_id for item in question_materials if item.material_id not in mapped_ids
+        ),
+        "cards_without_annotation": sorted(
+            item.material_id for item in card_materials if item.material_id not in mapped_ids
+        ),
+        "textbooks_without_annotation": sorted(
+            item.material_id for item in textbook_materials if item.material_id not in mapped_ids
+        ),
+        "materials_without_classification": list(mapping.unclassified_material_ids),
         "points_without_annotation": sorted(
             point.kp_id
             for point in points
             if not any(point.kp_id in (annotation.target_ids or []) for annotation in annotations)
         ),
-        "limitations": ["缺口按目录与材料表计算；缺失项不自动补全，需教师确认"],
+        "points_without_verified_source": sorted(unresolved_sources),
+        "limitations": [
+            "缺口按目录与材料表计算；缺失项不自动补全，需教师确认",
+            "材料关联缺口按题目、学习卡（讲义）、教材分别列出，不混用",
+        ],
     }
+
+    def _partial_count(materials: list[Any]) -> int:
+        """有指标归属但没形成正式知识点关联的材料：算部分关联，不算已关联。"""
+
+        return sum(
+            1
+            for item in materials
+            if item.material_id not in mapped_ids
+            and (set(item.indicator_ids or []) & indicator_ids)
+        )
+
     review_summary = {
         "dataset_id": dataset_id,
         "catalog_version": catalog.version,
@@ -549,44 +611,89 @@ def build_knowledge(
             "formal_relations": len(clean_relations),
             "formal_annotations": len(annotations),
             "unresolved_items": len([issue for issue in issues if issue.severity == "error"]),
+            "catalog_materials": len(catalog.materials),
+            "materials_with_annotation": len(mapped_ids & material_ids),
+            "question_total": mapping.totals["question"],
+            "question_with_annotation": mapping.mapped["question"],
+            "card_total": mapping.totals["card"],
+            "card_with_annotation": mapping.mapped["card"],
+            "textbook_total": mapping.totals["textbook"],
+            "textbook_with_annotation": mapping.mapped["textbook"],
+            "points_with_verified_source": len(verified_sources),
+            "points_without_verified_source": len(unresolved_sources),
         },
+        "coverage_scope_note": (
+            "材料类比率（题目、学习卡、教材）的分子与分母只取同一类材料；"
+            "指标与知识点比率按各自对象统计。比率不会超过 100%，"
+            "分母为 0 或分子大于分母时 value 为 null 并写原因"
+        ),
         "coverage": [
-            {
-                "key": "indicator_coverage",
-                "label": "课程指标覆盖",
-                "numerator": covered_indicators,
-                "denominator": indicator_total,
-                "value": (covered_indicators / indicator_total) if indicator_total else None,
-                "partial_count": 0,
-                "not_applicable_count": 0,
-                "unknown_count": 0,
-                "scope_description": "至少有一个正式知识点关联的指标数／全部指标数",
-                "detail_refs": [],
-            },
-            {
-                "key": "question_mapping",
-                "label": "题目知识关联",
-                "numerator": mapped_materials,
-                "denominator": question_total,
-                "value": (mapped_materials / question_total) if question_total else None,
-                "partial_count": len([issue for issue in issues if issue.code == "MAPPING_PARTIAL"]),
-                "not_applicable_count": 0,
-                "unknown_count": 0,
-                "scope_description": "至少一条正式 primary 关联的题目数／全部正式题目数",
-                "detail_refs": [],
-            },
-            {
-                "key": "point_sourcing",
-                "label": "教材出处",
-                "numerator": sourced_points,
-                "denominator": len(points) or 1,
-                "value": (sourced_points / len(points)) if points else None,
-                "partial_count": 0,
-                "not_applicable_count": 0,
-                "unknown_count": 0,
-                "scope_description": "有至少一处来源定位的正式知识点数／正式知识点数",
-                "detail_refs": [],
-            },
+            coverage_item(
+                key="indicator_coverage",
+                label="课程指标覆盖率",
+                population="indicator",
+                numerator=len(covered_indicators),
+                denominator=len(catalog.indicators),
+                numerator_label="至少有一个正式知识点关联的课程指标数",
+                denominator_label="全部课程指标数",
+                scope_description="按课程指标统计，与题目、学习卡、教材的数量无关",
+            ),
+            coverage_item(
+                key="question_mapping",
+                label="题目知识关联率",
+                population="question",
+                numerator=mapping.mapped["question"],
+                denominator=mapping.totals["question"],
+                numerator_label="有正式知识点关联的题目数",
+                denominator_label="全部正式题目数（material_type=question）",
+                scope_description=(
+                    "题目关联率=有正式知识点关联的题目数／全部题目数；"
+                    "学习卡（讲义）与教材各自单独统计，不混入题目分子或分母"
+                ),
+                partial_count=_partial_count(question_materials),
+                unknown_count=len(mapping.unclassified_material_ids),
+                reason_notes=[unclassified_note] if unclassified_note else None,
+            ),
+            coverage_item(
+                key="card_mapping",
+                label="学习卡（讲义）知识关联率",
+                population="card",
+                numerator=mapping.mapped["card"],
+                denominator=mapping.totals["card"],
+                numerator_label="有正式知识点关联的学习卡（讲义）数",
+                denominator_label="全部学习卡（讲义）数（material_type=card）",
+                scope_description="只统计学习卡（讲义）；不并入题目关联率，也不占用题目分母",
+                partial_count=_partial_count(card_materials),
+                unknown_count=len(mapping.unclassified_material_ids),
+                reason_notes=[unclassified_note] if unclassified_note else None,
+            ),
+            coverage_item(
+                key="textbook_mapping",
+                label="教材知识关联率",
+                population="textbook",
+                numerator=mapping.mapped["textbook"],
+                denominator=mapping.totals["textbook"],
+                numerator_label="有正式知识点关联的教材数",
+                denominator_label="全部教材数（material_type=textbook）",
+                scope_description="只统计教材；不并入题目关联率，也不占用题目分母",
+                partial_count=_partial_count(textbook_materials),
+                unknown_count=len(mapping.unclassified_material_ids),
+                reason_notes=[unclassified_note] if unclassified_note else None,
+            ),
+            coverage_item(
+                key="point_sourcing",
+                label="知识点来源可核验率",
+                population="knowledge_point",
+                numerator=len(verified_sources),
+                denominator=len(points),
+                numerator_label="至少有一处已核验且带页码定位的知识点数",
+                denominator_label="全部正式知识点数",
+                scope_description=(
+                    "只认 verification_status=verified 且带 PDF 页码或印刷页码的来源；"
+                    "只有课程要求表登记、未核验或没有页码的不计入分子"
+                ),
+                unknown_count=len(source_states["missing"]),
+            ),
         ],
         "audit": {
             "reviewed_objects": len(points) + len(clean_relations) + len(annotations),
@@ -622,8 +729,8 @@ def build_knowledge(
             ),
             ReviewCheck(
                 code="MAPPING_VALID",
-                passed=mapped_materials > 0,
-                reason="材料关联目标存在于正式知识点集合",
+                passed=bool(mapped_ids & material_ids),
+                reason="材料关联目标存在于正式知识点集合；题目、学习卡、教材分别计数",
             ),
         ],
         reviewed_at="",
