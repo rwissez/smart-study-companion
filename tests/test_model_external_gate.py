@@ -32,3 +32,14 @@ def test_remote_model_allowed_with_explicit_flag() -> None:
 def test_loopback_model_is_trusted() -> None:
     assert_external_model_allowed(_settings("http://127.0.0.1:11434/v1"))
     assert_external_model_allowed(_settings("http://localhost:8001/v1"))
+
+
+def test_unconfigured_model_does_not_trigger_external_gate() -> None:
+    settings = Settings(
+        model_provider="",
+        model_base_url="",
+        model_name="",
+        model_api_key="",
+    )
+
+    assert_external_model_allowed(settings)
