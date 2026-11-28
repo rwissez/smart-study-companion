@@ -44,15 +44,18 @@ export function ModelStatus({ onConfigure }: Props) {
   }
   const data = settings.data;
   if (data?.configured) {
+    // 已配置同样可以点击：教师需要能随时回来更换提供方、地址或密钥。
     return (
-      <span
+      <button
+        type="button"
         className="modelMark modelMarkOk"
-        role="status"
-        title={`模型服务已配置：${data.provider ?? "未标注提供方"} · ${data.model_id ?? "未标注模型"}${data.has_api_key ? " · 已保存密钥，不回显" : ""}`}
+        onClick={onConfigure}
+        title={`模型服务已配置：${data.provider ?? "未标注提供方"} · ${data.model_id ?? "未标注模型"}${data.has_api_key ? " · 已保存密钥，不回显" : ""}（点击可更换模型、地址或密钥）`}
+        aria-label="模型已配置，打开模型设置"
       >
         <IconCheck size={14} />
         <span>模型已配置</span>
-      </span>
+      </button>
     );
   }
   return (

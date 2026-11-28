@@ -7,8 +7,12 @@ import {
   createProposal,
   getCatalog,
   getConversationMessages,
+  listClasses,
   listConversations,
+  listRuns,
+  listStudents,
   type ChatProgressStep,
+  type ChatTargetPayload,
 } from "../../api/service";
 import type {
   ChatMessageRecord,
@@ -20,6 +24,7 @@ import type {
 import { queryKeys } from "../../lib/queryKeys";
 import { useSession } from "../../app/session";
 import { formatDate } from "../../lib/format";
+import { nodeLabel } from "../../lib/labels";
 import { ModelStatus } from "./ModelStatus";
 import { SafeMarkdown } from "./SafeMarkdown";
 import { chatStreamStore, type ChatScopeIdentity } from "./chatStreamStore";
@@ -60,9 +65,53 @@ const TOOL_LABELS: Record<string, string> = {
 };
 
 const PLACEHOLDER_TEACHER =
-  "直接提问，例如：D05 这次为什么丢分？帮我核对一下证据。\nEnter 发送，Shift+Enter 换行。";
+  "直接提问；建议先在上方选择分析对象（班级或学生）。\nEnter 发送，Shift+Enter 换行。";
 const PLACEHOLDER_STUDENT =
   "说说你在哪里卡住了，例如：这道题去括号时符号总是写错。\nEnter 发送，Shift+Enter 换行。";
+
+interface QuickTask {
+  key: string;
+  label: string;
+  taskType: string;
+  needsStudent: boolean;
+  message: (objectLabel: string) => string;
+}
+
+const QUICK_TASKS: QuickTask[] = [
+  {
+    key: "class_common",
+    label: "分析班级共性",
+    taskType: "class_analysis",
+    needsStudent: false,
+    message: (classId) => `分析 ${classId} 的班级共性与薄弱知识点，并指出需要关注的学生。`,
+  },
+  {
+    key: "attention",
+    label: "查看关注学生",
+    taskType: "class_analysis",
+    needsStudent: false,
+    message: (classId) => `${classId} 里现在有哪些学生需要重点关注？分别需要什么支持？`,
+  },
+  {
+    key: "student_loss",
+    label: "解释失分原因",
+    taskType: "student_loss_explanation",
+    needsStudent: true,
+    message: (studentId) => `解释 ${studentId} 这次为什么丢分，并给出作答依据。`,
+  },
+  {
+    key: "data_quality",
+    label: "检查数据质量",
+    taskType: "data_quality",
+    needsStudent: false,
+    message: () => "检查当前数据集的数据质量问题，并指出哪些需要处理。",
+  },
+];
+
+function targetHint(message: string): { needStudent: boolean } | null {
+  if (!/分析对象|目标|target|选择学生|选择班级|改选/i.test(message)) return null;
+  return { needStudent: /学生/.test(message) };
+}
 
 function assistantMeta(message: ChatMessageRecord): string | null {
   if (message.status === "partial") return "规则摘要（未使用模型）";
@@ -138,6 +187,48 @@ export function ChatPanel({ role, context, onConfigure, initialConversationId }:
   const autoSelectedRef = useRef(false);
   const stickToBottom = useRef(true);
   const [showJump, setShowJump] = useState(false);
+  const objectBarRef = useRef<HTMLDivElement>(null);
+  const classAutoTouched = useRef(false);
+  const nodeTouched = useRef(false);
+  const [targetClassId, setTargetClassId] = useState("");
+  const [targetStudentId, setTargetStudentId] = useState("");
+  const [targetNodeId, setTargetNodeId] = useState("");
+  const [guardHint, setGuardHint] = useState<string | null>(null);
+  const classParam = searchParams.get("class") ?? "";
+
+  const classesQuery = useQuery({
+    queryKey: queryKeys.classes(scopeKey),
+    queryFn: () => listClasses(scopeKey.datasetId as string),
+    enabled: role === "teacher" && Boolean(scopeKey.datasetId),
+  });
+  const studentsQuery = useQuery({
+    queryKey: queryKeys.roster(scopeKey, targetClassId || null, 1),
+    queryFn: () =>
+      listStudents(scopeKey.datasetId as string, { classId: targetClassId || null, pageSize: 200 }),
+    enabled: role === "teacher" && Boolean(scopeKey.datasetId),
+  });
+  const runsQuery = useQuery({
+    queryKey: queryKeys.runs(scopeKey),
+    queryFn: () => listRuns(scopeKey.datasetId as string),
+    enabled: role === "teacher" && Boolean(scopeKey.datasetId),
+  });
+  const nodeOptions = runsQuery.data?.find((item) => item.status === "succeeded")?.node_ids ?? [];
+
+  useEffect(() => {
+    setTargetStudentId(context?.studentId ?? "");
+  }, [context?.studentId]);
+  useEffect(() => {
+    if (!nodeTouched.current) setTargetNodeId(context?.nodeId ?? "");
+  }, [context?.nodeId]);
+  useEffect(() => {
+    setTargetClassId(classParam);
+  }, [classParam]);
+  useEffect(() => {
+    if (role !== "teacher") return;
+    if (!classParam && !classAutoTouched.current && classesQuery.data?.length) {
+      setTargetClassId(classesQuery.data[0].class_id);
+    }
+  }, [classParam, classesQuery.data, role]);
 
   // 活动流按身份键保存在模块级 store：路由切走卸载组件时流继续写，回来再订阅同一份状态。
   const scopeIdentity = useMemo<ChatScopeIdentity>(
@@ -423,12 +514,103 @@ export function ChatPanel({ role, context, onConfigure, initialConversationId }:
     }
   };
 
+  const updateObjectParams = (patch: Record<string, string | null>) => {
+    const next = new URLSearchParams(searchParams);
+    Object.entries(patch).forEach(([key, value]) => {
+      if (value) next.set(key, value);
+      else next.delete(key);
+    });
+    setSearchParams(next, { replace: true });
+  };
+
+  const changeTargetClass = (value: string) => {
+    classAutoTouched.current = true;
+    setTargetClassId(value);
+    setTargetStudentId("");
+    updateObjectParams({ class: value || null, student: null });
+  };
+  const changeTargetStudent = (value: string) => {
+    setTargetStudentId(value);
+    updateObjectParams({ student: value || null });
+  };
+  const changeTargetNode = (value: string) => {
+    nodeTouched.current = true;
+    setTargetNodeId(value);
+    updateObjectParams({ node: value || null });
+  };
+
+  const focusObjectBar = () => {
+    const node = objectBarRef.current;
+    if (!node) return;
+    if (typeof node.scrollIntoView === "function") node.scrollIntoView({ behavior: "smooth", block: "center" });
+    node.classList.add("chatObjectBarFlash");
+    window.setTimeout(() => node.classList.remove("chatObjectBarFlash"), 1600);
+  };
+
+  const resolveSendBinding = (text: string): { studentId: string | null; target: ChatTargetPayload | null } => {
+    if (role !== "teacher") return { studentId: context?.studentId ?? null, target: null };
+    const students = (studentsQuery.data?.items ?? []).filter((item) => item.student_id);
+    const mentionedStudent = students.find((item) => item.student_id && text.includes(item.student_id));
+    if (mentionedStudent?.student_id) return { studentId: mentionedStudent.student_id, target: null };
+    if (targetStudentId) return { studentId: targetStudentId, target: null };
+    const mentionedClass = (classesQuery.data ?? [])
+      .map((item) => item.class_id)
+      .find((id) => id && text.includes(id));
+    if (mentionedClass) return { studentId: null, target: { type: "class", id: mentionedClass } };
+    if (targetClassId) return { studentId: null, target: { type: "class", id: targetClassId } };
+    return { studentId: context?.studentId ?? null, target: null };
+  };
+
+  const startSend = (
+    text: string,
+    options: { taskType?: string; binding?: { studentId: string | null; target: ChatTargetPayload | null } } = {},
+  ) => {
+    if (!text || busy) return;
+    const binding = options.binding ?? resolveSendBinding(text);
+    setDraft("");
+    setGuardHint(null);
+    chatStreamStore.start({
+      identity: scopeIdentity,
+      text,
+      conversationId: selectedId,
+      request: {
+        nodeId: targetNodeId || null,
+        studentId: binding.studentId,
+        target: binding.target,
+        taskType: options.taskType ?? null,
+      },
+    });
+  };
+
+  const runQuickTask = (task: QuickTask) => {
+    if (busy) return;
+    const classId = targetClassId || classesQuery.data?.[0]?.class_id || "";
+    if (task.needsStudent && !targetStudentId) {
+      setGuardHint(`“${task.label}”需要指定学生：请先在“学生”下拉中选择一位学生。`);
+      focusObjectBar();
+      return;
+    }
+    if (!task.needsStudent && task.taskType !== "data_quality" && !classId) {
+      setGuardHint(`“${task.label}”需要先选择分析对象：请在上方的下拉中选择班级。`);
+      focusObjectBar();
+      return;
+    }
+    const objectLabel = task.needsStudent ? targetStudentId : classId;
+    const binding = task.needsStudent
+      ? { studentId: targetStudentId, target: null }
+      : task.taskType === "data_quality"
+        ? { studentId: null, target: null }
+        : { studentId: null, target: { type: "class" as const, id: classId } };
+    const text = task.message(objectLabel);
+    setDraft(text);
+    startSend(text, { taskType: task.taskType, binding });
+  };
+
   // 发送只负责把请求交给 store：流由 store 持续接收，组件卸载不影响。
   const send = () => {
     const text = draft.trim();
     if (!text || busy) return;
-    setDraft("");
-    chatStreamStore.start({ identity: scopeIdentity, text, conversationId: selectedId });
+    startSend(text);
   };
 
   const items = messages.data ?? [];
@@ -466,12 +648,7 @@ export function ChatPanel({ role, context, onConfigure, initialConversationId }:
           ))}
         </div>
         <div className="chatSideMeta">
-          <p className="xs muted">
-            对象：{context?.studentId ? `学生 ${context.studentId}` : role === "student" ? "本人" : "当前数据集"}
-            <br />
-            节点：{context?.nodeId ? "已绑定当前观察节点" : "未绑定"}
-          </p>
-          <p className="xs muted">对象与授权由服务端重新校验；历史文本不能当作新的授权。</p>
+          <p className="xs muted">分析对象在右上选择条维护；对象与授权由服务端按会话重新校验，历史文本不能当作新的授权。</p>
         </div>
       </aside>
 
@@ -498,6 +675,77 @@ export function ChatPanel({ role, context, onConfigure, initialConversationId }:
             {role === "teacher" ? <ModelStatus onConfigure={onConfigure ?? (() => undefined)} /> : null}
           </div>
         </div>
+
+        {role === "teacher" ? (
+          <div className="chatObjectBar" ref={objectBarRef}>
+            <label className="field chatObjectField">
+              <span className="fieldLabel">班级</span>
+              <select
+                className="select"
+                value={targetClassId}
+                aria-label="分析对象班级"
+                onChange={(event) => changeTargetClass(event.target.value)}
+              >
+                <option value="">按提问识别</option>
+                {(classesQuery.data ?? []).map((item) => (
+                  <option key={item.class_id} value={item.class_id}>
+                    {item.display_name || item.class_id}（{item.roster_count} 人）
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className="field chatObjectField">
+              <span className="fieldLabel">学生</span>
+              <select
+                className="select"
+                value={targetStudentId}
+                aria-label="分析对象学生"
+                onChange={(event) => changeTargetStudent(event.target.value)}
+              >
+                <option value="">全班</option>
+                {(studentsQuery.data?.items ?? []).map((item) => (
+                  <option key={item.student_id} value={item.student_id}>
+                    {item.student_id}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className="field chatObjectField">
+              <span className="fieldLabel">节点</span>
+              <select
+                className="select"
+                value={targetNodeId}
+                aria-label="观察节点"
+                onChange={(event) => changeTargetNode(event.target.value)}
+              >
+                <option value="">自动</option>
+                {nodeOptions.map((node) => (
+                  <option key={node} value={node}>
+                    {nodeLabel(node, nodeOptions)}
+                  </option>
+                ))}
+              </select>
+            </label>
+            {guardHint ? <p className="xs fieldError chatGuardHint" role="status">{guardHint}</p> : null}
+          </div>
+        ) : null}
+
+        {role === "teacher" ? (
+          <div className="chatQuickRow" aria-label="快捷任务">
+            {QUICK_TASKS.map((task) => (
+              <button
+                key={task.key}
+                type="button"
+                className="btn btnSm btnGhost"
+                disabled={busy}
+                onClick={() => runQuickTask(task)}
+                title={task.needsStudent ? "需要先在上方选择一位学生" : "按当前上方选择的分析对象执行"}
+              >
+                {task.label}
+              </button>
+            ))}
+          </div>
+        ) : null}
 
         <div className="chatLog" ref={logRef} aria-live="polite" onScroll={onLogScroll}>
           {messages.isPending && selectedId ? <StatePanel kind="loading" title="正在读取会话消息" /> : null}
@@ -708,6 +956,18 @@ export function ChatPanel({ role, context, onConfigure, initialConversationId }:
             <div className="fieldError" role="alert">
               {streamError.text}
               {streamError.requestId ? `（请求编号 ${streamError.requestId}）` : ""}
+              {targetHint(streamError.text) ? (
+                <span className="row" style={{ gap: 8, marginTop: 6, flexWrap: "wrap" }}>
+                  <button type="button" className="btn btnSm" onClick={focusObjectBar}>
+                    选择分析对象
+                  </button>
+                  <span className="xs muted">
+                    {targetHint(streamError.text)?.needStudent
+                      ? "这类问题需要具体学生：在“学生”下拉中选择后重新发送。"
+                      : "在上方选择班级或学生后重新发送。"}
+                  </span>
+                </span>
+              ) : null}
               {streamError.details.length ? (
                 <ul>{streamError.details.map((detail, index) => <li key={index} className="small">{detail.field ? `${detail.field}：` : ""}{detail.reason}</li>)}</ul>
               ) : null}

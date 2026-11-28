@@ -315,9 +315,9 @@ def _server_context(
     if target is None and scope.role == "student":
         target = ChatTarget(type="student", id=scope.student_id)
     if task.target == "student" and (target is None or target.type != "student"):
-        raise DomainError("VALIDATION_ERROR", "该任务需要显式学生目标")
+        raise DomainError("VALIDATION_ERROR", "这个分析需要指定具体学生：请先在对话页上方选择学生后再提问。")
     if task.target == "class" and (target is None or target.type != "class"):
-        raise DomainError("VALIDATION_ERROR", "该任务需要显式班级目标")
+        raise DomainError("VALIDATION_ERROR", "这个分析需要指定班级：请先在对话页上方选择班级后再提问。")
     if task.target == "student_or_dataset" and target is None and scope.role == "student":
         target = ChatTarget(type="student", id=scope.student_id)
     if task.target == "student_or_dataset" and target is not None and target.type != "student":
@@ -332,9 +332,9 @@ def _server_context(
         elif target.id not in classes:
             raise DomainError("NOT_FOUND", "目标班级不存在")
         if task.target == "student" and target.type != "student":
-            raise DomainError("VALIDATION_ERROR", "该任务要求学生目标")
+            raise DomainError("VALIDATION_ERROR", "这个分析需要指定具体学生，当前选择的是班级：请改选学生后再提问。")
         if task.target == "class" and target.type != "class":
-            raise DomainError("VALIDATION_ERROR", "该任务要求班级目标")
+            raise DomainError("VALIDATION_ERROR", "这个分析需要指定班级，当前选择的是学生：请改选班级后再提问。")
 
     if task.requires_run and not run_id:
         raise DomainError("VALIDATION_ERROR", "该任务必须提供 run_id")
@@ -1424,9 +1424,9 @@ def _execute_chat(
         if scope.role not in explicit.roles:
             raise DomainError("FORBIDDEN", "当前角色不能执行该任务")
         if explicit.target == "class" and target is not None and target.type != "class":
-            raise DomainError("VALIDATION_ERROR", "该任务要求班级目标")
+            raise DomainError("VALIDATION_ERROR", "这个分析需要指定班级，当前选择的是学生：请改选班级后再提问。")
         if explicit.target == "student" and target is not None and target.type != "student":
-            raise DomainError("VALIDATION_ERROR", "该任务要求学生目标")
+            raise DomainError("VALIDATION_ERROR", "这个分析需要指定具体学生，当前选择的是班级：请改选学生后再提问。")
     prompts = PromptRegistry()
     router_prompt, router_version = prompts.load("router.md")
     plan = plan_route(
@@ -1539,7 +1539,10 @@ def _execute_chat(
         if task.target == "student_or_dataset" and scope.role == "teacher":
             target = None
         else:
-            raise DomainError("VALIDATION_ERROR", "该任务需要显式 target")
+            raise DomainError(
+                "VALIDATION_ERROR",
+                "这个分析需要先指定分析对象：请在对话页顶部选择班级或学生后再提问。",
+            )
     if task.requires_run and not payload.run_id:
         raise DomainError("VALIDATION_ERROR", "该任务必须提供 run_id")
     if task.requires_node and not payload.node_id:

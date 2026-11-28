@@ -18,13 +18,15 @@ import { nodeLabel } from "../../lib/labels";
 import { distributionText } from "../../components/learning/StudentRoster";
 import { ClassComparison } from "../../components/learning/ClassComparison";
 import { FindingsList } from "../../components/learning/FindingsList";
+import { IndicatorDistribution } from "../../components/learning/IndicatorDistribution";
 import { IndicatorRadar } from "../../components/learning/IndicatorRadar";
 import { MetricList } from "../../components/learning/MetricList";
+import { TodayFocus } from "../../components/learning/TodayFocus";
 import { AttentionList, StudentRoster } from "../../components/learning/StudentRoster";
 import { StatePanel } from "../../components/feedback/StatePanel";
 import { EvidenceDrawer } from "../../components/evidence/EvidenceDrawer";
 import type { EvidenceRef } from "../../api/types";
-import { performanceLabel, evidenceStatusLabel } from "../../lib/format";
+import { performanceLabel, evidenceStatusLabel, formatTime } from "../../lib/format";
 
 interface SavedView {
   classId: string | null;
@@ -102,6 +104,8 @@ export function ClassesPage() {
     queryKey: queryKeys.classProfile(scopeKey, activeClassId ?? "", activeNodeId, null),
     queryFn: () => getClassProfile(datasetId as string, activeClassId as string, activeNodeId),
     enabled: Boolean(datasetId && activeClassId && activeNodeId),
+    // 总览自动保持新鲜：30s 轮询 + 页面显示最后更新时间，替代手动刷新按钮。
+    refetchInterval: 30_000,
   });
 
   const roster = useQuery({
@@ -209,9 +213,9 @@ export function ClassesPage() {
           >
             {showCompare ? "返回班级视图" : "班级比较"}
           </button>
-          <button type="button" className="btn" onClick={() => { void profile.refetch(); void roster.refetch(); }}>
-            刷新
-          </button>
+          {profile.dataUpdatedAt ? (
+            <span className="xs muted tabular" title="每 30 秒自动更新">最后更新 {formatTime(profile.dataUpdatedAt)}</span>
+          ) : null}
         </div>
       </div>
 
@@ -271,6 +275,14 @@ export function ClassesPage() {
 
       {result ? (
         <>
+          <TodayFocus
+            result={result}
+            names={names}
+            nodeLabel={activeNodeId ? nodeLabel(activeNodeId, nodes) : null}
+            alerts={alertsQuery.data ?? []}
+            chatHref={`/teacher/chat?class=${encodeURIComponent(activeClassId ?? "")}&node=${encodeURIComponent(activeNodeId ?? "")}`}
+          />
+
           <section className="section" aria-labelledby="summary-title">
             <div className="statGrid">
               <div className="stat">
@@ -290,7 +302,10 @@ export function ClassesPage() {
               </div>
             </div>
             {result.limitations.length ? (
-              <p className="small muted" style={{ marginTop: 12 }}>限制：{result.limitations.join("；")}</p>
+              <details style={{ marginTop: 12 }}>
+                <summary className="small muted" style={{ cursor: "pointer" }}>口径与限制（{result.limitations.length}）</summary>
+                <p className="small muted" style={{ marginTop: 8 }}>{result.limitations.join("；")}</p>
+              </details>
             ) : null}
           </section>
 
@@ -321,7 +336,7 @@ export function ClassesPage() {
                   findings={result.common_findings}
                   names={names}
                   onEvidence={onEvidence}
-                  emptyText="服务端没有返回共性问题；这不等于没有问题。"
+                  emptyText="本轮没有共性问题记录；下一次观察后更新。"
                   evidenceContext={{ class_id: activeClassId, student_id: null }}
                 />
               </div>
@@ -330,32 +345,34 @@ export function ClassesPage() {
                   <h2 className="sectionTitle">表现分布</h2>
                   <span className="sectionHint">计数 / 名册人数</span>
                 </div>
-                {result.performance_distribution.length === 0 ? (
-                  <p className="muted small">服务端没有返回表现分布。</p>
-                ) : (
-                  <div className="tableWrap">
-                    <table className="table">
-                      <thead>
-                        <tr>
-                          <th scope="col">观察指标</th>
-                          <th scope="col">表现</th>
-                          <th scope="col">证据</th>
-                          <th scope="col" className="numeric">人数 / 名册</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {result.performance_distribution.map((bucket, index) => (
-                          <tr key={`${bucket.indicator_id}-${bucket.performance}-${index}`}>
-                            <td className="small">{names[bucket.indicator_id] ?? bucket.indicator_id}</td>
-                            <td className="small">{performanceLabel(bucket.performance)}</td>
-                            <td className="small">{evidenceStatusLabel(bucket.evidence_status)}</td>
-                            <td className="numeric">{distributionText(bucket.count, bucket.roster_count)}</td>
+                <IndicatorDistribution buckets={result.performance_distribution} names={names} />
+                {result.performance_distribution.length > 0 ? (
+                  <details style={{ marginTop: 12 }}>
+                    <summary className="small muted" style={{ cursor: "pointer" }}>分布明细表</summary>
+                    <div className="tableWrap" style={{ marginTop: 8 }}>
+                      <table className="table">
+                        <thead>
+                          <tr>
+                            <th scope="col">观察指标</th>
+                            <th scope="col">表现</th>
+                            <th scope="col">证据</th>
+                            <th scope="col" className="numeric">人数 / 名册</th>
                           </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                )}
+                        </thead>
+                        <tbody>
+                          {result.performance_distribution.map((bucket, index) => (
+                            <tr key={`${bucket.indicator_id}-${bucket.performance}-${index}`}>
+                              <td className="small">{names[bucket.indicator_id] ?? bucket.indicator_id}</td>
+                              <td className="small">{performanceLabel(bucket.performance)}</td>
+                              <td className="small">{evidenceStatusLabel(bucket.evidence_status)}</td>
+                              <td className="numeric">{distributionText(bucket.count, bucket.roster_count)}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </details>
+                ) : null}
               </div>
               <div>
                 <div className="sectionHead">

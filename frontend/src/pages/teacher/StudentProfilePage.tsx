@@ -19,6 +19,7 @@ import { EvidenceDrawer } from "../../components/evidence/EvidenceDrawer";
 import { StatePanel } from "../../components/feedback/StatePanel";
 import { FindingsList } from "../../components/learning/FindingsList";
 import { IndicatorRadar } from "../../components/learning/IndicatorRadar";
+import { ProgressTimeline } from "../../components/learning/ProgressTimeline";
 import { MetricList } from "../../components/learning/MetricList";
 import { ProgressView } from "../../components/learning/ProgressView";
 import { TaskGroupView } from "../../components/learning/TaskGroupView";
@@ -283,6 +284,25 @@ export function StudentProfilePage() {
 
           {tab === "overview" ? (
             <section className="section" aria-label="学情概览">
+              <section className="section todayFocus" aria-label="本阶段结论">
+                <div className="sectionHead">
+                  <h2 className="sectionTitle">本阶段结论</h2>
+                  <span className="sectionHint">
+                    {result.findings.length} 条发现 · 有效观测 {result.scope_kind === "class" ? "按班级" : "本人"}
+                  </span>
+                </div>
+                <p className="prose">
+                  {result.summary ?? "服务端还没有给出整体结论；下方是逐指标的发现与依据。"}
+                </p>
+                {result.limitations.length ? (
+                  <details style={{ marginTop: 8 }}>
+                    <summary className="small muted" style={{ cursor: "pointer" }}>
+                      口径与限制（{result.limitations.length}）
+                    </summary>
+                    <p className="small muted" style={{ marginTop: 8 }}>{result.limitations.join("；")}</p>
+                  </details>
+                ) : null}
+              </section>
               <div className="grid2">
                 <div>
                   <div className="sectionHead">
@@ -304,7 +324,7 @@ export function StudentProfilePage() {
                 <div>
                   <div className="sectionHead">
                     <h2 className="sectionTitle">诊断发现</h2>
-                    <span className="sectionHint">{result.findings.length} 条 · 证据与表现分开判断</span>
+                    <span className="sectionHint">{result.findings.length} 条</span>
                   </div>
                   <FindingsList
                     findings={result.findings}
@@ -312,8 +332,8 @@ export function StudentProfilePage() {
                     onEvidence={setEvidence}
                     evidenceContext={{ student_id: studentId, class_id: result?.class_id ?? null }}
                     materialNames={materialNames}
+                    note="证据与表现分开判断：证据不足时不把“暂不定论”当成未掌握。"
                   />
-                  {result.summary ? <p className="prose" style={{ marginTop: 12 }}>{result.summary}</p> : null}
                   {result.strategy_signals.length ? (
                     <div style={{ marginTop: 12 }}>
                       <h3 className="paneTitle">策略信号</h3>
@@ -327,14 +347,13 @@ export function StudentProfilePage() {
                       </ul>
                     </div>
                   ) : null}
-                  {result.limitations.length ? <p className="small muted">限制：{result.limitations.join("；")}</p> : null}
                 </div>
               </div>
 
               <div className="section">
                 <div className="sectionHead">
                   <h2 className="sectionTitle">学习方案摘要</h2>
-                  <span className="sectionHint">正式版本以服务端为准</span>
+                  <span className="sectionHint">已发布 · 只读</span>
                 </div>
                 {plan.isPending ? <StatePanel kind="loading" title="正在读取学习方案" /> : null}
                 {plan.isError ? (
@@ -388,13 +407,23 @@ export function StudentProfilePage() {
                 <StatePanel kind="error" title="进展读取失败" message={toErrorMessage(progress.error)} requestId={errorRequestId(progress.error)} />
               ) : null}
               {progress.data ? (
-                <ProgressView
-                  items={progress.data.items}
-                  names={names}
-                  onEvidence={setEvidence}
-                  evidenceContext={{ student_id: studentId, class_id: result?.class_id ?? null }}
-                  materialNames={materialNames}
-                />
+                <>
+                  <ProgressTimeline items={progress.data.items} names={names} onEvidence={setEvidence} />
+                  {progress.data.items.length ? (
+                    <details style={{ marginTop: 12 }}>
+                      <summary className="small muted" style={{ cursor: "pointer" }}>进展明细表</summary>
+                      <div style={{ marginTop: 8 }}>
+                        <ProgressView
+                          items={progress.data.items}
+                          names={names}
+                          onEvidence={setEvidence}
+                          evidenceContext={{ student_id: studentId, class_id: result?.class_id ?? null }}
+                          materialNames={materialNames}
+                        />
+                      </div>
+                    </details>
+                  ) : null}
+                </>
               ) : null}
             </section>
           ) : null}

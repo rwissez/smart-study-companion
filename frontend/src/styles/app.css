@@ -121,7 +121,7 @@ ul, ol { padding-left: 20px; }
 .pageSub { margin-top: var(--space-1); font-size: var(--font-sm); color: var(--color-text-secondary); }
 .pageActions { display: flex; align-items: center; gap: var(--space-2); flex-wrap: wrap; }
 
-.section { margin-top: var(--space-8); min-width: 0; }
+.section { margin-top: var(--space-6); min-width: 0; }
 .section:first-child { margin-top: 0; }
 .sectionHead {
   display: flex; align-items: baseline; justify-content: space-between;
@@ -132,12 +132,12 @@ ul, ol { padding-left: 20px; }
 .sectionTitle { font-size: var(--font-section); font-weight: 600; line-height: 1.5; }
 .sectionHint { font-size: var(--font-sm); color: var(--color-text-secondary); }
 
-.grid2 { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: var(--space-8); }
+.grid2 { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: var(--space-6); }
 .grid3 { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--space-4); }
-.split { display: grid; grid-template-columns: minmax(0, 1.15fr) minmax(0, 0.85fr); gap: var(--space-8); }
+.split { display: grid; grid-template-columns: minmax(0, 1.15fr) minmax(0, 0.85fr); gap: var(--space-6); }
 .stack { display: flex; flex-direction: column; gap: var(--space-4); }
 .stackSm { display: flex; flex-direction: column; gap: var(--space-2); }
-.stackLg { display: flex; flex-direction: column; gap: var(--space-6); }
+.stackLg { display: flex; flex-direction: column; gap: var(--space-5); }
 .row { display: flex; align-items: center; gap: var(--space-2); flex-wrap: wrap; }
 .rowBetween { display: flex; align-items: center; justify-content: space-between; gap: var(--space-3); flex-wrap: wrap; }
 .muted { color: var(--color-text-secondary); }
@@ -317,6 +317,11 @@ ul, ol { padding-left: 20px; }
 
 .groupList { display: flex; flex-direction: column; gap: var(--space-6); }
 .group { min-width: 0; }
+details.group > summary { list-style: none; cursor: pointer; }
+details.group > summary::-webkit-details-marker { display: none; }
+details.group > summary::after { content: "▸ 展开"; font-size: var(--font-xs); color: var(--color-text-secondary); margin-left: var(--space-2); }
+details.group[open] > summary::after { content: "▸ 收起"; }
+details.group[open] > summary { padding-bottom: var(--space-2); border-bottom: 1px solid var(--color-border); }
 .groupHead { display: flex; align-items: flex-start; justify-content: space-between; gap: var(--space-3); flex-wrap: wrap; padding-bottom: var(--space-2); border-bottom: 1px solid var(--color-border); }
 .groupIndex { font-size: var(--font-xs); color: var(--color-text-secondary); font-variant-numeric: tabular-nums; }
 .groupGoal { font-size: var(--font-body); font-weight: 600; line-height: 1.5; max-width: 78ch; }
@@ -519,6 +524,20 @@ ul, ol { padding-left: 20px; }
 .jobMeta { display: flex; gap: var(--space-4); flex-wrap: wrap; font-size: var(--font-sm); color: var(--color-text-secondary); }
 .qualityGrid { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: var(--space-6); }
 
+/* 今日关注结论卡与表现分布条：结论与行动在前，精确计数放明细。 */
+.todayFocus { border: 1px solid var(--color-selected-border); border-radius: var(--radius-md); padding: var(--space-4); background: var(--color-selected-bg); }
+.todayFocusList { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: var(--space-2); }
+.todayFocusItem { display: flex; align-items: center; gap: var(--space-3); flex-wrap: wrap; }
+.todayFocusText { flex: 1 1 auto; min-width: 200px; }
+.indicatorDistribution { display: flex; flex-direction: column; gap: var(--space-3); }
+.indicatorDistHead { display: flex; justify-content: space-between; align-items: baseline; gap: var(--space-2); margin-bottom: var(--space-1); }
+.indicatorDistBar { display: flex; height: 10px; border-radius: var(--radius-sm); overflow: hidden; background: var(--color-hover); }
+.indicatorDistSegment { display: block; height: 100%; }
+.indicatorDistLegend { display: flex; gap: var(--space-3); flex-wrap: wrap; margin-top: var(--space-1); }
+.progressTimelineList { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: var(--space-2); }
+.progressTimelineItem { display: flex; align-items: baseline; gap: var(--space-3); flex-wrap: wrap; }
+.progressTimelineBody { display: flex; flex-direction: column; gap: 2px; flex: 1 1 auto; min-width: 220px; }
+
 /* --------------------------------------------------------------------- 对话 */
 
 /* 中间是主要回答区：主列占满剩余高度，左侧只放会话历史。 */
@@ -545,6 +564,17 @@ ul, ol { padding-left: 20px; }
 }
 .chatTopMeta { display: flex; align-items: baseline; gap: var(--space-2); flex-wrap: wrap; min-width: 0; }
 .chatTopTitle { font-size: var(--font-section); font-weight: 600; line-height: 1.5; }
+/* 分析对象选择条：班级/学生/节点三连下拉，紧跟顶栏；快捷任务与它同区。 */
+.chatObjectBar {
+  display: flex; align-items: flex-end; gap: var(--space-3); flex-wrap: wrap;
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+}
+.chatObjectField { min-width: 150px; }
+.chatObjectBarFlash { outline: 2px solid var(--color-primary); }
+.chatGuardHint { margin: 0; }
+.chatQuickRow { display: flex; gap: var(--space-2); flex-wrap: wrap; }
 .chatLog { flex: 1 1 auto; min-height: 0; overflow: auto; display: flex; flex-direction: column; gap: var(--space-4); padding-right: var(--space-1); }
 .chatMsg { border-top: 0; padding: 0; min-width: 0; }
 .chatMsg-user {
