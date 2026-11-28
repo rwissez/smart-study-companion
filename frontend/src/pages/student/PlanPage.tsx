@@ -67,6 +67,15 @@ export function StudentPlanPage() {
     navigate(`/student/plan/${encodeURIComponent(planData.plan_version)}/activities/${encodeURIComponent(activity.activity_id)}`);
   };
 
+  // 当前活动所在任务组：学生端默认只展开它，其余组折叠，突出“今天做什么”。
+  const currentGroup = useMemo(() => {
+    if (!current) return null;
+    return (
+      groups.find((group) => group.activity_ids.includes(current.activity_id) || current.group_id === group.group_id) ??
+      null
+    );
+  }, [current, groups]);
+
   const completedIds = new Set(
     activities.filter((activity) => derived[activity.activity_id] === "completed").map((activity) => activity.activity_id),
   );
@@ -123,38 +132,42 @@ export function StudentPlanPage() {
                 <div className="planMeta" style={{ marginTop: 8 }}>
                   <span>必需活动 {doneRequired} / {totalRequired}</span>
                   <span>任务组 {groups.length} 个</span>
-                  <span>{planData.plan.recommendations.length} 条建议</span>
-                  <span>{planData.freshness === "current" ? "当前安排" : "历史安排"}</span>
-                  <span>{planData.plan.publication_status === "published" ? "已发布" : "发布状态待确认"}</span>
                 </div>
               </div>
-              {current ? <span className="tag tagAccent">当前：{current.title || current.purpose || "下一步活动"}</span> : <span className="tag">全部必需活动已完成</span>}
-            </div>
-            <div className="progressTrack" style={{ marginTop: 12 }} aria-hidden="true">
-              <div className="progressFill" style={{ width: totalRequired ? `${(doneRequired / totalRequired) * 100}%` : "0%" }} />
+              <div className="row" style={{ gap: 12, alignItems: "center" }}>
+                {current ? <span className="tag tagAccent">当前：{current.title || current.purpose || "下一步活动"}</span> : <span className="tag">全部必需活动已完成</span>}
+                <ProgressRing done={doneRequired} total={totalRequired} />
+              </div>
             </div>
             <p className="xs muted" style={{ marginTop: 6 }}>
-              进度只统计服务端确认完成的必需活动；取消的活动不计入完成。
+              进度只统计已确认完成的必需活动。
             </p>
             {planData.plan.recommendations[0]?.student_intro ? (
               <p className="prose reading" style={{ marginTop: 12 }}>{planData.plan.recommendations[0].student_intro}</p>
             ) : null}
             {planData.applicability ? (
-              <div className="statePanel" style={{ marginTop: 12 }}>
-                <span className="stateTitle">适用性复查：{planData.applicability.result === "applicable" ? "安排仍然适用" : "需要重新安排"}</span>
-                <span className="small muted">复查时间 {formatDate(planData.applicability.checked_at)}</span>
+              <details style={{ marginTop: 12 }}>
+                <summary className="small" style={{ cursor: "pointer" }}>
+                  适用性复查：{planData.applicability.result === "applicable" ? "安排仍然适用" : "需要重新安排"}
+                  <span className="xs muted"> · {formatDate(planData.applicability.checked_at)}</span>
+                </summary>
                 {planData.applicability.limitations.length ? (
-                  <span className="small">限制：{planData.applicability.limitations.join("；")}</span>
+                  <p className="small muted" style={{ marginTop: 8 }}>{planData.applicability.limitations.join("；")}</p>
                 ) : null}
-              </div>
+              </details>
             ) : null}
-            {planData.limitations.length ? <p className="small muted">限制：{planData.limitations.join("；")}</p> : null}
+            {planData.limitations.length ? (
+              <details style={{ marginTop: 8 }}>
+                <summary className="small muted" style={{ cursor: "pointer" }}>口径与限制（{planData.limitations.length}）</summary>
+                <p className="small muted" style={{ marginTop: 8 }}>{planData.limitations.join("；")}</p>
+              </details>
+            ) : null}
           </section>
 
           <section className="section" aria-label="任务组">
             <div className="sectionHead">
               <h2 className="sectionTitle">任务组</h2>
-              <span className="sectionHint">按 C 的任务组顺序排列，不按题型重排</span>
+              <span className="sectionHint">顺序来自正式方案的任务组，不按题型重排</span>
             </div>
             {events.isError ? (
               <p className="small muted">学习事件读取失败，活动状态暂以方案快照显示：{toErrorMessage(events.error)}</p>
@@ -168,10 +181,43 @@ export function StudentPlanPage() {
               currentActivityId={current?.activity_id ?? null}
               onOpen={openActivity}
               canOpen={canOpen}
+              defaultExpandedGroupId={currentGroup?.group_id ?? groups[0]?.group_id ?? null}
             />
           </section>
         </>
       ) : null}
     </div>
+  );
+}
+
+/** 必需活动完成环：完成数来自服务端事件推导，前端只做比例展示，不自行判定。 */
+function ProgressRing({ done, total }: { done: number; total: number }) {
+  const pct = total > 0 ? done / total : 0;
+  const radius = 26;
+  const circumference = 2 * Math.PI * radius;
+  return (
+    <svg
+      width="72"
+      height="72"
+      viewBox="0 0 72 72"
+      role="img"
+      aria-label={`必需活动完成 ${done} / ${total}`}
+    >
+      <circle cx="36" cy="36" r={radius} fill="none" stroke="var(--color-hover)" strokeWidth="8" />
+      <circle
+        cx="36"
+        cy="36"
+        r={radius}
+        fill="none"
+        stroke="var(--color-primary)"
+        strokeWidth="8"
+        strokeDasharray={`${circumference * pct} ${circumference}`}
+        strokeLinecap="round"
+        transform="rotate(-90 36 36)"
+      />
+      <text x="36" y="41" textAnchor="middle" fontSize="15" fontWeight="600" fill="var(--color-text-primary)">
+        {Math.round(pct * 100)}%
+      </text>
+    </svg>
   );
 }

@@ -10,6 +10,8 @@ interface Props {
   emptyText?: string;
   evidenceContext?: EvidenceContext;
   materialNames?: Record<string, string>;
+  /** 列表级说明（只出现一次）；逐条限制仍按条目展示。 */
+  note?: string;
 }
 
 const PERFORMANCE_TONE: Record<string, string> = {
@@ -48,12 +50,14 @@ export function FindingsList({
   emptyText = "本次分析没有返回诊断发现。",
   evidenceContext,
   materialNames,
+  note,
 }: Props) {
   if (findings.length === 0) {
     return <p className="muted small">{emptyText}</p>;
   }
   return (
     <div className="findingList">
+      {note ? <p className="xs muted" style={{ marginBottom: 8 }}>{note}</p> : null}
       {findings.map((finding) => (
         <article className="findingItem" key={finding.finding_id}>
           <div className="findingHead">
@@ -73,9 +77,7 @@ export function FindingsList({
           ))}
           {finding.limitations.length ? (
             <p className="findingMeta">限制：{finding.limitations.join("；")}</p>
-          ) : (
-            <p className="findingMeta">证据状态与表现分开判断：证据不足时不把“暂不定论”当成未掌握。</p>
-          )}
+          ) : null}
           {finding.evidence_refs.length && onEvidence ? (
             <div className="row" style={{ marginTop: 8 }}>
               <EvidenceRefsButton

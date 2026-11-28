@@ -20,6 +20,14 @@ export function formatDay(value: string | null | undefined): string {
   return new Intl.DateTimeFormat("zh-CN", { year: "numeric", month: "2-digit", day: "2-digit" }).format(date);
 }
 
+/** 只到分钟的当日时间，用于“最后更新”标记。 */
+export function formatTime(value: string | number | Date | null | undefined): string {
+  if (!value) return "—";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "—";
+  return new Intl.DateTimeFormat("zh-CN", { hour: "2-digit", minute: "2-digit" }).format(date);
+}
+
 /** 比例统一按 0—100 展示；无记录返回 null，由调用方显示“无可用结果”。 */
 export function ratioPercent(value: number | null | undefined): number | null {
   if (value === null || value === undefined) return null;

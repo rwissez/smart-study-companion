@@ -544,12 +544,20 @@ export async function testModelSettings(): Promise<{ connected: boolean; message
   });
 }
 
+/** 与后端 ChatTarget 对齐：target 合法取值只有 student/class 两种。 */
+export interface ChatTargetPayload {
+  type: "student" | "class";
+  id: string;
+}
+
 export async function sendChat(payload: {
   messages: Array<{ role: "user" | "assistant"; content: string }>;
   conversation_id?: string | null;
   run_id?: string | null;
   node_id?: string | null;
   student_id?: string | null;
+  target?: ChatTargetPayload | null;
+  task_type?: string | null;
 }): Promise<ChatReply> {
   if (isDemo) return demo.sendChat();
   return request<ChatReply>("/chat", { method: "POST", body: JSON.stringify(payload) });
@@ -620,6 +628,8 @@ export async function* streamChat(
     run_id?: string | null;
     node_id?: string | null;
     student_id?: string | null;
+    target?: ChatTargetPayload | null;
+    task_type?: string | null;
   },
   signal?: AbortSignal,
 ): AsyncGenerator<ChatStreamEvent> {
