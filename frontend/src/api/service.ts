@@ -743,11 +743,35 @@ export async function getExportPreview(runId: string): Promise<ExportPreview> {
   return request<ExportPreview>(`/runs/${segment(runId)}/exports`);
 }
 
-export async function createExport(runId: string): Promise<ExportCreateResponse> {
+/**
+ * 案例学生集合在预检与正式导出共用同一套归一化：去重、去掉空白、按编号排序。
+ * 空集合表示“不指定”，由后端按正式学情自动选取；不能传空数组。
+ */
+export function normalizeCaseStudentIds(ids: readonly string[] | null | undefined): string[] {
+  if (!ids || ids.length === 0) return [];
+  const unique = new Set<string>();
+  ids.forEach((id) => {
+    const trimmed = id.trim();
+    if (trimmed) unique.add(trimmed);
+  });
+  return [...unique].sort();
+}
+
+export interface CreateExportOptions {
+  caseStudentIds?: string[];
+}
+
+export async function createExport(
+  runId: string,
+  options: CreateExportOptions = {},
+): Promise<ExportCreateResponse> {
   if (isDemo) throw new Error("演示模式不会生成真实导出。");
+  const caseStudentIds = normalizeCaseStudentIds(options.caseStudentIds);
+  const payload: { format: string; case_student_ids?: string[] } = { format: "zip" };
+  if (caseStudentIds.length > 0) payload.case_student_ids = caseStudentIds;
   return request<ExportCreateResponse>(`/runs/${segment(runId)}/exports`, {
     method: "POST",
-    body: JSON.stringify({ format: "zip" }),
+    body: JSON.stringify(payload),
   });
 }
 
@@ -915,10 +939,11 @@ export async function preflightExport(
   options: { nodeIds?: string[]; caseStudentIds?: string[] } = {},
 ): Promise<ExportPreflight> {
   if (isDemo) return { ready: false, blocking: [], warnings: [], coverage: { students: 0, classes: 0, cases: 0 } };
+  const caseStudentIds = normalizeCaseStudentIds(options.caseStudentIds);
   return request<ExportPreflight>(
     `/runs/${segment(runId)}/exports/preflight${query({
       node_ids: options.nodeIds?.join(",") ?? null,
-      case_student_ids: options.caseStudentIds?.join(",") ?? null,
+      case_student_ids: caseStudentIds.length > 0 ? caseStudentIds.join(",") : null,
     })}`,
   );
 }
