@@ -381,7 +381,7 @@ def review_plan_with_model(
             round_minutes,
             max_activities,
         ),
-        allow_external=False,
+        allow_external=True,
     )
     try:
         result = service.generate_structured(request, PlanReviewOut)

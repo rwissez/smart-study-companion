@@ -481,7 +481,7 @@ def _review_request(
             ],
             "protected_material_contents": [_clean(item) for item in protected_texts][:12],
         },
-        allow_external=False,
+        allow_external=True,
     )
 
 
@@ -575,7 +575,7 @@ def _call_repair(
             ],
             "protected_material_contents": [_clean(item) for item in protected_texts][:12],
         },
-        allow_external=False,
+        allow_external=True,
     )
     try:
         result = service.generate_structured(request, LessonRepairOut)
@@ -736,7 +736,7 @@ def generate_with_model(
                 "教材版本或外部链接。"
             ),
         },
-        allow_external=False,
+        allow_external=True,
     )
     try:
         result = service.generate_structured(request, LessonModelOut)

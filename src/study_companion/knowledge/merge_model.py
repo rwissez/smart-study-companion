@@ -123,7 +123,7 @@ def resolve_merges(
             prompt_version="1.0",
             namespace="a",
             input_payload={"pairs": payload},
-            allow_external=False,
+            allow_external=True,
         ),
         MergeJudgments,
     )
@@ -152,7 +152,7 @@ def resolve_merges(
             prompt_version="1.0",
             namespace="a",
             input_payload={"pairs": reversed_payload},
-            allow_external=False,
+            allow_external=True,
         ),
         MergeJudgments,
     )

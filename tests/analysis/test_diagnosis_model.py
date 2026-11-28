@@ -152,7 +152,7 @@ def test_success_returns_validated_diagnosis() -> None:
     assert request.task_key == "diagnose_errors.v1"
     assert request.namespace == "b"
     assert request.prompt_version == "1.0"
-    assert request.allow_external is False
+    assert request.allow_external is True  # 任务声明可外发；是否真正外发仍由全局设置决定
     payload = request.input_payload["candidates"][0]
     assert payload["candidate_id"] == "S01:N01:Q1"
     assert payload["rubric_points"][1]["awarded"] == 1

@@ -105,7 +105,7 @@ def fill_mapping_gaps(
                 prompt_version="1.0",
                 namespace="a",
                 input_payload={"materials": payload, "round": round_index + 1},
-                allow_external=False,
+                allow_external=True,
             ),
             MappingDecisions,
         )
@@ -130,7 +130,7 @@ def fill_mapping_gaps(
                         for item in payload
                     ]
                 },
-                allow_external=False,
+                allow_external=True,
             ),
             MappingDecisions,
         )

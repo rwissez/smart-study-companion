@@ -280,7 +280,7 @@ def _screen_scope(*, service: ModelService, document: Any, scope: Any, catalog: 
             "indicators": indicators,
             "chapters": payload_chapters,
         },
-        allow_external=False,
+        allow_external=True,
     )
     result = service.generate_structured(request, ScopeScreen)
     if not result.succeeded or result.value is None:
@@ -355,7 +355,7 @@ def extract_points_with_model(
                 "rule_candidates": hints,
                 "chunk_text": chunk.text,
             },
-            allow_external=False,
+            allow_external=True,
         )
         result = service.generate_structured(request, ModelPointBatch)
         if not result.succeeded or result.value is None:
@@ -446,7 +446,7 @@ def extract_points_with_model(
             ],
             "indicators": indicators,
         },
-        allow_external=False,
+        allow_external=True,
     )
     review = service.generate_structured(request, PointReview)
     if not review.succeeded or review.value is None:

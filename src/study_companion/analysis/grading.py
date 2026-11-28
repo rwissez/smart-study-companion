@@ -313,7 +313,7 @@ def grade_solution_with_model(
             "student_steps": attempt.solution_steps,
             "attempt_id": attempt.attempt_id,
         },
-        allow_external=False,
+        allow_external=True,
     )
     result = service.generate_structured(request, _SolutionGradeOut)
     if not result.succeeded or result.value is None:
@@ -487,7 +487,7 @@ def review_solution_candidate(
         prompt_version=REVIEW_PROMPT_VERSION,
         namespace=REVIEW_PROMPT_NAMESPACE,
         input_payload=_review_input_payload(attempt, material, candidate),
-        allow_external=False,
+        allow_external=True,
     )
     try:
         result = service.generate_structured(request, GradingReviewOut)

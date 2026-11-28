@@ -549,7 +549,7 @@ def optimize_plan_with_model(
         prompt_version=prompt_version,
         namespace=PROMPT_NAMESPACE,
         input_payload=_build_payload(intent, index, candidates, constraints, locked),
-        allow_external=False,
+        allow_external=True,
     )
     try:
         result = service.generate_structured(request, OptimizeOut)

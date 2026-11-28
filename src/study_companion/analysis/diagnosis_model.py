@@ -605,7 +605,7 @@ def diagnose_unexplained_errors(
             for candidate in candidates
             if candidate.record_id
         ],
-        allow_external=False,
+        allow_external=True,
     )
     try:
         result = service.generate_structured(request, DiagnosisOutput)

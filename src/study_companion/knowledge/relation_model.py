@@ -389,7 +389,7 @@ def _collect_proposals(
             prompt_version="1.0",
             namespace="a",
             input_payload=_proposal_payload(knowledge_version, index, len(batches), batch, by_id),
-            allow_external=False,
+            allow_external=True,
         )
         result = service.generate_structured(request, RelationProposals)
         if not result.succeeded or result.value is None:
@@ -442,7 +442,7 @@ def _review(
             prompt_version="1.0",
             namespace="a",
             input_payload=_review_payload(chunk, by_id),
-            allow_external=False,
+            allow_external=True,
         )
         result = service.generate_structured(request, RelationReview)
         if not result.succeeded or result.value is None:
