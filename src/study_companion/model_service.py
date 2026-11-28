@@ -202,6 +202,22 @@ class ModelService:
                 },
                 prompt_version=request.prompt_version,
             )
+        model_url = self._settings.model_base_url or ""
+        if (
+            self._provider is None
+            and model_url
+            and not _is_locally_trusted(model_url)
+            and not request.allow_external
+        ):
+            return ModelTaskResult(
+                status="failed",
+                error={
+                    "code": "MODEL_EXTERNAL_NOT_ALLOWED",
+                    "message": "当前任务未授权向远端模型发送输入",
+                    "details": [],
+                },
+                prompt_version=request.prompt_version,
+            )
         try:
             provider = self._load_provider()
         except DomainError as exc:
