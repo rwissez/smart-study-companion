@@ -1,0 +1,249 @@
+{
+  "$defs": {
+    "EvidenceRef": {
+      "additionalProperties": false,
+      "description": "统一证据引用。定位字段由服务端补足并校验，不接受任意对象路径。",
+      "properties": {
+        "analysis_version": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Analysis Version"
+        },
+        "attempt_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Attempt Id"
+        },
+        "catalog_version": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Catalog Version"
+        },
+        "curriculum_type": {
+          "anyOf": [
+            {
+              "enum": [
+                "topic",
+                "indicator",
+                "source"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Curriculum Type"
+        },
+        "dataset_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Dataset Id"
+        },
+        "id": {
+          "title": "Id",
+          "type": "string"
+        },
+        "kind": {
+          "enum": [
+            "record",
+            "metric",
+            "material",
+            "curriculum",
+            "knowledge_point",
+            "relation",
+            "annotation",
+            "rubric_point",
+            "learning_event",
+            "attempt",
+            "grade",
+            "finding",
+            "progress",
+            "recommendation",
+            "source_page",
+            "lesson"
+          ],
+          "title": "Kind",
+          "type": "string"
+        },
+        "knowledge_version": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Knowledge Version"
+        },
+        "material_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Material Id"
+        },
+        "plan_version": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Plan Version"
+        },
+        "run_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Run Id"
+        }
+      },
+      "required": [
+        "kind",
+        "id"
+      ],
+      "title": "EvidenceRef",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "action_fingerprint": {
+      "default": "",
+      "title": "Action Fingerprint",
+      "type": "string"
+    },
+    "baseline_analysis_version": {
+      "title": "Baseline Analysis Version",
+      "type": "string"
+    },
+    "comparison_id": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Comparison Id"
+    },
+    "completed_at": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Completed At"
+    },
+    "evidence_refs": {
+      "items": {
+        "$ref": "#/$defs/EvidenceRef"
+      },
+      "title": "Evidence Refs",
+      "type": "array"
+    },
+    "group_id": {
+      "title": "Group Id",
+      "type": "string"
+    },
+    "started_at": {
+      "title": "Started At",
+      "type": "string"
+    },
+    "status": {
+      "default": "planned",
+      "enum": [
+        "planned",
+        "running",
+        "effective",
+        "partial",
+        "ineffective",
+        "inconclusive"
+      ],
+      "title": "Status",
+      "type": "string"
+    },
+    "strategy": {
+      "enum": [
+        "collect_evidence",
+        "prerequisite_support",
+        "error_correction",
+        "consolidation",
+        "transfer",
+        "teacher_intervention"
+      ],
+      "title": "Strategy",
+      "type": "string"
+    },
+    "target_key": {
+      "title": "Target Key",
+      "type": "string"
+    },
+    "trial_id": {
+      "title": "Trial Id",
+      "type": "string"
+    }
+  },
+  "required": [
+    "trial_id",
+    "group_id",
+    "target_key",
+    "strategy",
+    "baseline_analysis_version",
+    "started_at"
+  ],
+  "title": "StrategyTrial",
+  "type": "object"
+}

@@ -1,0 +1,50 @@
+{
+  "additionalProperties": false,
+  "properties": {
+    "missing_reason": {
+      "default": "",
+      "title": "Missing Reason",
+      "type": "string"
+    },
+    "review_refs": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Review Refs",
+      "type": "array"
+    },
+    "source_id": {
+      "title": "Source Id",
+      "type": "string"
+    },
+    "source_type": {
+      "title": "Source Type",
+      "type": "string"
+    },
+    "status": {
+      "enum": [
+        "verified",
+        "partial",
+        "unmapped",
+        "not_applicable",
+        "needs_review"
+      ],
+      "title": "Status",
+      "type": "string"
+    },
+    "verified_target_ids": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Verified Target Ids",
+      "type": "array"
+    }
+  },
+  "required": [
+    "source_type",
+    "source_id",
+    "status"
+  ],
+  "title": "KnowledgeCoverageItem",
+  "type": "object"
+}

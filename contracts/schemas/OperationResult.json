@@ -1,0 +1,92 @@
+{
+  "additionalProperties": false,
+  "properties": {
+    "error": {
+      "anyOf": [
+        {
+          "additionalProperties": true,
+          "type": "object"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Error"
+    },
+    "new_plan_version": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "New Plan Version"
+    },
+    "operation_id": {
+      "title": "Operation Id",
+      "type": "string"
+    },
+    "previous_plan_version": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Previous Plan Version"
+    },
+    "publication_status": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Publication Status"
+    },
+    "review_status": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Review Status"
+    },
+    "status": {
+      "enum": [
+        "pending",
+        "running",
+        "succeeded",
+        "failed",
+        "needs_confirmation"
+      ],
+      "title": "Status",
+      "type": "string"
+    },
+    "target_student_id": {
+      "title": "Target Student Id",
+      "type": "string"
+    }
+  },
+  "required": [
+    "operation_id",
+    "target_student_id",
+    "status"
+  ],
+  "title": "OperationResult",
+  "type": "object"
+}

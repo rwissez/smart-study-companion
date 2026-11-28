@@ -1,0 +1,609 @@
+{
+  "$defs": {
+    "AnswerSegmentView": {
+      "additionalProperties": false,
+      "properties": {
+        "evidence_refs": {
+          "items": {
+            "$ref": "#/$defs/EvidenceRef"
+          },
+          "title": "Evidence Refs",
+          "type": "array"
+        },
+        "kind": {
+          "enum": [
+            "fact",
+            "explanation",
+            "suggestion",
+            "operation",
+            "limitation"
+          ],
+          "title": "Kind",
+          "type": "string"
+        },
+        "text": {
+          "title": "Text",
+          "type": "string"
+        }
+      },
+      "required": [
+        "kind",
+        "text"
+      ],
+      "title": "AnswerSegmentView",
+      "type": "object"
+    },
+    "AssistedConfirmationView": {
+      "additionalProperties": false,
+      "properties": {
+        "activity_id": {
+          "title": "Activity Id",
+          "type": "string"
+        },
+        "attempt_id": {
+          "title": "Attempt Id",
+          "type": "string"
+        },
+        "confirmation_id": {
+          "title": "Confirmation Id",
+          "type": "string"
+        },
+        "expires_at": {
+          "title": "Expires At",
+          "type": "string"
+        },
+        "plan_version": {
+          "title": "Plan Version",
+          "type": "string"
+        },
+        "summary": {
+          "title": "Summary",
+          "type": "string"
+        }
+      },
+      "required": [
+        "confirmation_id",
+        "activity_id",
+        "attempt_id",
+        "plan_version",
+        "summary",
+        "expires_at"
+      ],
+      "title": "AssistedConfirmationView",
+      "type": "object"
+    },
+    "ConfirmationTarget": {
+      "additionalProperties": false,
+      "properties": {
+        "base_plan_version": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Base Plan Version"
+        },
+        "changes_summary": {
+          "default": "",
+          "title": "Changes Summary",
+          "type": "string"
+        },
+        "draft_hash": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Draft Hash"
+        },
+        "proposal_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Proposal Id"
+        },
+        "student_id": {
+          "title": "Student Id",
+          "type": "string"
+        }
+      },
+      "required": [
+        "student_id"
+      ],
+      "title": "ConfirmationTarget",
+      "type": "object"
+    },
+    "ConfirmationView": {
+      "additionalProperties": false,
+      "properties": {
+        "confirmation_id": {
+          "title": "Confirmation Id",
+          "type": "string"
+        },
+        "expires_at": {
+          "title": "Expires At",
+          "type": "string"
+        },
+        "summary": {
+          "title": "Summary",
+          "type": "string"
+        },
+        "targets": {
+          "items": {
+            "$ref": "#/$defs/ConfirmationTarget"
+          },
+          "title": "Targets",
+          "type": "array"
+        }
+      },
+      "required": [
+        "confirmation_id",
+        "summary",
+        "expires_at"
+      ],
+      "title": "ConfirmationView",
+      "type": "object"
+    },
+    "EvidenceRef": {
+      "additionalProperties": false,
+      "description": "统一证据引用。定位字段由服务端补足并校验，不接受任意对象路径。",
+      "properties": {
+        "analysis_version": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Analysis Version"
+        },
+        "attempt_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Attempt Id"
+        },
+        "catalog_version": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Catalog Version"
+        },
+        "curriculum_type": {
+          "anyOf": [
+            {
+              "enum": [
+                "topic",
+                "indicator",
+                "source"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Curriculum Type"
+        },
+        "dataset_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Dataset Id"
+        },
+        "id": {
+          "title": "Id",
+          "type": "string"
+        },
+        "kind": {
+          "enum": [
+            "record",
+            "metric",
+            "material",
+            "curriculum",
+            "knowledge_point",
+            "relation",
+            "annotation",
+            "rubric_point",
+            "learning_event",
+            "attempt",
+            "grade",
+            "finding",
+            "progress",
+            "recommendation",
+            "source_page",
+            "lesson"
+          ],
+          "title": "Kind",
+          "type": "string"
+        },
+        "knowledge_version": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Knowledge Version"
+        },
+        "material_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Material Id"
+        },
+        "plan_version": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Plan Version"
+        },
+        "run_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Run Id"
+        }
+      },
+      "required": [
+        "kind",
+        "id"
+      ],
+      "title": "EvidenceRef",
+      "type": "object"
+    },
+    "OperationResult": {
+      "additionalProperties": false,
+      "properties": {
+        "error": {
+          "anyOf": [
+            {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Error"
+        },
+        "new_plan_version": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "New Plan Version"
+        },
+        "operation_id": {
+          "title": "Operation Id",
+          "type": "string"
+        },
+        "previous_plan_version": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Previous Plan Version"
+        },
+        "publication_status": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Publication Status"
+        },
+        "review_status": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Review Status"
+        },
+        "status": {
+          "enum": [
+            "pending",
+            "running",
+            "succeeded",
+            "failed",
+            "needs_confirmation"
+          ],
+          "title": "Status",
+          "type": "string"
+        },
+        "target_student_id": {
+          "title": "Target Student Id",
+          "type": "string"
+        }
+      },
+      "required": [
+        "operation_id",
+        "target_student_id",
+        "status"
+      ],
+      "title": "OperationResult",
+      "type": "object"
+    },
+    "ToolTraceView": {
+      "additionalProperties": false,
+      "properties": {
+        "call_id": {
+          "title": "Call Id",
+          "type": "string"
+        },
+        "evidence_refs": {
+          "items": {
+            "$ref": "#/$defs/EvidenceRef"
+          },
+          "title": "Evidence Refs",
+          "type": "array"
+        },
+        "message": {
+          "default": "",
+          "title": "Message",
+          "type": "string"
+        },
+        "stage": {
+          "default": "",
+          "title": "Stage",
+          "type": "string"
+        },
+        "status": {
+          "default": "succeeded",
+          "enum": [
+            "running",
+            "succeeded",
+            "failed",
+            "skipped",
+            "pending"
+          ],
+          "title": "Status",
+          "type": "string"
+        },
+        "tool_name": {
+          "title": "Tool Name",
+          "type": "string"
+        }
+      },
+      "required": [
+        "call_id",
+        "tool_name"
+      ],
+      "title": "ToolTraceView",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "assisted_confirmation": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/AssistedConfirmationView"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
+    },
+    "clarification": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Clarification"
+    },
+    "confirmation": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/ConfirmationView"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
+    },
+    "conversation_id": {
+      "title": "Conversation Id",
+      "type": "string"
+    },
+    "evidence_refs": {
+      "items": {
+        "$ref": "#/$defs/EvidenceRef"
+      },
+      "title": "Evidence Refs",
+      "type": "array"
+    },
+    "job_id": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Job Id"
+    },
+    "message_id": {
+      "title": "Message Id",
+      "type": "string"
+    },
+    "operation_results": {
+      "items": {
+        "$ref": "#/$defs/OperationResult"
+      },
+      "title": "Operation Results",
+      "type": "array"
+    },
+    "prompt_version": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Prompt Version"
+    },
+    "route_source": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Route Source"
+    },
+    "segments": {
+      "items": {
+        "$ref": "#/$defs/AnswerSegmentView"
+      },
+      "title": "Segments",
+      "type": "array"
+    },
+    "status": {
+      "default": "completed",
+      "enum": [
+        "completed",
+        "partial",
+        "needs_confirmation",
+        "failed",
+        "out_of_scope"
+      ],
+      "title": "Status",
+      "type": "string"
+    },
+    "stopped_reason": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Stopped Reason"
+    },
+    "task_type": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Task Type"
+    },
+    "text": {
+      "title": "Text",
+      "type": "string"
+    },
+    "tool_trace": {
+      "items": {
+        "$ref": "#/$defs/ToolTraceView"
+      },
+      "title": "Tool Trace",
+      "type": "array"
+    }
+  },
+  "required": [
+    "conversation_id",
+    "message_id",
+    "text"
+  ],
+  "title": "ChatResponse",
+  "type": "object"
+}

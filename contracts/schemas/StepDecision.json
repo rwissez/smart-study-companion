@@ -1,0 +1,72 @@
+{
+  "additionalProperties": false,
+  "properties": {
+    "arguments": {
+      "additionalProperties": true,
+      "title": "Arguments",
+      "type": "object"
+    },
+    "kind": {
+      "enum": [
+        "call",
+        "finish",
+        "clarify"
+      ],
+      "title": "Kind",
+      "type": "string"
+    },
+    "missing_fact": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Missing Fact"
+    },
+    "reason": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Reason"
+    },
+    "step_key": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Step Key"
+    },
+    "tool_name": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Tool Name"
+    }
+  },
+  "required": [
+    "kind"
+  ],
+  "title": "StepDecision",
+  "type": "object"
+}

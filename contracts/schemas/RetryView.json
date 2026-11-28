@@ -1,0 +1,67 @@
+{
+  "additionalProperties": false,
+  "properties": {
+    "can_retry": {
+      "default": false,
+      "title": "Can Retry",
+      "type": "boolean"
+    },
+    "manual_retry_count": {
+      "default": 0,
+      "maximum": 1,
+      "minimum": 0,
+      "title": "Manual Retry Count",
+      "type": "integer"
+    },
+    "retry_block_reason": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Retry Block Reason"
+    },
+    "retry_job_id": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Retry Job Id"
+    },
+    "retry_of_job_id": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Retry Of Job Id"
+    },
+    "root_job_id": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Root Job Id"
+    }
+  },
+  "title": "RetryView",
+  "type": "object"
+}

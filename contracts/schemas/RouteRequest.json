@@ -1,0 +1,48 @@
+{
+  "additionalProperties": false,
+  "properties": {
+    "depends_on": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Depends On",
+      "type": "array"
+    },
+    "intent_summary": {
+      "title": "Intent Summary",
+      "type": "string"
+    },
+    "operation": {
+      "enum": [
+        "read",
+        "propose",
+        "write"
+      ],
+      "title": "Operation",
+      "type": "string"
+    },
+    "step_key": {
+      "title": "Step Key",
+      "type": "string"
+    },
+    "targets": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Targets",
+      "type": "array"
+    },
+    "task_key": {
+      "title": "Task Key",
+      "type": "string"
+    }
+  },
+  "required": [
+    "step_key",
+    "task_key",
+    "operation",
+    "intent_summary"
+  ],
+  "title": "RouteRequest",
+  "type": "object"
+}

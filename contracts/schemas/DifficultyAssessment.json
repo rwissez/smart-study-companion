@@ -1,0 +1,57 @@
+{
+  "additionalProperties": false,
+  "description": "难度评估；没有可靠评估时整体为 null，不默认中等。",
+  "properties": {
+    "evidence_refs": {
+      "items": {
+        "additionalProperties": true,
+        "type": "object"
+      },
+      "title": "Evidence Refs",
+      "type": "array"
+    },
+    "level": {
+      "enum": [
+        "basic",
+        "intermediate",
+        "advanced"
+      ],
+      "title": "Level",
+      "type": "string"
+    },
+    "method": {
+      "enum": [
+        "rule",
+        "model",
+        "teacher"
+      ],
+      "title": "Method",
+      "type": "string"
+    },
+    "reason": {
+      "title": "Reason",
+      "type": "string"
+    },
+    "rule_version": {
+      "title": "Rule Version",
+      "type": "string"
+    },
+    "status": {
+      "enum": [
+        "unverified",
+        "verified"
+      ],
+      "title": "Status",
+      "type": "string"
+    }
+  },
+  "required": [
+    "level",
+    "method",
+    "status",
+    "reason",
+    "rule_version"
+  ],
+  "title": "DifficultyAssessment",
+  "type": "object"
+}

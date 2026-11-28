@@ -9,6 +9,7 @@
 from __future__ import annotations
 
 from collections import defaultdict
+from typing import TYPE_CHECKING
 
 from study_companion.contracts import (
     AnalysisBundle,
@@ -16,6 +17,7 @@ from study_companion.contracts import (
     AnswerEvent,
     Catalog,
     ClassResult,
+    DiagnosticDetail,
     EvidenceRef,
     Finding,
     Metric,
@@ -25,7 +27,12 @@ from study_companion.contracts import (
     StudentResult,
 )
 
+if TYPE_CHECKING:
+    from study_companion.model_service import ModelService
+
 # 表现较好判定线（得分率 >= 该值记 observed_strength）；阈值随 rule_version 可追溯
+MASTERED_THRESHOLD = 0.80
+DEVELOPING_THRESHOLD = 0.50
 STRENGTH_THRESHOLD = 0.8
 
 SCORE_RATIO = "valid_score_ratio"          # 得分率：得分和/满分和
@@ -40,8 +47,14 @@ def analyze_dataset(
     catalog: Catalog,
     context: RunContext,
     config: AnalysisConfig,
+    *,
+    service: "ModelService | None" = None,
 ) -> AnalysisBundle:
-    """对处理后数据集按 学生×节点×指标 与 班级×节点×指标 计算统计结果。"""
+    """对处理后数据集按 学生×节点×指标 与 班级×节点×指标 计算统计结果。
+
+    ``service`` 可选：只有调用方显式传入且模型已配置时才补一次"错因语义解释"。
+    模型失败只记录 limitation，不改动任何指标、分数或已有 Finding。
+    """
     material_indicators: dict[str, set[str]] = {}
     indicator_materials: dict[str, set[str]] = defaultdict(set)
     reviewed_variants: dict[str, set[str]] = defaultdict(set)
@@ -94,6 +107,32 @@ def analyze_dataset(
                     reviewed_variants, context, config, unmapped,
                 )
             )
+
+    from study_companion.analysis.class_insights import enrich_class
+
+    for result in class_results:
+        members = [
+            item
+            for item in student_results
+            if item.class_id == result.class_id and item.node_id == result.node_id
+        ]
+        if not members:
+            continue
+        insight = enrich_class(
+            class_id=result.class_id,
+            node_id=result.node_id,
+            roster_count=result.roster_count,
+            members=members,
+        )
+        result.common_findings = insight["common_findings"]
+        result.performance_distribution = insight["performance_distribution"]
+        result.attention_students = insight["attention_students"]
+        result.limitations = list(result.limitations) + list(insight["limitations"])
+
+    # 语义解释放在确定性统计全部完成之后：只读已完成的事实，失败不回写统计。
+    _apply_model_diagnosis(
+        student_results, data=data, catalog=catalog, context=context, service=service
+    )
 
     return AnalysisBundle(
         run_id=context.run_id,
@@ -229,6 +268,15 @@ def _finding_for_indicator(
         status = "conflicting"
         limitations.append(f"{len(quarantined)}个事件因记录冲突被隔离，判定基于其余有效记录")
 
+    # 掌握程度只在证据充分时给；不足或冲突一律 unknown，不默认"未掌握"。
+    mastery_level = "unknown"
+    if status == "sufficient" and score_ratio.value is not None:
+        if score_ratio.value >= MASTERED_THRESHOLD:
+            mastery_level = "mastered"
+        elif score_ratio.value >= DEVELOPING_THRESHOLD:
+            mastery_level = "developing"
+        else:
+            mastery_level = "emerging"
     return Finding(
         finding_id=finding_id,
         indicator_id=indicator_id,
@@ -237,6 +285,7 @@ def _finding_for_indicator(
         performance=performance,
         evidence_refs=refs,
         limitations=limitations,
+        mastery_level=mastery_level,  # type: ignore[arg-type]
     )
 
 
@@ -338,6 +387,176 @@ def _class_result(
         roster_count=len(roster), observed_student_count=len(observed_students),
         metrics=metrics, findings=findings, limitations=limitations,
     )
+
+
+# ---------------------------------------------------------------------------
+# 可选：错因语义诊断（模型只解释，不改分）
+# ---------------------------------------------------------------------------
+
+_DIAGNOSIS_LABELS = {
+    "foundation_gap": "概念/前置知识缺口",
+    "step_error": "步骤或运算错误",
+    "hint_dependency": "提示依赖",
+    "transfer_difficulty": "迁移困难",
+    "other_supported": "其他有证据支持的错误",
+    "uncertain": "证据不足，未确定错误类型",
+}
+
+
+def _diagnosis_summary(item) -> str:  # noqa: ANN001 - 避免顶层导入模型任务类型
+    label = _DIAGNOSIS_LABELS.get(item.error_type, item.error_type)
+    evidence = "；".join(
+        f"{entry.source}「{entry.quote.strip()}」" for entry in item.evidence[:3]
+    )
+    if item.error_type == "uncertain":
+        summary = f"语义诊断（{label}）：{item.reason}"
+    else:
+        summary = f"语义诊断（{label}，置信度{item.confidence:.2f}）：{item.reason}"
+    if evidence:
+        summary = f"{summary}｜原文证据：{evidence}"
+    return summary
+
+
+def _diagnosis_refs(item, context: RunContext) -> list[EvidenceRef]:  # noqa: ANN001
+    refs: list[EvidenceRef] = []
+    if item.record_id:
+        refs.append(EvidenceRef(kind="record", id=item.record_id, run_id=context.run_id))
+    for metric_id in item.metric_ids:
+        refs.append(EvidenceRef(kind="metric", id=metric_id, run_id=context.run_id))
+    unique: dict[str, EvidenceRef] = {}
+    for ref in refs:
+        unique.setdefault(ref.key(), ref)
+    return list(unique.values())
+
+
+def _append_limited_notes(
+    student_results: list[StudentResult],
+    scopes: set[tuple[str, str]],
+    notes: list[str],
+) -> None:
+    """把模型或数据限制写进对应学生结果，不改指标。"""
+
+    if not notes:
+        return
+    for result in student_results:
+        if (result.student_id, result.node_id) not in scopes:
+            continue
+        for note in notes:
+            if note and note not in result.limitations:
+                result.limitations.append(note)
+
+
+def _apply_model_diagnosis(
+    student_results: list[StudentResult],
+    *,
+    data: PreparedDataset,
+    catalog: Catalog,
+    context: RunContext,
+    service: "ModelService | None",
+) -> None:
+    """在确定性统计完成后补一次语义解释；未配置/无候选时完全跳过。"""
+
+    if service is None or not getattr(service, "configured", True):
+        return
+
+    from study_companion.analysis.diagnosis_model import (
+        collect_unexplained_errors,
+        diagnose_unexplained_errors,
+    )
+
+    try:
+        collection = collect_unexplained_errors(
+            data, catalog, student_results=student_results
+        )
+    except Exception as exc:  # 诊断准备失败不得影响确定性结果
+        note = f"语义诊断准备失败（{type(exc).__name__}），已保留确定性统计与评分"
+        for result in student_results:
+            if note not in result.limitations:
+                result.limitations.append(note)
+        return
+    if collection.candidates:
+        try:
+            diagnosis = diagnose_unexplained_errors(
+                collection.candidates, service=service
+            )
+        except Exception as exc:  # 兜底：模型适配层异常不得中断学情分析
+            from study_companion.analysis.diagnosis_model import DiagnosisResult
+
+            diagnosis = DiagnosisResult(
+                limitations=[
+                    f"语义诊断调用异常（{type(exc).__name__}），已保留确定性统计与评分"
+                ],
+                called=True,
+            )
+    else:
+        diagnosis = None
+
+    affected = {(candidate.student_id, candidate.node_id) for candidate in collection.candidates}
+    _append_limited_notes(
+        student_results,
+        set(collection.omitted_scopes),
+        [note for note in collection.limitations if "上限" in note],
+    )
+    _append_limited_notes(
+        student_results,
+        set(collection.conflicting_scopes),
+        [note for note in collection.limitations if "证据冲突" in note],
+    )
+
+    if diagnosis is None:
+        candidate_students = {candidate.student_id for candidate in collection.candidates}
+        for result in student_results:
+            if result.student_id in candidate_students:
+                continue
+            if not any(finding.performance == "needs_practice" for finding in result.findings):
+                continue
+            note = "该生没有可用的书面解题过程，本次未做模型错因解释"
+            if note not in result.limitations:
+                result.limitations.append(note)
+        return
+
+    if not diagnosis.items:
+        _append_limited_notes(student_results, affected, diagnosis.limitations)
+        return
+
+    for item in diagnosis.items:
+        result = next(
+            (
+                candidate
+                for candidate in student_results
+                if candidate.student_id == item.student_id
+                and candidate.node_id == item.node_id
+            ),
+            None,
+        )
+        if result is None:
+            continue
+        detail_limitations = list(item.limitations) + [
+            "模型语义诊断只解释原因，不改写分数与确定性指标"
+        ]
+        for indicator_id in item.indicator_ids:
+            finding = next(
+                (candidate for candidate in result.findings if candidate.indicator_id == indicator_id),
+                None,
+            )
+            if finding is None:
+                continue
+            finding.diagnostic_details.append(
+                DiagnosticDetail(
+                    summary=_diagnosis_summary(item),
+                    evidence_refs=_diagnosis_refs(item, context),
+                    limitations=detail_limitations,
+                )
+            )
+            if finding.generation_method == "rule":
+                finding.generation_method = "hybrid"
+            if item.error_type == "uncertain":
+                note = "模型对本题给出不确定结论，未提升为确定错误类型"
+                if note not in finding.limitations:
+                    finding.limitations.append(note)
+
+    # 被程序丢弃或模型自述的限制仍要可追溯，挂到受影响学生结果上。
+    _append_limited_notes(student_results, affected, diagnosis.limitations)
 
 
 def _quality_summary(data: PreparedDataset) -> dict[str, int]:

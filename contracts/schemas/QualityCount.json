@@ -1,0 +1,50 @@
+{
+  "additionalProperties": false,
+  "properties": {
+    "denominator": {
+      "minimum": 0,
+      "title": "Denominator",
+      "type": "integer"
+    },
+    "key": {
+      "title": "Key",
+      "type": "string"
+    },
+    "label": {
+      "title": "Label",
+      "type": "string"
+    },
+    "limitations": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Limitations",
+      "type": "array"
+    },
+    "numerator": {
+      "minimum": 0,
+      "title": "Numerator",
+      "type": "integer"
+    },
+    "value": {
+      "anyOf": [
+        {
+          "type": "number"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Value"
+    }
+  },
+  "required": [
+    "key",
+    "label",
+    "numerator",
+    "denominator"
+  ],
+  "title": "QualityCount",
+  "type": "object"
+}

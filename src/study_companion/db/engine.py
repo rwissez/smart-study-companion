@@ -34,7 +34,9 @@ def build_engine(settings: Settings | None = None) -> Engine:
     engine = create_engine(
         settings.database_url,
         future=True,
-        pool_pre_ping=True,
+        # SQLite 本地文件不存在真正的"陈旧连接"问题；关掉 pre_ping 以免它在池化连接上
+        # 打开一个早于其他请求提交的读事务（WAL 快照隔离会因此漏读新行）。
+        pool_pre_ping=url.get_backend_name() != "sqlite",
         connect_args={"check_same_thread": False} if url.get_backend_name() == "sqlite" else {},
     )
     if url.get_backend_name() == "sqlite":

@@ -1,0 +1,247 @@
+{
+  "$defs": {
+    "EvidenceRef": {
+      "additionalProperties": false,
+      "description": "统一证据引用。定位字段由服务端补足并校验，不接受任意对象路径。",
+      "properties": {
+        "analysis_version": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Analysis Version"
+        },
+        "attempt_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Attempt Id"
+        },
+        "catalog_version": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Catalog Version"
+        },
+        "curriculum_type": {
+          "anyOf": [
+            {
+              "enum": [
+                "topic",
+                "indicator",
+                "source"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Curriculum Type"
+        },
+        "dataset_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Dataset Id"
+        },
+        "id": {
+          "title": "Id",
+          "type": "string"
+        },
+        "kind": {
+          "enum": [
+            "record",
+            "metric",
+            "material",
+            "curriculum",
+            "knowledge_point",
+            "relation",
+            "annotation",
+            "rubric_point",
+            "learning_event",
+            "attempt",
+            "grade",
+            "finding",
+            "progress",
+            "recommendation",
+            "source_page",
+            "lesson"
+          ],
+          "title": "Kind",
+          "type": "string"
+        },
+        "knowledge_version": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Knowledge Version"
+        },
+        "material_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Material Id"
+        },
+        "plan_version": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Plan Version"
+        },
+        "run_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Run Id"
+        }
+      },
+      "required": [
+        "kind",
+        "id"
+      ],
+      "title": "EvidenceRef",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "description": "Agent 事实表中的一条可核对事实，只能由工具适配器构造。",
+  "properties": {
+    "evidence_refs": {
+      "items": {
+        "$ref": "#/$defs/EvidenceRef"
+      },
+      "title": "Evidence Refs",
+      "type": "array"
+    },
+    "fact_key": {
+      "title": "Fact Key",
+      "type": "string"
+    },
+    "kind": {
+      "enum": [
+        "metric",
+        "finding",
+        "progress",
+        "knowledge",
+        "plan",
+        "operation",
+        "event",
+        "quality",
+        "teacher_observation"
+      ],
+      "title": "Kind",
+      "type": "string"
+    },
+    "limitations": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Limitations",
+      "type": "array"
+    },
+    "scope": {
+      "additionalProperties": true,
+      "title": "Scope",
+      "type": "object"
+    },
+    "statement": {
+      "title": "Statement",
+      "type": "string"
+    },
+    "subject_ref": {
+      "title": "Subject Ref",
+      "type": "string"
+    },
+    "unit": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Unit"
+    },
+    "value": {
+      "anyOf": [
+        {
+          "type": "number"
+        },
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Value"
+    },
+    "version_refs": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Version Refs",
+      "type": "array"
+    }
+  },
+  "required": [
+    "fact_key",
+    "kind",
+    "subject_ref",
+    "statement"
+  ],
+  "title": "Fact",
+  "type": "object"
+}

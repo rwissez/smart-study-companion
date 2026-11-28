@@ -1,6 +1,17 @@
 {
   "additionalProperties": false,
   "properties": {
+    "group": {
+      "default": "advance",
+      "enum": [
+        "advance",
+        "fall_back",
+        "escalate_teacher",
+        "wrap_up"
+      ],
+      "title": "Group",
+      "type": "string"
+    },
     "next_action": {
       "title": "Next Action",
       "type": "string"

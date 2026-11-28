@@ -1,0 +1,556 @@
+{
+  "$defs": {
+    "FindingView": {
+      "additionalProperties": false,
+      "properties": {
+        "description": {
+          "title": "Description",
+          "type": "string"
+        },
+        "evidence_status": {
+          "title": "Evidence Status",
+          "type": "string"
+        },
+        "finding_id": {
+          "title": "Finding Id",
+          "type": "string"
+        },
+        "indicator_id": {
+          "title": "Indicator Id",
+          "type": "string"
+        },
+        "limitations": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Limitations",
+          "type": "array"
+        },
+        "performance": {
+          "title": "Performance",
+          "type": "string"
+        }
+      },
+      "required": [
+        "finding_id",
+        "indicator_id",
+        "description",
+        "evidence_status",
+        "performance"
+      ],
+      "title": "FindingView",
+      "type": "object"
+    },
+    "MaterialView": {
+      "additionalProperties": false,
+      "description": "材料安全投影：学生视图不含答案、解析、评分细则。",
+      "properties": {
+        "catalog_version": {
+          "title": "Catalog Version",
+          "type": "string"
+        },
+        "content": {
+          "title": "Content",
+          "type": "string"
+        },
+        "difficulty_level": {
+          "anyOf": [
+            {
+              "enum": [
+                "basic",
+                "intermediate",
+                "advanced"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Difficulty Level"
+        },
+        "difficulty_status": {
+          "anyOf": [
+            {
+              "enum": [
+                "unverified",
+                "verified"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Difficulty Status"
+        },
+        "display_order": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Display Order"
+        },
+        "indicator_ids": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Indicator Ids",
+          "type": "array"
+        },
+        "material_id": {
+          "title": "Material Id",
+          "type": "string"
+        },
+        "material_type": {
+          "enum": [
+            "question",
+            "card",
+            "textbook"
+          ],
+          "title": "Material Type",
+          "type": "string"
+        },
+        "max_score": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Max Score"
+        },
+        "options": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Options",
+          "type": "array"
+        },
+        "question_type": {
+          "anyOf": [
+            {
+              "enum": [
+                "choice",
+                "fill_blank",
+                "solution"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Question Type"
+        },
+        "reference_answer": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Reference Answer"
+        },
+        "reference_explanation": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Reference Explanation"
+        },
+        "reviewed_variant_tag": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Reviewed Variant Tag"
+        },
+        "rubric_points": {
+          "items": {
+            "$ref": "#/$defs/RubricPoint"
+          },
+          "title": "Rubric Points",
+          "type": "array"
+        },
+        "source_label": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Source Label"
+        },
+        "source_locator": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/SourceLocator"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "topic_ids": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Topic Ids",
+          "type": "array"
+        }
+      },
+      "required": [
+        "material_id",
+        "material_type",
+        "catalog_version",
+        "content"
+      ],
+      "title": "MaterialView",
+      "type": "object"
+    },
+    "RubricPoint": {
+      "additionalProperties": false,
+      "properties": {
+        "description": {
+          "title": "Description",
+          "type": "string"
+        },
+        "max_score": {
+          "title": "Max Score",
+          "type": "integer"
+        },
+        "point_id": {
+          "title": "Point Id",
+          "type": "string"
+        }
+      },
+      "required": [
+        "point_id",
+        "description",
+        "max_score"
+      ],
+      "title": "RubricPoint",
+      "type": "object"
+    },
+    "RubricScoreView": {
+      "additionalProperties": false,
+      "properties": {
+        "description": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Description"
+        },
+        "max_score": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Max Score"
+        },
+        "point_id": {
+          "title": "Point Id",
+          "type": "string"
+        },
+        "score": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Score"
+        }
+      },
+      "required": [
+        "point_id"
+      ],
+      "title": "RubricScoreView",
+      "type": "object"
+    },
+    "SourceLocator": {
+      "additionalProperties": false,
+      "description": "材料出处。``source_file`` 只能是已登记文件或受控来源标记。",
+      "properties": {
+        "chapter": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Chapter"
+        },
+        "file_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "File Id"
+        },
+        "page_end": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Page End"
+        },
+        "pdf_page": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Pdf Page"
+        },
+        "printed_page": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Printed Page"
+        },
+        "section": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Section"
+        },
+        "source_file": {
+          "title": "Source File",
+          "type": "string"
+        },
+        "source_kind": {
+          "anyOf": [
+            {
+              "enum": [
+                "standard",
+                "textbook",
+                "competition_material",
+                "other_registered"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Source Kind"
+        },
+        "verification_status": {
+          "default": "unverified",
+          "enum": [
+            "verified",
+            "unverified"
+          ],
+          "title": "Verification Status",
+          "type": "string"
+        }
+      },
+      "required": [
+        "source_file"
+      ],
+      "title": "SourceLocator",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "assessment_label": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Assessment Label"
+    },
+    "final_answer": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Final Answer"
+    },
+    "historical_revision": {
+      "anyOf": [
+        {
+          "type": "integer"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Historical Revision"
+    },
+    "max_score": {
+      "anyOf": [
+        {
+          "type": "integer"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Max Score"
+    },
+    "quality_issues": {
+      "items": {
+        "additionalProperties": true,
+        "type": "object"
+      },
+      "title": "Quality Issues",
+      "type": "array"
+    },
+    "question": {
+      "$ref": "#/$defs/MaterialView"
+    },
+    "related_findings": {
+      "items": {
+        "$ref": "#/$defs/FindingView"
+      },
+      "title": "Related Findings",
+      "type": "array"
+    },
+    "rubric_scores": {
+      "items": {
+        "$ref": "#/$defs/RubricScoreView"
+      },
+      "title": "Rubric Scores",
+      "type": "array"
+    },
+    "score": {
+      "anyOf": [
+        {
+          "type": "integer"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Score"
+    },
+    "solution_steps": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Solution Steps"
+    },
+    "status": {
+      "title": "Status",
+      "type": "string"
+    },
+    "student_id": {
+      "title": "Student Id",
+      "type": "string"
+    },
+    "submitted_at": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Submitted At"
+    }
+  },
+  "required": [
+    "question",
+    "student_id",
+    "status"
+  ],
+  "title": "RecordDetail",
+  "type": "object"
+}

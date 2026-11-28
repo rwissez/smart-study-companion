@@ -1,0 +1,36 @@
+{
+  "additionalProperties": false,
+  "properties": {
+    "conversation_id": {
+      "title": "Conversation Id",
+      "type": "string"
+    },
+    "job_id": {
+      "title": "Job Id",
+      "type": "string"
+    },
+    "message_id": {
+      "title": "Message Id",
+      "type": "string"
+    },
+    "status": {
+      "default": "queued",
+      "enum": [
+        "queued",
+        "running",
+        "succeeded",
+        "failed",
+        "cancelled"
+      ],
+      "title": "Status",
+      "type": "string"
+    }
+  },
+  "required": [
+    "job_id",
+    "conversation_id",
+    "message_id"
+  ],
+  "title": "ChatAccepted",
+  "type": "object"
+}

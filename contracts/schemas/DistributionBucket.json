@@ -1,0 +1,58 @@
+{
+  "additionalProperties": false,
+  "properties": {
+    "count": {
+      "minimum": 0,
+      "title": "Count",
+      "type": "integer"
+    },
+    "evidence_status": {
+      "enum": [
+        "sufficient",
+        "insufficient",
+        "conflicting"
+      ],
+      "title": "Evidence Status",
+      "type": "string"
+    },
+    "indicator_id": {
+      "title": "Indicator Id",
+      "type": "string"
+    },
+    "kp_id": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Kp Id"
+    },
+    "performance": {
+      "enum": [
+        "observed_strength",
+        "needs_practice",
+        "undetermined"
+      ],
+      "title": "Performance",
+      "type": "string"
+    },
+    "roster_count": {
+      "minimum": 0,
+      "title": "Roster Count",
+      "type": "integer"
+    }
+  },
+  "required": [
+    "indicator_id",
+    "performance",
+    "evidence_status",
+    "count",
+    "roster_count"
+  ],
+  "title": "DistributionBucket",
+  "type": "object"
+}

@@ -1,0 +1,137 @@
+{
+  "additionalProperties": false,
+  "properties": {
+    "activity_id": {
+      "title": "Activity Id",
+      "type": "string"
+    },
+    "agent_help_count": {
+      "anyOf": [
+        {
+          "type": "integer"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Agent Help Count"
+    },
+    "assistance_status": {
+      "default": "unknown",
+      "enum": [
+        "unknown",
+        "independent",
+        "assisted"
+      ],
+      "title": "Assistance Status",
+      "type": "string"
+    },
+    "attempt_id": {
+      "title": "Attempt Id",
+      "type": "string"
+    },
+    "dataset_id": {
+      "title": "Dataset Id",
+      "type": "string"
+    },
+    "final_answer": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Final Answer"
+    },
+    "hint_max_level": {
+      "anyOf": [
+        {
+          "type": "integer"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Hint Max Level"
+    },
+    "latest_grade_id": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Latest Grade Id"
+    },
+    "material_id": {
+      "title": "Material Id",
+      "type": "string"
+    },
+    "plan_version": {
+      "title": "Plan Version",
+      "type": "string"
+    },
+    "solution_steps": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Solution Steps"
+    },
+    "status": {
+      "default": "in_progress",
+      "enum": [
+        "in_progress",
+        "submitted",
+        "completed"
+      ],
+      "title": "Status",
+      "type": "string"
+    },
+    "student_id": {
+      "title": "Student Id",
+      "type": "string"
+    },
+    "submission_no": {
+      "default": 0,
+      "minimum": 0,
+      "title": "Submission No",
+      "type": "integer"
+    },
+    "submitted_at": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Submitted At"
+    }
+  },
+  "required": [
+    "attempt_id",
+    "student_id",
+    "dataset_id",
+    "plan_version",
+    "activity_id",
+    "material_id"
+  ],
+  "title": "Attempt",
+  "type": "object"
+}

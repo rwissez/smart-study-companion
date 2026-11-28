@@ -1,0 +1,70 @@
+{
+  "additionalProperties": false,
+  "properties": {
+    "denominator": {
+      "default": 0,
+      "minimum": 0,
+      "title": "Denominator",
+      "type": "integer"
+    },
+    "detail_refs": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Detail Refs",
+      "type": "array"
+    },
+    "key": {
+      "title": "Key",
+      "type": "string"
+    },
+    "label": {
+      "title": "Label",
+      "type": "string"
+    },
+    "not_applicable_count": {
+      "default": 0,
+      "title": "Not Applicable Count",
+      "type": "integer"
+    },
+    "numerator": {
+      "default": 0,
+      "minimum": 0,
+      "title": "Numerator",
+      "type": "integer"
+    },
+    "partial_count": {
+      "default": 0,
+      "title": "Partial Count",
+      "type": "integer"
+    },
+    "scope_description": {
+      "default": "",
+      "title": "Scope Description",
+      "type": "string"
+    },
+    "unknown_count": {
+      "default": 0,
+      "title": "Unknown Count",
+      "type": "integer"
+    },
+    "value": {
+      "anyOf": [
+        {
+          "type": "number"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Value"
+    }
+  },
+  "required": [
+    "key",
+    "label"
+  ],
+  "title": "CoverageMetric",
+  "type": "object"
+}

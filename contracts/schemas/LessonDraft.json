@@ -1,0 +1,813 @@
+{
+  "$defs": {
+    "CitationComponent": {
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "title": "Id",
+          "type": "string"
+        },
+        "labels": {
+          "items": {
+            "$ref": "#/$defs/CitationLabel"
+          },
+          "maxItems": 6,
+          "minItems": 1,
+          "title": "Labels",
+          "type": "array"
+        },
+        "type": {
+          "const": "citation",
+          "title": "Type",
+          "type": "string"
+        }
+      },
+      "required": [
+        "type",
+        "id",
+        "labels"
+      ],
+      "title": "CitationComponent",
+      "type": "object"
+    },
+    "CitationLabel": {
+      "additionalProperties": false,
+      "properties": {
+        "evidence_index": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Evidence Index"
+        },
+        "label": {
+          "title": "Label",
+          "type": "string"
+        },
+        "source_index": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Source Index"
+        }
+      },
+      "required": [
+        "label"
+      ],
+      "title": "CitationLabel",
+      "type": "object"
+    },
+    "ContrastComponent": {
+      "additionalProperties": false,
+      "properties": {
+        "before": {
+          "title": "Before",
+          "type": "string"
+        },
+        "correct": {
+          "title": "Correct",
+          "type": "string"
+        },
+        "id": {
+          "title": "Id",
+          "type": "string"
+        },
+        "incorrect": {
+          "title": "Incorrect",
+          "type": "string"
+        },
+        "note": {
+          "title": "Note",
+          "type": "string"
+        },
+        "type": {
+          "const": "contrast",
+          "title": "Type",
+          "type": "string"
+        }
+      },
+      "required": [
+        "type",
+        "id",
+        "before",
+        "incorrect",
+        "correct",
+        "note"
+      ],
+      "title": "ContrastComponent",
+      "type": "object"
+    },
+    "DerivationComponent": {
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "title": "Id",
+          "type": "string"
+        },
+        "mode": {
+          "enum": [
+            "expression",
+            "equation",
+            "inequality"
+          ],
+          "title": "Mode",
+          "type": "string"
+        },
+        "steps": {
+          "items": {
+            "$ref": "#/$defs/DerivationStep"
+          },
+          "maxItems": 6,
+          "minItems": 2,
+          "title": "Steps",
+          "type": "array"
+        },
+        "type": {
+          "const": "derivation",
+          "title": "Type",
+          "type": "string"
+        }
+      },
+      "required": [
+        "type",
+        "id",
+        "mode",
+        "steps"
+      ],
+      "title": "DerivationComponent",
+      "type": "object"
+    },
+    "DerivationStep": {
+      "additionalProperties": false,
+      "properties": {
+        "expr": {
+          "title": "Expr",
+          "type": "string"
+        },
+        "note": {
+          "title": "Note",
+          "type": "string"
+        }
+      },
+      "required": [
+        "expr",
+        "note"
+      ],
+      "title": "DerivationStep",
+      "type": "object"
+    },
+    "EvidenceRef": {
+      "additionalProperties": false,
+      "description": "统一证据引用。定位字段由服务端补足并校验，不接受任意对象路径。",
+      "properties": {
+        "analysis_version": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Analysis Version"
+        },
+        "attempt_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Attempt Id"
+        },
+        "catalog_version": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Catalog Version"
+        },
+        "curriculum_type": {
+          "anyOf": [
+            {
+              "enum": [
+                "topic",
+                "indicator",
+                "source"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Curriculum Type"
+        },
+        "dataset_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Dataset Id"
+        },
+        "id": {
+          "title": "Id",
+          "type": "string"
+        },
+        "kind": {
+          "enum": [
+            "record",
+            "metric",
+            "material",
+            "curriculum",
+            "knowledge_point",
+            "relation",
+            "annotation",
+            "rubric_point",
+            "learning_event",
+            "attempt",
+            "grade",
+            "finding",
+            "progress",
+            "recommendation",
+            "source_page",
+            "lesson"
+          ],
+          "title": "Kind",
+          "type": "string"
+        },
+        "knowledge_version": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Knowledge Version"
+        },
+        "material_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Material Id"
+        },
+        "plan_version": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Plan Version"
+        },
+        "run_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Run Id"
+        }
+      },
+      "required": [
+        "kind",
+        "id"
+      ],
+      "title": "EvidenceRef",
+      "type": "object"
+    },
+    "FormulaComponent": {
+      "additionalProperties": false,
+      "properties": {
+        "caption": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Caption"
+        },
+        "expr": {
+          "title": "Expr",
+          "type": "string"
+        },
+        "id": {
+          "title": "Id",
+          "type": "string"
+        },
+        "type": {
+          "const": "formula",
+          "title": "Type",
+          "type": "string"
+        }
+      },
+      "required": [
+        "type",
+        "id",
+        "expr"
+      ],
+      "title": "FormulaComponent",
+      "type": "object"
+    },
+    "IntervalValue": {
+      "additionalProperties": false,
+      "properties": {
+        "hi": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Hi"
+        },
+        "hi_closed": {
+          "default": false,
+          "title": "Hi Closed",
+          "type": "boolean"
+        },
+        "lo": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Lo"
+        },
+        "lo_closed": {
+          "default": false,
+          "title": "Lo Closed",
+          "type": "boolean"
+        }
+      },
+      "title": "IntervalValue",
+      "type": "object"
+    },
+    "NumberLineComponent": {
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "title": "Id",
+          "type": "string"
+        },
+        "max": {
+          "maximum": 100,
+          "minimum": -100,
+          "title": "Max",
+          "type": "integer"
+        },
+        "min": {
+          "maximum": 100,
+          "minimum": -100,
+          "title": "Min",
+          "type": "integer"
+        },
+        "operation": {
+          "default": "none",
+          "enum": [
+            "none",
+            "intersection"
+          ],
+          "title": "Operation",
+          "type": "string"
+        },
+        "result_index": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Result Index"
+        },
+        "sets": {
+          "items": {
+            "$ref": "#/$defs/NumberLineSet"
+          },
+          "maxItems": 3,
+          "minItems": 1,
+          "title": "Sets",
+          "type": "array"
+        },
+        "tick": {
+          "default": 1,
+          "maximum": 10,
+          "minimum": 1,
+          "title": "Tick",
+          "type": "integer"
+        },
+        "type": {
+          "const": "number_line",
+          "title": "Type",
+          "type": "string"
+        }
+      },
+      "required": [
+        "type",
+        "id",
+        "min",
+        "max",
+        "sets"
+      ],
+      "title": "NumberLineComponent",
+      "type": "object"
+    },
+    "NumberLineSet": {
+      "additionalProperties": false,
+      "properties": {
+        "intervals": {
+          "items": {
+            "$ref": "#/$defs/IntervalValue"
+          },
+          "maxItems": 4,
+          "title": "Intervals",
+          "type": "array"
+        },
+        "label": {
+          "title": "Label",
+          "type": "string"
+        }
+      },
+      "required": [
+        "label"
+      ],
+      "title": "NumberLineSet",
+      "type": "object"
+    },
+    "OfficialCardRef": {
+      "additionalProperties": false,
+      "properties": {
+        "catalog_version": {
+          "title": "Catalog Version",
+          "type": "string"
+        },
+        "kind": {
+          "const": "official_card",
+          "title": "Kind",
+          "type": "string"
+        },
+        "material_id": {
+          "title": "Material Id",
+          "type": "string"
+        }
+      },
+      "required": [
+        "kind",
+        "material_id",
+        "catalog_version"
+      ],
+      "title": "OfficialCardRef",
+      "type": "object"
+    },
+    "SourceLocator": {
+      "additionalProperties": false,
+      "description": "材料出处。``source_file`` 只能是已登记文件或受控来源标记。",
+      "properties": {
+        "chapter": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Chapter"
+        },
+        "file_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "File Id"
+        },
+        "page_end": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Page End"
+        },
+        "pdf_page": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Pdf Page"
+        },
+        "printed_page": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Printed Page"
+        },
+        "section": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Section"
+        },
+        "source_file": {
+          "title": "Source File",
+          "type": "string"
+        },
+        "source_kind": {
+          "anyOf": [
+            {
+              "enum": [
+                "standard",
+                "textbook",
+                "competition_material",
+                "other_registered"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Source Kind"
+        },
+        "verification_status": {
+          "default": "unverified",
+          "enum": [
+            "verified",
+            "unverified"
+          ],
+          "title": "Verification Status",
+          "type": "string"
+        }
+      },
+      "required": [
+        "source_file"
+      ],
+      "title": "SourceLocator",
+      "type": "object"
+    },
+    "TextComponent": {
+      "additionalProperties": false,
+      "properties": {
+        "heading": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Heading"
+        },
+        "id": {
+          "title": "Id",
+          "type": "string"
+        },
+        "paragraphs": {
+          "items": {
+            "type": "string"
+          },
+          "maxItems": 4,
+          "minItems": 1,
+          "title": "Paragraphs",
+          "type": "array"
+        },
+        "type": {
+          "const": "text",
+          "title": "Type",
+          "type": "string"
+        }
+      },
+      "required": [
+        "type",
+        "id",
+        "paragraphs"
+      ],
+      "title": "TextComponent",
+      "type": "object"
+    },
+    "VerifiedTextbookRef": {
+      "additionalProperties": false,
+      "properties": {
+        "annotation_id": {
+          "title": "Annotation Id",
+          "type": "string"
+        },
+        "kind": {
+          "const": "verified_textbook",
+          "title": "Kind",
+          "type": "string"
+        },
+        "knowledge_version": {
+          "title": "Knowledge Version",
+          "type": "string"
+        },
+        "locator": {
+          "$ref": "#/$defs/SourceLocator"
+        }
+      },
+      "required": [
+        "kind",
+        "annotation_id",
+        "knowledge_version",
+        "locator"
+      ],
+      "title": "VerifiedTextbookRef",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "components": {
+      "items": {
+        "discriminator": {
+          "mapping": {
+            "citation": "#/$defs/CitationComponent",
+            "contrast": "#/$defs/ContrastComponent",
+            "derivation": "#/$defs/DerivationComponent",
+            "formula": "#/$defs/FormulaComponent",
+            "number_line": "#/$defs/NumberLineComponent",
+            "text": "#/$defs/TextComponent"
+          },
+          "propertyName": "type"
+        },
+        "oneOf": [
+          {
+            "$ref": "#/$defs/TextComponent"
+          },
+          {
+            "$ref": "#/$defs/FormulaComponent"
+          },
+          {
+            "$ref": "#/$defs/DerivationComponent"
+          },
+          {
+            "$ref": "#/$defs/ContrastComponent"
+          },
+          {
+            "$ref": "#/$defs/NumberLineComponent"
+          },
+          {
+            "$ref": "#/$defs/CitationComponent"
+          }
+        ]
+      },
+      "maxItems": 12,
+      "minItems": 1,
+      "title": "Components",
+      "type": "array"
+    },
+    "estimated_minutes": {
+      "default": 3,
+      "maximum": 6,
+      "minimum": 3,
+      "title": "Estimated Minutes",
+      "type": "integer"
+    },
+    "evidence_refs": {
+      "items": {
+        "$ref": "#/$defs/EvidenceRef"
+      },
+      "maxItems": 12,
+      "title": "Evidence Refs",
+      "type": "array"
+    },
+    "fallback_text": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Fallback Text"
+    },
+    "goal": {
+      "title": "Goal",
+      "type": "string"
+    },
+    "kp_ids": {
+      "items": {
+        "type": "string"
+      },
+      "maxItems": 4,
+      "minItems": 1,
+      "title": "Kp Ids",
+      "type": "array"
+    },
+    "source_refs": {
+      "items": {
+        "anyOf": [
+          {
+            "$ref": "#/$defs/OfficialCardRef"
+          },
+          {
+            "$ref": "#/$defs/VerifiedTextbookRef"
+          }
+        ]
+      },
+      "maxItems": 8,
+      "title": "Source Refs",
+      "type": "array"
+    },
+    "title": {
+      "title": "Title",
+      "type": "string"
+    }
+  },
+  "required": [
+    "title",
+    "goal",
+    "kp_ids",
+    "components"
+  ],
+  "title": "LessonDraft",
+  "type": "object"
+}

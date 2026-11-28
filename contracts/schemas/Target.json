@@ -1,0 +1,23 @@
+{
+  "additionalProperties": false,
+  "properties": {
+    "id": {
+      "title": "Id",
+      "type": "string"
+    },
+    "type": {
+      "enum": [
+        "student",
+        "class"
+      ],
+      "title": "Type",
+      "type": "string"
+    }
+  },
+  "required": [
+    "type",
+    "id"
+  ],
+  "title": "Target",
+  "type": "object"
+}

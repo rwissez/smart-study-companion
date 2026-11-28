@@ -1,0 +1,32 @@
+{
+  "additionalProperties": false,
+  "description": "包络警告项。模型类名用 ``Warning_`` 以免遮蔽内置 ``Warning``。",
+  "properties": {
+    "code": {
+      "title": "Code",
+      "type": "string"
+    },
+    "issue_id": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Issue Id"
+    },
+    "message": {
+      "title": "Message",
+      "type": "string"
+    }
+  },
+  "required": [
+    "code",
+    "message"
+  ],
+  "title": "Warning_",
+  "type": "object"
+}

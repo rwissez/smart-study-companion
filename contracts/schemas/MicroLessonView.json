@@ -1,0 +1,503 @@
+{
+  "$defs": {
+    "CitationComponent": {
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "title": "Id",
+          "type": "string"
+        },
+        "labels": {
+          "items": {
+            "$ref": "#/$defs/CitationLabel"
+          },
+          "maxItems": 6,
+          "minItems": 1,
+          "title": "Labels",
+          "type": "array"
+        },
+        "type": {
+          "const": "citation",
+          "title": "Type",
+          "type": "string"
+        }
+      },
+      "required": [
+        "type",
+        "id",
+        "labels"
+      ],
+      "title": "CitationComponent",
+      "type": "object"
+    },
+    "CitationLabel": {
+      "additionalProperties": false,
+      "properties": {
+        "evidence_index": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Evidence Index"
+        },
+        "label": {
+          "title": "Label",
+          "type": "string"
+        },
+        "source_index": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Source Index"
+        }
+      },
+      "required": [
+        "label"
+      ],
+      "title": "CitationLabel",
+      "type": "object"
+    },
+    "ContrastComponent": {
+      "additionalProperties": false,
+      "properties": {
+        "before": {
+          "title": "Before",
+          "type": "string"
+        },
+        "correct": {
+          "title": "Correct",
+          "type": "string"
+        },
+        "id": {
+          "title": "Id",
+          "type": "string"
+        },
+        "incorrect": {
+          "title": "Incorrect",
+          "type": "string"
+        },
+        "note": {
+          "title": "Note",
+          "type": "string"
+        },
+        "type": {
+          "const": "contrast",
+          "title": "Type",
+          "type": "string"
+        }
+      },
+      "required": [
+        "type",
+        "id",
+        "before",
+        "incorrect",
+        "correct",
+        "note"
+      ],
+      "title": "ContrastComponent",
+      "type": "object"
+    },
+    "DerivationComponent": {
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "title": "Id",
+          "type": "string"
+        },
+        "mode": {
+          "enum": [
+            "expression",
+            "equation",
+            "inequality"
+          ],
+          "title": "Mode",
+          "type": "string"
+        },
+        "steps": {
+          "items": {
+            "$ref": "#/$defs/DerivationStep"
+          },
+          "maxItems": 6,
+          "minItems": 2,
+          "title": "Steps",
+          "type": "array"
+        },
+        "type": {
+          "const": "derivation",
+          "title": "Type",
+          "type": "string"
+        }
+      },
+      "required": [
+        "type",
+        "id",
+        "mode",
+        "steps"
+      ],
+      "title": "DerivationComponent",
+      "type": "object"
+    },
+    "DerivationStep": {
+      "additionalProperties": false,
+      "properties": {
+        "expr": {
+          "title": "Expr",
+          "type": "string"
+        },
+        "note": {
+          "title": "Note",
+          "type": "string"
+        }
+      },
+      "required": [
+        "expr",
+        "note"
+      ],
+      "title": "DerivationStep",
+      "type": "object"
+    },
+    "FormulaComponent": {
+      "additionalProperties": false,
+      "properties": {
+        "caption": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Caption"
+        },
+        "expr": {
+          "title": "Expr",
+          "type": "string"
+        },
+        "id": {
+          "title": "Id",
+          "type": "string"
+        },
+        "type": {
+          "const": "formula",
+          "title": "Type",
+          "type": "string"
+        }
+      },
+      "required": [
+        "type",
+        "id",
+        "expr"
+      ],
+      "title": "FormulaComponent",
+      "type": "object"
+    },
+    "IntervalValue": {
+      "additionalProperties": false,
+      "properties": {
+        "hi": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Hi"
+        },
+        "hi_closed": {
+          "default": false,
+          "title": "Hi Closed",
+          "type": "boolean"
+        },
+        "lo": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Lo"
+        },
+        "lo_closed": {
+          "default": false,
+          "title": "Lo Closed",
+          "type": "boolean"
+        }
+      },
+      "title": "IntervalValue",
+      "type": "object"
+    },
+    "NumberLineComponent": {
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "title": "Id",
+          "type": "string"
+        },
+        "max": {
+          "maximum": 100,
+          "minimum": -100,
+          "title": "Max",
+          "type": "integer"
+        },
+        "min": {
+          "maximum": 100,
+          "minimum": -100,
+          "title": "Min",
+          "type": "integer"
+        },
+        "operation": {
+          "default": "none",
+          "enum": [
+            "none",
+            "intersection"
+          ],
+          "title": "Operation",
+          "type": "string"
+        },
+        "result_index": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Result Index"
+        },
+        "sets": {
+          "items": {
+            "$ref": "#/$defs/NumberLineSet"
+          },
+          "maxItems": 3,
+          "minItems": 1,
+          "title": "Sets",
+          "type": "array"
+        },
+        "tick": {
+          "default": 1,
+          "maximum": 10,
+          "minimum": 1,
+          "title": "Tick",
+          "type": "integer"
+        },
+        "type": {
+          "const": "number_line",
+          "title": "Type",
+          "type": "string"
+        }
+      },
+      "required": [
+        "type",
+        "id",
+        "min",
+        "max",
+        "sets"
+      ],
+      "title": "NumberLineComponent",
+      "type": "object"
+    },
+    "NumberLineSet": {
+      "additionalProperties": false,
+      "properties": {
+        "intervals": {
+          "items": {
+            "$ref": "#/$defs/IntervalValue"
+          },
+          "maxItems": 4,
+          "title": "Intervals",
+          "type": "array"
+        },
+        "label": {
+          "title": "Label",
+          "type": "string"
+        }
+      },
+      "required": [
+        "label"
+      ],
+      "title": "NumberLineSet",
+      "type": "object"
+    },
+    "TextComponent": {
+      "additionalProperties": false,
+      "properties": {
+        "heading": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Heading"
+        },
+        "id": {
+          "title": "Id",
+          "type": "string"
+        },
+        "paragraphs": {
+          "items": {
+            "type": "string"
+          },
+          "maxItems": 4,
+          "minItems": 1,
+          "title": "Paragraphs",
+          "type": "array"
+        },
+        "type": {
+          "const": "text",
+          "title": "Type",
+          "type": "string"
+        }
+      },
+      "required": [
+        "type",
+        "id",
+        "paragraphs"
+      ],
+      "title": "TextComponent",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "activity_id": {
+      "title": "Activity Id",
+      "type": "string"
+    },
+    "components": {
+      "items": {
+        "discriminator": {
+          "mapping": {
+            "citation": "#/$defs/CitationComponent",
+            "contrast": "#/$defs/ContrastComponent",
+            "derivation": "#/$defs/DerivationComponent",
+            "formula": "#/$defs/FormulaComponent",
+            "number_line": "#/$defs/NumberLineComponent",
+            "text": "#/$defs/TextComponent"
+          },
+          "propertyName": "type"
+        },
+        "oneOf": [
+          {
+            "$ref": "#/$defs/TextComponent"
+          },
+          {
+            "$ref": "#/$defs/FormulaComponent"
+          },
+          {
+            "$ref": "#/$defs/DerivationComponent"
+          },
+          {
+            "$ref": "#/$defs/ContrastComponent"
+          },
+          {
+            "$ref": "#/$defs/NumberLineComponent"
+          },
+          {
+            "$ref": "#/$defs/CitationComponent"
+          }
+        ]
+      },
+      "title": "Components",
+      "type": "array"
+    },
+    "content_id": {
+      "title": "Content Id",
+      "type": "string"
+    },
+    "content_version": {
+      "title": "Content Version",
+      "type": "string"
+    },
+    "fallback_text": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Fallback Text"
+    },
+    "goal": {
+      "default": "",
+      "title": "Goal",
+      "type": "string"
+    },
+    "plan_version": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Plan Version"
+    },
+    "review_status": {
+      "default": "validated",
+      "enum": [
+        "draft",
+        "validated",
+        "needs_review",
+        "rejected",
+        "human_confirmed"
+      ],
+      "title": "Review Status",
+      "type": "string"
+    },
+    "safe_sources": {
+      "items": {
+        "additionalProperties": true,
+        "type": "object"
+      },
+      "title": "Safe Sources",
+      "type": "array"
+    },
+    "schema_version": {
+      "title": "Schema Version",
+      "type": "string"
+    },
+    "title": {
+      "title": "Title",
+      "type": "string"
+    }
+  },
+  "required": [
+    "activity_id",
+    "content_id",
+    "content_version",
+    "schema_version",
+    "title"
+  ],
+  "title": "MicroLessonView",
+  "type": "object"
+}

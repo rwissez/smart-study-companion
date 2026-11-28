@@ -1,0 +1,50 @@
+{
+  "additionalProperties": false,
+  "properties": {
+    "description": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Description"
+    },
+    "max_score": {
+      "anyOf": [
+        {
+          "type": "integer"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Max Score"
+    },
+    "point_id": {
+      "title": "Point Id",
+      "type": "string"
+    },
+    "score": {
+      "anyOf": [
+        {
+          "type": "integer"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Score"
+    }
+  },
+  "required": [
+    "point_id"
+  ],
+  "title": "RubricScoreView",
+  "type": "object"
+}

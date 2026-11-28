@@ -1,0 +1,102 @@
+{
+  "additionalProperties": false,
+  "properties": {
+    "analysis_versions": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Analysis Versions",
+      "type": "array"
+    },
+    "catalog_version": {
+      "title": "Catalog Version",
+      "type": "string"
+    },
+    "created_at": {
+      "default": "",
+      "title": "Created At",
+      "type": "string"
+    },
+    "dataset_id": {
+      "title": "Dataset Id",
+      "type": "string"
+    },
+    "error": {
+      "anyOf": [
+        {
+          "additionalProperties": true,
+          "type": "object"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Error"
+    },
+    "job_id": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Job Id"
+    },
+    "knowledge_version": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Knowledge Version"
+    },
+    "node_ids": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Node Ids",
+      "type": "array"
+    },
+    "rule_version": {
+      "default": "",
+      "title": "Rule Version",
+      "type": "string"
+    },
+    "run_id": {
+      "title": "Run Id",
+      "type": "string"
+    },
+    "stage": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Stage"
+    },
+    "status": {
+      "default": "succeeded",
+      "title": "Status",
+      "type": "string"
+    }
+  },
+  "required": [
+    "run_id",
+    "dataset_id",
+    "catalog_version"
+  ],
+  "title": "RunSummary",
+  "type": "object"
+}

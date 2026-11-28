@@ -1,0 +1,27 @@
+import assert from "node:assert/strict";
+import path from "node:path";
+import { chromium } from "playwright-core";
+
+const BASE = "http://127.0.0.1:5174";
+const OUT = path.resolve("..", "docs", "evidence", "ui");
+const browser = await chromium.launch({ executablePath: process.env.BROWSER_EXECUTABLE, headless: true });
+const page = await browser.newPage({ viewport: { width: 1440, height: 900 } });
+const errors = [];
+page.on("console", (message) => { if (message.type() === "error") errors.push(message.text()); });
+page.on("pageerror", (error) => errors.push(String(error)));
+await page.goto(`${BASE}/identity`, { waitUntil: "networkidle" });
+await page.getByRole("heading", { name: "选择身份" }).waitFor();
+assert.ok(await page.getByText("演示数据").first().isVisible(), "演示模式必须显示演示数据角标");
+await page.screenshot({ path: path.join(OUT, "50-demo-mode-identity-1440.png"), fullPage: true });
+await page.getByRole("button", { name: /^学生/ }).first().click();
+await page.getByRole("button", { name: /S01/ }).first().click();
+await page.getByRole("button", { name: /以学生 S01 身份进入/ }).click();
+await page.waitForURL(/\/student\/profile/);
+await page.getByRole("heading", { name: "个人画像" }).waitFor();
+await page.getByText("学习表现", { exact: true }).waitFor();
+assert.ok(await page.getByText("演示数据").first().isVisible(), "学生页也必须显示演示数据角标");
+await page.screenshot({ path: path.join(OUT, "51-demo-mode-student-1440.png"), fullPage: true });
+await page.getByRole("link", { name: "学习计划", exact: true }).click();
+await page.getByText("任务组 1").first().waitFor();
+console.log("demo smoke ok", { errors: errors.length });
+await browser.close();

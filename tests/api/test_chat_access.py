@@ -51,3 +51,19 @@ def test_chat_requires_a_session_token(client: TestClient) -> None:
 
     assert response.status_code == 403
     assert response.json()["error"]["code"] == "FORBIDDEN"
+
+
+def test_student_cannot_read_another_student_via_fallback(
+    client: TestClient, seeded: dict
+) -> None:
+    token = _token(
+        client, role="student", dataset_id=seeded["dataset_id"], student_id="S01"
+    )
+    response = client.post(
+        "/api/v1/chat",
+        json={**BODY, "student_id": "S02", "node_id": "N01"},
+        headers=_headers(token),
+    )
+
+    assert response.status_code == 403
+    assert response.json()["error"]["code"] == "FORBIDDEN"

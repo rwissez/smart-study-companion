@@ -1,0 +1,49 @@
+{
+  "additionalProperties": false,
+  "properties": {
+    "dataset_id": {
+      "title": "Dataset Id",
+      "type": "string"
+    },
+    "file_id": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "File Id"
+    },
+    "record_id": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Record Id"
+    },
+    "source_row_number": {
+      "minimum": 1,
+      "title": "Source Row Number",
+      "type": "integer"
+    },
+    "table_name": {
+      "title": "Table Name",
+      "type": "string"
+    }
+  },
+  "required": [
+    "dataset_id",
+    "table_name",
+    "source_row_number"
+  ],
+  "title": "SourceRowRef",
+  "type": "object"
+}

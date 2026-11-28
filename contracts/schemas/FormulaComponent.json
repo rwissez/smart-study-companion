@@ -1,0 +1,37 @@
+{
+  "additionalProperties": false,
+  "properties": {
+    "caption": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Caption"
+    },
+    "expr": {
+      "title": "Expr",
+      "type": "string"
+    },
+    "id": {
+      "title": "Id",
+      "type": "string"
+    },
+    "type": {
+      "const": "formula",
+      "title": "Type",
+      "type": "string"
+    }
+  },
+  "required": [
+    "type",
+    "id",
+    "expr"
+  ],
+  "title": "FormulaComponent",
+  "type": "object"
+}

@@ -1,0 +1,289 @@
+{
+  "$defs": {
+    "EvidenceRef": {
+      "additionalProperties": false,
+      "description": "统一证据引用。定位字段由服务端补足并校验，不接受任意对象路径。",
+      "properties": {
+        "analysis_version": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Analysis Version"
+        },
+        "attempt_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Attempt Id"
+        },
+        "catalog_version": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Catalog Version"
+        },
+        "curriculum_type": {
+          "anyOf": [
+            {
+              "enum": [
+                "topic",
+                "indicator",
+                "source"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Curriculum Type"
+        },
+        "dataset_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Dataset Id"
+        },
+        "id": {
+          "title": "Id",
+          "type": "string"
+        },
+        "kind": {
+          "enum": [
+            "record",
+            "metric",
+            "material",
+            "curriculum",
+            "knowledge_point",
+            "relation",
+            "annotation",
+            "rubric_point",
+            "learning_event",
+            "attempt",
+            "grade",
+            "finding",
+            "progress",
+            "recommendation",
+            "source_page",
+            "lesson"
+          ],
+          "title": "Kind",
+          "type": "string"
+        },
+        "knowledge_version": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Knowledge Version"
+        },
+        "material_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Material Id"
+        },
+        "plan_version": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Plan Version"
+        },
+        "run_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Run Id"
+        }
+      },
+      "required": [
+        "kind",
+        "id"
+      ],
+      "title": "EvidenceRef",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "activity_ids": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Activity Ids",
+      "type": "array"
+    },
+    "auxiliary_strategies": {
+      "items": {
+        "enum": [
+          "collect_evidence",
+          "prerequisite_support",
+          "error_correction",
+          "consolidation",
+          "transfer",
+          "teacher_intervention"
+        ],
+        "type": "string"
+      },
+      "title": "Auxiliary Strategies",
+      "type": "array"
+    },
+    "dependencies": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Dependencies",
+      "type": "array"
+    },
+    "estimated_minutes": {
+      "default": 0,
+      "minimum": 0,
+      "title": "Estimated Minutes",
+      "type": "integer"
+    },
+    "evidence_refs": {
+      "items": {
+        "$ref": "#/$defs/EvidenceRef"
+      },
+      "title": "Evidence Refs",
+      "type": "array"
+    },
+    "expected_outcome": {
+      "default": "",
+      "title": "Expected Outcome",
+      "type": "string"
+    },
+    "goal": {
+      "title": "Goal",
+      "type": "string"
+    },
+    "goal_target_key": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Goal Target Key"
+    },
+    "group_id": {
+      "title": "Group Id",
+      "type": "string"
+    },
+    "order": {
+      "default": 1,
+      "minimum": 1,
+      "title": "Order",
+      "type": "integer"
+    },
+    "primary_strategy": {
+      "anyOf": [
+        {
+          "enum": [
+            "collect_evidence",
+            "prerequisite_support",
+            "error_correction",
+            "consolidation",
+            "transfer",
+            "teacher_intervention"
+          ],
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Primary Strategy"
+    },
+    "required_activity_ids": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Required Activity Ids",
+      "type": "array"
+    },
+    "strategy_types": {
+      "items": {
+        "enum": [
+          "collect_evidence",
+          "prerequisite_support",
+          "error_correction",
+          "consolidation",
+          "transfer",
+          "teacher_intervention"
+        ],
+        "type": "string"
+      },
+      "title": "Strategy Types",
+      "type": "array"
+    },
+    "student_intro": {
+      "default": "",
+      "title": "Student Intro",
+      "type": "string"
+    },
+    "teacher_reason": {
+      "default": "",
+      "title": "Teacher Reason",
+      "type": "string"
+    }
+  },
+  "required": [
+    "group_id",
+    "goal"
+  ],
+  "title": "TaskGroup",
+  "type": "object"
+}

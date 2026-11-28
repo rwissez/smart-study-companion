@@ -1,0 +1,137 @@
+{
+  "$defs": {
+    "IntervalValue": {
+      "additionalProperties": false,
+      "properties": {
+        "hi": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Hi"
+        },
+        "hi_closed": {
+          "default": false,
+          "title": "Hi Closed",
+          "type": "boolean"
+        },
+        "lo": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Lo"
+        },
+        "lo_closed": {
+          "default": false,
+          "title": "Lo Closed",
+          "type": "boolean"
+        }
+      },
+      "title": "IntervalValue",
+      "type": "object"
+    },
+    "NumberLineSet": {
+      "additionalProperties": false,
+      "properties": {
+        "intervals": {
+          "items": {
+            "$ref": "#/$defs/IntervalValue"
+          },
+          "maxItems": 4,
+          "title": "Intervals",
+          "type": "array"
+        },
+        "label": {
+          "title": "Label",
+          "type": "string"
+        }
+      },
+      "required": [
+        "label"
+      ],
+      "title": "NumberLineSet",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "id": {
+      "title": "Id",
+      "type": "string"
+    },
+    "max": {
+      "maximum": 100,
+      "minimum": -100,
+      "title": "Max",
+      "type": "integer"
+    },
+    "min": {
+      "maximum": 100,
+      "minimum": -100,
+      "title": "Min",
+      "type": "integer"
+    },
+    "operation": {
+      "default": "none",
+      "enum": [
+        "none",
+        "intersection"
+      ],
+      "title": "Operation",
+      "type": "string"
+    },
+    "result_index": {
+      "anyOf": [
+        {
+          "type": "integer"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Result Index"
+    },
+    "sets": {
+      "items": {
+        "$ref": "#/$defs/NumberLineSet"
+      },
+      "maxItems": 3,
+      "minItems": 1,
+      "title": "Sets",
+      "type": "array"
+    },
+    "tick": {
+      "default": 1,
+      "maximum": 10,
+      "minimum": 1,
+      "title": "Tick",
+      "type": "integer"
+    },
+    "type": {
+      "const": "number_line",
+      "title": "Type",
+      "type": "string"
+    }
+  },
+  "required": [
+    "type",
+    "id",
+    "min",
+    "max",
+    "sets"
+  ],
+  "title": "NumberLineComponent",
+  "type": "object"
+}

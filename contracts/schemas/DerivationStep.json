@@ -1,0 +1,19 @@
+{
+  "additionalProperties": false,
+  "properties": {
+    "expr": {
+      "title": "Expr",
+      "type": "string"
+    },
+    "note": {
+      "title": "Note",
+      "type": "string"
+    }
+  },
+  "required": [
+    "expr",
+    "note"
+  ],
+  "title": "DerivationStep",
+  "type": "object"
+}

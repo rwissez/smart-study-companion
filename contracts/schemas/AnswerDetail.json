@@ -1,0 +1,354 @@
+{
+  "$defs": {
+    "EvidenceRef": {
+      "additionalProperties": false,
+      "description": "统一证据引用。定位字段由服务端补足并校验，不接受任意对象路径。",
+      "properties": {
+        "analysis_version": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Analysis Version"
+        },
+        "attempt_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Attempt Id"
+        },
+        "catalog_version": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Catalog Version"
+        },
+        "curriculum_type": {
+          "anyOf": [
+            {
+              "enum": [
+                "topic",
+                "indicator",
+                "source"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Curriculum Type"
+        },
+        "dataset_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Dataset Id"
+        },
+        "id": {
+          "title": "Id",
+          "type": "string"
+        },
+        "kind": {
+          "enum": [
+            "record",
+            "metric",
+            "material",
+            "curriculum",
+            "knowledge_point",
+            "relation",
+            "annotation",
+            "rubric_point",
+            "learning_event",
+            "attempt",
+            "grade",
+            "finding",
+            "progress",
+            "recommendation",
+            "source_page",
+            "lesson"
+          ],
+          "title": "Kind",
+          "type": "string"
+        },
+        "knowledge_version": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Knowledge Version"
+        },
+        "material_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Material Id"
+        },
+        "plan_version": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Plan Version"
+        },
+        "run_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Run Id"
+        }
+      },
+      "required": [
+        "kind",
+        "id"
+      ],
+      "title": "EvidenceRef",
+      "type": "object"
+    },
+    "RubricScore": {
+      "additionalProperties": false,
+      "properties": {
+        "evidence_refs": {
+          "items": {
+            "$ref": "#/$defs/EvidenceRef"
+          },
+          "title": "Evidence Refs",
+          "type": "array"
+        },
+        "max_score": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Max Score"
+        },
+        "point_id": {
+          "title": "Point Id",
+          "type": "string"
+        },
+        "score": {
+          "title": "Score",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "point_id",
+        "score"
+      ],
+      "title": "RubricScore",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "description": "便于跨模块读取的作答详情；不取代 :class:`SourceRecord`。",
+  "properties": {
+    "answer_math": {
+      "anyOf": [
+        {
+          "additionalProperties": true,
+          "type": "object"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Answer Math"
+    },
+    "dataset_id": {
+      "title": "Dataset Id",
+      "type": "string"
+    },
+    "disposition": {
+      "default": "include",
+      "enum": [
+        "include",
+        "exclude_score",
+        "quarantine_event"
+      ],
+      "title": "Disposition",
+      "type": "string"
+    },
+    "event_id": {
+      "title": "Event Id",
+      "type": "string"
+    },
+    "final_answer": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Final Answer"
+    },
+    "material_id": {
+      "title": "Material Id",
+      "type": "string"
+    },
+    "max_score": {
+      "anyOf": [
+        {
+          "type": "integer"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Max Score"
+    },
+    "node_id": {
+      "title": "Node Id",
+      "type": "string"
+    },
+    "record_id": {
+      "title": "Record Id",
+      "type": "string"
+    },
+    "revision": {
+      "minimum": 1,
+      "title": "Revision",
+      "type": "integer"
+    },
+    "rubric_scores": {
+      "items": {
+        "$ref": "#/$defs/RubricScore"
+      },
+      "title": "Rubric Scores",
+      "type": "array"
+    },
+    "score": {
+      "anyOf": [
+        {
+          "type": "integer"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Score"
+    },
+    "solution_steps": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Solution Steps"
+    },
+    "source": {
+      "default": "official_assessment",
+      "enum": [
+        "official_assessment",
+        "online"
+      ],
+      "title": "Source",
+      "type": "string"
+    },
+    "status": {
+      "enum": [
+        "graded",
+        "pending",
+        "unanswered"
+      ],
+      "title": "Status",
+      "type": "string"
+    },
+    "steps_math": {
+      "items": {
+        "additionalProperties": true,
+        "type": "object"
+      },
+      "title": "Steps Math",
+      "type": "array"
+    },
+    "student_id": {
+      "title": "Student Id",
+      "type": "string"
+    },
+    "submitted_at": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Submitted At"
+    }
+  },
+  "required": [
+    "dataset_id",
+    "event_id",
+    "record_id",
+    "student_id",
+    "node_id",
+    "material_id",
+    "revision",
+    "status"
+  ],
+  "title": "AnswerDetail",
+  "type": "object"
+}

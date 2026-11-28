@@ -1,0 +1,41 @@
+{
+  "additionalProperties": false,
+  "properties": {
+    "authorization_ref": {
+      "title": "Authorization Ref",
+      "type": "string"
+    },
+    "base_plan_version": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Base Plan Version"
+    },
+    "draft_hash": {
+      "title": "Draft Hash",
+      "type": "string"
+    },
+    "proposal_id": {
+      "title": "Proposal Id",
+      "type": "string"
+    },
+    "student_id": {
+      "title": "Student Id",
+      "type": "string"
+    }
+  },
+  "required": [
+    "proposal_id",
+    "draft_hash",
+    "authorization_ref",
+    "student_id"
+  ],
+  "title": "AgentRevisionSubmission",
+  "type": "object"
+}

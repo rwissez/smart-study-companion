@@ -1,0 +1,177 @@
+{
+  "$defs": {
+    "Snapshot": {
+      "additionalProperties": false,
+      "description": "C 生成输入指纹（04 §9 PlanSnapshot）。",
+      "properties": {
+        "analysis_version": {
+          "title": "Analysis Version",
+          "type": "string"
+        },
+        "base_plan_version": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Base Plan Version"
+        },
+        "catalog_version": {
+          "title": "Catalog Version",
+          "type": "string"
+        },
+        "config_hash": {
+          "default": "",
+          "title": "Config Hash",
+          "type": "string"
+        },
+        "dataset_family_id": {
+          "title": "Dataset Family Id",
+          "type": "string"
+        },
+        "dataset_id": {
+          "title": "Dataset Id",
+          "type": "string"
+        },
+        "event_cutoff": {
+          "minimum": 0,
+          "title": "Event Cutoff",
+          "type": "integer"
+        },
+        "knowledge_version": {
+          "title": "Knowledge Version",
+          "type": "string"
+        },
+        "node_id": {
+          "title": "Node Id",
+          "type": "string"
+        },
+        "rule_version": {
+          "default": "c-rules-1",
+          "title": "Rule Version",
+          "type": "string"
+        },
+        "run_id": {
+          "title": "Run Id",
+          "type": "string"
+        },
+        "student_id": {
+          "title": "Student Id",
+          "type": "string"
+        }
+      },
+      "required": [
+        "dataset_family_id",
+        "dataset_id",
+        "run_id",
+        "student_id",
+        "node_id",
+        "catalog_version",
+        "knowledge_version",
+        "analysis_version",
+        "event_cutoff"
+      ],
+      "title": "Snapshot",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "base_plan_version": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Base Plan Version"
+    },
+    "blocked_reasons": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Blocked Reasons",
+      "type": "array"
+    },
+    "candidate_options": {
+      "items": {
+        "additionalProperties": true,
+        "type": "object"
+      },
+      "title": "Candidate Options",
+      "type": "array"
+    },
+    "changes_summary": {
+      "items": {
+        "additionalProperties": true,
+        "type": "object"
+      },
+      "title": "Changes Summary",
+      "type": "array"
+    },
+    "draft_hash": {
+      "title": "Draft Hash",
+      "type": "string"
+    },
+    "estimated_minutes": {
+      "default": 0,
+      "title": "Estimated Minutes",
+      "type": "integer"
+    },
+    "expires_at": {
+      "title": "Expires At",
+      "type": "string"
+    },
+    "proposal_id": {
+      "title": "Proposal Id",
+      "type": "string"
+    },
+    "proposal_revision": {
+      "default": 1,
+      "minimum": 1,
+      "title": "Proposal Revision",
+      "type": "integer"
+    },
+    "snapshot": {
+      "$ref": "#/$defs/Snapshot"
+    },
+    "status": {
+      "enum": [
+        "ready",
+        "unchanged",
+        "deferred"
+      ],
+      "title": "Status",
+      "type": "string"
+    },
+    "student_id": {
+      "title": "Student Id",
+      "type": "string"
+    },
+    "warnings": {
+      "items": {
+        "additionalProperties": true,
+        "type": "object"
+      },
+      "title": "Warnings",
+      "type": "array"
+    }
+  },
+  "required": [
+    "proposal_id",
+    "student_id",
+    "snapshot",
+    "draft_hash",
+    "expires_at",
+    "status"
+  ],
+  "title": "ProposalView",
+  "type": "object"
+}

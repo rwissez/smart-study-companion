@@ -1,0 +1,25 @@
+{
+  "additionalProperties": false,
+  "properties": {
+    "catalog_version": {
+      "title": "Catalog Version",
+      "type": "string"
+    },
+    "kind": {
+      "const": "official_card",
+      "title": "Kind",
+      "type": "string"
+    },
+    "material_id": {
+      "title": "Material Id",
+      "type": "string"
+    }
+  },
+  "required": [
+    "kind",
+    "material_id",
+    "catalog_version"
+  ],
+  "title": "OfficialCardRef",
+  "type": "object"
+}

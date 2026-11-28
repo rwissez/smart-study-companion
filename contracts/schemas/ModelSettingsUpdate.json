@@ -1,0 +1,60 @@
+{
+  "additionalProperties": false,
+  "properties": {
+    "api_key": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Api Key"
+    },
+    "clear_api_key": {
+      "default": false,
+      "title": "Clear Api Key",
+      "type": "boolean"
+    },
+    "model_id": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Model Id"
+    },
+    "provider": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Provider"
+    },
+    "url": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Url"
+    }
+  },
+  "title": "ModelSettingsUpdate",
+  "type": "object"
+}

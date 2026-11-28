@@ -1,0 +1,95 @@
+{
+  "$defs": {
+    "FileMapping": {
+      "additionalProperties": false,
+      "properties": {
+        "file_id": {
+          "title": "File Id",
+          "type": "string"
+        },
+        "role": {
+          "enum": [
+            "requirements",
+            "materials",
+            "students",
+            "nodes",
+            "records",
+            "dictionary",
+            "standard",
+            "textbook",
+            "unknown"
+          ],
+          "title": "Role",
+          "type": "string"
+        },
+        "sheet_name": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Sheet Name"
+        }
+      },
+      "required": [
+        "file_id",
+        "role"
+      ],
+      "title": "FileMapping",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "dataset_family_id": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Dataset Family Id"
+    },
+    "expected_parent_dataset_id": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Expected Parent Dataset Id"
+    },
+    "file_mappings": {
+      "items": {
+        "$ref": "#/$defs/FileMapping"
+      },
+      "title": "File Mappings",
+      "type": "array"
+    },
+    "intent": {
+      "enum": [
+        "new_family",
+        "append_to_family",
+        "auto_detect"
+      ],
+      "title": "Intent",
+      "type": "string"
+    }
+  },
+  "required": [
+    "file_mappings",
+    "intent"
+  ],
+  "title": "ImportConfirmRequest",
+  "type": "object"
+}

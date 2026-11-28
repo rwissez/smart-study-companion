@@ -1,0 +1,39 @@
+{
+  "additionalProperties": false,
+  "properties": {
+    "activity_id": {
+      "title": "Activity Id",
+      "type": "string"
+    },
+    "attempt_id": {
+      "title": "Attempt Id",
+      "type": "string"
+    },
+    "confirmation_id": {
+      "title": "Confirmation Id",
+      "type": "string"
+    },
+    "expires_at": {
+      "title": "Expires At",
+      "type": "string"
+    },
+    "plan_version": {
+      "title": "Plan Version",
+      "type": "string"
+    },
+    "summary": {
+      "title": "Summary",
+      "type": "string"
+    }
+  },
+  "required": [
+    "confirmation_id",
+    "activity_id",
+    "attempt_id",
+    "plan_version",
+    "summary",
+    "expires_at"
+  ],
+  "title": "AssistedConfirmationView",
+  "type": "object"
+}

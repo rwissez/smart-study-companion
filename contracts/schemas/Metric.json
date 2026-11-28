@@ -2,7 +2,32 @@
   "$defs": {
     "EvidenceRef": {
       "additionalProperties": false,
+      "description": "统一证据引用。定位字段由服务端补足并校验，不接受任意对象路径。",
       "properties": {
+        "analysis_version": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Analysis Version"
+        },
+        "attempt_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Attempt Id"
+        },
         "catalog_version": {
           "anyOf": [
             {
@@ -15,6 +40,35 @@
           "default": null,
           "title": "Catalog Version"
         },
+        "curriculum_type": {
+          "anyOf": [
+            {
+              "enum": [
+                "topic",
+                "indicator",
+                "source"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Curriculum Type"
+        },
+        "dataset_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Dataset Id"
+        },
         "id": {
           "title": "Id",
           "type": "string"
@@ -24,10 +78,58 @@
             "record",
             "metric",
             "material",
-            "curriculum"
+            "curriculum",
+            "knowledge_point",
+            "relation",
+            "annotation",
+            "rubric_point",
+            "learning_event",
+            "attempt",
+            "grade",
+            "finding",
+            "progress",
+            "recommendation",
+            "source_page",
+            "lesson"
           ],
           "title": "Kind",
           "type": "string"
+        },
+        "knowledge_version": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Knowledge Version"
+        },
+        "material_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Material Id"
+        },
+        "plan_version": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Plan Version"
         },
         "run_id": {
           "anyOf": [
@@ -51,6 +153,7 @@
     },
     "MetricScope": {
       "additionalProperties": false,
+      "description": "恰好一个 student_id 或 class_id；粒度以最具体字段识别。",
       "properties": {
         "class_id": {
           "anyOf": [
@@ -76,6 +179,18 @@
           "default": null,
           "title": "Indicator Id"
         },
+        "kp_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Kp Id"
+        },
         "node_id": {
           "title": "Node Id",
           "type": "string"
@@ -91,6 +206,18 @@
           ],
           "default": null,
           "title": "Student Id"
+        },
+        "topic_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Topic Id"
         }
       },
       "required": [
@@ -102,6 +229,18 @@
   },
   "additionalProperties": false,
   "properties": {
+    "calculation_version": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Calculation Version"
+    },
     "denominator": {
       "anyOf": [
         {
@@ -119,6 +258,23 @@
       },
       "title": "Evidence Refs",
       "type": "array"
+    },
+    "evidence_status": {
+      "anyOf": [
+        {
+          "enum": [
+            "sufficient",
+            "insufficient",
+            "conflicting"
+          ],
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Evidence Status"
     },
     "excluded_event_count": {
       "default": 0,

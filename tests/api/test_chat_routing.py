@@ -126,9 +126,9 @@ def test_pending_task_returns_explicit_unavailable_error(client: TestClient, see
     monkeypatch.setattr("study_companion.api.routes.chat.build_provider", lambda _settings: provider)
     token = _session(client, "teacher", seeded["dataset_id"])
     response = client.post("/api/v1/chat", headers={"Authorization": f"Bearer {token}"}, json={
-        "run_id": "synthetic-run", "node_id": "N01", "target": {"type": "student", "id": "S01"},
-        "task_type": "student_learning_advice",
-        "messages": [{"role": "user", "content": "给学习建议"}],
+        "run_id": "synthetic-run", "node_id": "N01", "target": {"type": "class", "id": "DC01"},
+        "task_type": "class_strategy",
+        "messages": [{"role": "user", "content": "给班级教学策略"}],
     })
     assert response.status_code == 422
     assert response.json()["error"]["code"] == "TASK_NOT_AVAILABLE"

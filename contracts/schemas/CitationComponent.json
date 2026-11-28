@@ -1,0 +1,70 @@
+{
+  "$defs": {
+    "CitationLabel": {
+      "additionalProperties": false,
+      "properties": {
+        "evidence_index": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Evidence Index"
+        },
+        "label": {
+          "title": "Label",
+          "type": "string"
+        },
+        "source_index": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Source Index"
+        }
+      },
+      "required": [
+        "label"
+      ],
+      "title": "CitationLabel",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "id": {
+      "title": "Id",
+      "type": "string"
+    },
+    "labels": {
+      "items": {
+        "$ref": "#/$defs/CitationLabel"
+      },
+      "maxItems": 6,
+      "minItems": 1,
+      "title": "Labels",
+      "type": "array"
+    },
+    "type": {
+      "const": "citation",
+      "title": "Type",
+      "type": "string"
+    }
+  },
+  "required": [
+    "type",
+    "id",
+    "labels"
+  ],
+  "title": "CitationComponent",
+  "type": "object"
+}

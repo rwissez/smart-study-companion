@@ -1,0 +1,42 @@
+{
+  "additionalProperties": false,
+  "properties": {
+    "auto_repaired_pass": {
+      "default": 0,
+      "title": "Auto Repaired Pass",
+      "type": "integer"
+    },
+    "first_pass": {
+      "default": 0,
+      "title": "First Pass",
+      "type": "integer"
+    },
+    "human_pass": {
+      "default": 0,
+      "title": "Human Pass",
+      "type": "integer"
+    },
+    "needs_review": {
+      "default": 0,
+      "title": "Needs Review",
+      "type": "integer"
+    },
+    "not_processed": {
+      "default": 0,
+      "title": "Not Processed",
+      "type": "integer"
+    },
+    "rejected": {
+      "default": 0,
+      "title": "Rejected",
+      "type": "integer"
+    },
+    "reviewed_objects": {
+      "default": 0,
+      "title": "Reviewed Objects",
+      "type": "integer"
+    }
+  },
+  "title": "AuditCounts",
+  "type": "object"
+}

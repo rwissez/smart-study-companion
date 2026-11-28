@@ -8,6 +8,7 @@ from sqlalchemy import text
 from study_companion import __version__
 from study_companion.api.deps import AppSettings, DbSession
 from study_companion.api.envelope import SCHEMA_VERSION, success
+from study_companion.model_settings import effective_settings
 
 router = APIRouter(tags=["health"])
 
@@ -27,6 +28,6 @@ def health(db: DbSession, settings: AppSettings) -> dict:
             "schema_version": SCHEMA_VERSION,
             "database_ok": database_ok,
             "demo_mode": settings.demo_mode,
-            "model_configured": settings.model_configured,
+            "model_configured": effective_settings(settings).model_configured,
         }
     )

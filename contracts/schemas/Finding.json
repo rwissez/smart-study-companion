@@ -1,8 +1,61 @@
 {
   "$defs": {
-    "EvidenceRef": {
+    "DiagnosticDetail": {
       "additionalProperties": false,
       "properties": {
+        "evidence_refs": {
+          "items": {
+            "$ref": "#/$defs/EvidenceRef"
+          },
+          "title": "Evidence Refs",
+          "type": "array"
+        },
+        "limitations": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Limitations",
+          "type": "array"
+        },
+        "summary": {
+          "title": "Summary",
+          "type": "string"
+        }
+      },
+      "required": [
+        "summary"
+      ],
+      "title": "DiagnosticDetail",
+      "type": "object"
+    },
+    "EvidenceRef": {
+      "additionalProperties": false,
+      "description": "统一证据引用。定位字段由服务端补足并校验，不接受任意对象路径。",
+      "properties": {
+        "analysis_version": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Analysis Version"
+        },
+        "attempt_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Attempt Id"
+        },
         "catalog_version": {
           "anyOf": [
             {
@@ -15,6 +68,35 @@
           "default": null,
           "title": "Catalog Version"
         },
+        "curriculum_type": {
+          "anyOf": [
+            {
+              "enum": [
+                "topic",
+                "indicator",
+                "source"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Curriculum Type"
+        },
+        "dataset_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Dataset Id"
+        },
         "id": {
           "title": "Id",
           "type": "string"
@@ -24,10 +106,58 @@
             "record",
             "metric",
             "material",
-            "curriculum"
+            "curriculum",
+            "knowledge_point",
+            "relation",
+            "annotation",
+            "rubric_point",
+            "learning_event",
+            "attempt",
+            "grade",
+            "finding",
+            "progress",
+            "recommendation",
+            "source_page",
+            "lesson"
           ],
           "title": "Kind",
           "type": "string"
+        },
+        "knowledge_version": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Knowledge Version"
+        },
+        "material_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Material Id"
+        },
+        "plan_version": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Plan Version"
         },
         "run_id": {
           "anyOf": [
@@ -56,6 +186,27 @@
       "title": "Description",
       "type": "string"
     },
+    "diagnostic_details": {
+      "items": {
+        "$ref": "#/$defs/DiagnosticDetail"
+      },
+      "title": "Diagnostic Details",
+      "type": "array"
+    },
+    "error_types": {
+      "items": {
+        "enum": [
+          "foundation_gap",
+          "step_error",
+          "hint_dependency",
+          "transfer_difficulty",
+          "other_supported"
+        ],
+        "type": "string"
+      },
+      "title": "Error Types",
+      "type": "array"
+    },
     "evidence_refs": {
       "items": {
         "$ref": "#/$defs/EvidenceRef"
@@ -76,9 +227,32 @@
       "title": "Finding Id",
       "type": "string"
     },
+    "generation_method": {
+      "default": "rule",
+      "enum": [
+        "rule",
+        "model",
+        "hybrid",
+        "human"
+      ],
+      "title": "Generation Method",
+      "type": "string"
+    },
     "indicator_id": {
       "title": "Indicator Id",
       "type": "string"
+    },
+    "kp_id": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Kp Id"
     },
     "limitations": {
       "items": {
@@ -95,6 +269,25 @@
       ],
       "title": "Performance",
       "type": "string"
+    },
+    "rubric_focus": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Rubric Focus",
+      "type": "array"
+    },
+    "topic_id": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Topic Id"
     }
   },
   "required": [

@@ -1,4 +1,55 @@
 {
+  "$defs": {
+    "SourceRowRef": {
+      "additionalProperties": false,
+      "properties": {
+        "dataset_id": {
+          "title": "Dataset Id",
+          "type": "string"
+        },
+        "file_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "File Id"
+        },
+        "record_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Record Id"
+        },
+        "source_row_number": {
+          "minimum": 1,
+          "title": "Source Row Number",
+          "type": "integer"
+        },
+        "table_name": {
+          "title": "Table Name",
+          "type": "string"
+        }
+      },
+      "required": [
+        "dataset_id",
+        "table_name",
+        "source_row_number"
+      ],
+      "title": "SourceRowRef",
+      "type": "object"
+    }
+  },
   "additionalProperties": false,
   "properties": {
     "action": {
@@ -10,6 +61,13 @@
       ],
       "title": "Action",
       "type": "string"
+    },
+    "affected_metric_names": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Affected Metric Names",
+      "type": "array"
     },
     "code": {
       "title": "Code",
@@ -26,6 +84,18 @@
       ],
       "default": null,
       "title": "Event Id"
+    },
+    "field": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Field"
     },
     "issue_id": {
       "title": "Issue Id",
@@ -54,6 +124,13 @@
       ],
       "title": "Severity",
       "type": "string"
+    },
+    "source_refs": {
+      "items": {
+        "$ref": "#/$defs/SourceRowRef"
+      },
+      "title": "Source Refs",
+      "type": "array"
     }
   },
   "required": [

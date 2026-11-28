@@ -1,0 +1,25 @@
+{
+  "additionalProperties": false,
+  "properties": {
+    "content_id": {
+      "title": "Content Id",
+      "type": "string"
+    },
+    "content_version": {
+      "title": "Content Version",
+      "type": "string"
+    },
+    "kind": {
+      "const": "personalized",
+      "title": "Kind",
+      "type": "string"
+    }
+  },
+  "required": [
+    "kind",
+    "content_id",
+    "content_version"
+  ],
+  "title": "PersonalizedRef",
+  "type": "object"
+}

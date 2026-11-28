@@ -1,0 +1,48 @@
+{
+  "additionalProperties": false,
+  "properties": {
+    "counts": {
+      "additionalProperties": {
+        "type": "integer"
+      },
+      "title": "Counts",
+      "type": "object"
+    },
+    "generated_at": {
+      "default": "",
+      "title": "Generated At",
+      "type": "string"
+    },
+    "issues": {
+      "additionalProperties": true,
+      "title": "Issues",
+      "type": "object"
+    },
+    "limitations": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Limitations",
+      "type": "array"
+    },
+    "rule_version": {
+      "default": "c-rules-1",
+      "title": "Rule Version",
+      "type": "string"
+    },
+    "scope": {
+      "additionalProperties": true,
+      "title": "Scope",
+      "type": "object"
+    },
+    "window": {
+      "additionalProperties": {
+        "type": "string"
+      },
+      "title": "Window",
+      "type": "object"
+    }
+  },
+  "title": "CQualityReport",
+  "type": "object"
+}

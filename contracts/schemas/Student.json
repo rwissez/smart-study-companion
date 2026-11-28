@@ -20,6 +20,18 @@
     "student_id": {
       "title": "Student Id",
       "type": "string"
+    },
+    "student_uid": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Student Uid"
     }
   },
   "required": [

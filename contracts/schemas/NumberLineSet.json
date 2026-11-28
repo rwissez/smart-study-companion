@@ -1,0 +1,65 @@
+{
+  "$defs": {
+    "IntervalValue": {
+      "additionalProperties": false,
+      "properties": {
+        "hi": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Hi"
+        },
+        "hi_closed": {
+          "default": false,
+          "title": "Hi Closed",
+          "type": "boolean"
+        },
+        "lo": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Lo"
+        },
+        "lo_closed": {
+          "default": false,
+          "title": "Lo Closed",
+          "type": "boolean"
+        }
+      },
+      "title": "IntervalValue",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "intervals": {
+      "items": {
+        "$ref": "#/$defs/IntervalValue"
+      },
+      "maxItems": 4,
+      "title": "Intervals",
+      "type": "array"
+    },
+    "label": {
+      "title": "Label",
+      "type": "string"
+    }
+  },
+  "required": [
+    "label"
+  ],
+  "title": "NumberLineSet",
+  "type": "object"
+}

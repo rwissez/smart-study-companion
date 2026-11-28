@@ -3,6 +3,18 @@
     "AnswerEvent": {
       "additionalProperties": false,
       "properties": {
+        "detail_ref": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Detail Ref"
+        },
         "disposition": {
           "default": "include",
           "enum": [
@@ -61,6 +73,42 @@
           "default": null,
           "title": "Selected Record Id"
         },
+        "selected_revision": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Selected Revision"
+        },
+        "source_event_key": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Source Event Key"
+        },
+        "source_revision": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Source Revision"
+        },
         "status": {
           "enum": [
             "graded",
@@ -88,6 +136,33 @@
     "Node": {
       "additionalProperties": false,
       "properties": {
+        "assessment_date": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Assessment Date"
+        },
+        "available_question_ids": {
+          "anyOf": [
+            {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Available Question Ids"
+        },
         "label": {
           "anyOf": [
             {
@@ -103,6 +178,22 @@
         "node_id": {
           "title": "Node Id",
           "type": "string"
+        },
+        "scope_kind": {
+          "default": "assessment",
+          "enum": [
+            "assessment",
+            "learning_current"
+          ],
+          "title": "Scope Kind",
+          "type": "string"
+        },
+        "topic_ids": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Topic Ids",
+          "type": "array"
         }
       },
       "required": [
@@ -124,6 +215,13 @@
           "title": "Action",
           "type": "string"
         },
+        "affected_metric_names": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Affected Metric Names",
+          "type": "array"
+        },
         "code": {
           "title": "Code",
           "type": "string"
@@ -139,6 +237,18 @@
           ],
           "default": null,
           "title": "Event Id"
+        },
+        "field": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Field"
         },
         "issue_id": {
           "title": "Issue Id",
@@ -167,6 +277,13 @@
           ],
           "title": "Severity",
           "type": "string"
+        },
+        "source_refs": {
+          "items": {
+            "$ref": "#/$defs/SourceRowRef"
+          },
+          "title": "Source Refs",
+          "type": "array"
         }
       },
       "required": [
@@ -183,9 +300,38 @@
     "SourceManifest": {
       "additionalProperties": false,
       "properties": {
+        "data_origin": {
+          "default": "official",
+          "title": "Data Origin",
+          "type": "string"
+        },
+        "dataset_family_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Dataset Family Id"
+        },
         "dataset_id": {
           "title": "Dataset Id",
           "type": "string"
+        },
+        "parent_dataset_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Parent Dataset Id"
         },
         "synthetic": {
           "title": "Synthetic",
@@ -247,6 +393,55 @@
       "title": "SourceRecord",
       "type": "object"
     },
+    "SourceRowRef": {
+      "additionalProperties": false,
+      "properties": {
+        "dataset_id": {
+          "title": "Dataset Id",
+          "type": "string"
+        },
+        "file_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "File Id"
+        },
+        "record_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Record Id"
+        },
+        "source_row_number": {
+          "minimum": 1,
+          "title": "Source Row Number",
+          "type": "integer"
+        },
+        "table_name": {
+          "title": "Table Name",
+          "type": "string"
+        }
+      },
+      "required": [
+        "dataset_id",
+        "table_name",
+        "source_row_number"
+      ],
+      "title": "SourceRowRef",
+      "type": "object"
+    },
     "Student": {
       "additionalProperties": false,
       "properties": {
@@ -269,6 +464,18 @@
         "student_id": {
           "title": "Student Id",
           "type": "string"
+        },
+        "student_uid": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Student Uid"
         }
       },
       "required": [

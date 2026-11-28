@@ -1,6 +1,132 @@
 {
+  "$defs": {
+    "SourceLocator": {
+      "additionalProperties": false,
+      "description": "材料出处。``source_file`` 只能是已登记文件或受控来源标记。",
+      "properties": {
+        "chapter": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Chapter"
+        },
+        "file_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "File Id"
+        },
+        "page_end": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Page End"
+        },
+        "pdf_page": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Pdf Page"
+        },
+        "printed_page": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Printed Page"
+        },
+        "section": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Section"
+        },
+        "source_file": {
+          "title": "Source File",
+          "type": "string"
+        },
+        "source_kind": {
+          "anyOf": [
+            {
+              "enum": [
+                "standard",
+                "textbook",
+                "competition_material",
+                "other_registered"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Source Kind"
+        },
+        "verification_status": {
+          "default": "unverified",
+          "enum": [
+            "verified",
+            "unverified"
+          ],
+          "title": "Verification Status",
+          "type": "string"
+        }
+      },
+      "required": [
+        "source_file"
+      ],
+      "title": "SourceLocator",
+      "type": "object"
+    }
+  },
   "additionalProperties": false,
   "properties": {
+    "curriculum_page": {
+      "default": "",
+      "title": "Curriculum Page",
+      "type": "string"
+    },
+    "curriculum_ref": {
+      "default": "",
+      "title": "Curriculum Ref",
+      "type": "string"
+    },
     "description": {
       "title": "Description",
       "type": "string"
@@ -8,6 +134,18 @@
     "indicator_id": {
       "title": "Indicator Id",
       "type": "string"
+    },
+    "textbook_pages": {
+      "default": "",
+      "title": "Textbook Pages",
+      "type": "string"
+    },
+    "textbook_refs": {
+      "items": {
+        "$ref": "#/$defs/SourceLocator"
+      },
+      "title": "Textbook Refs",
+      "type": "array"
     },
     "topic_id": {
       "title": "Topic Id",

@@ -1,0 +1,55 @@
+{
+  "additionalProperties": false,
+  "properties": {
+    "activity_id": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Activity Id"
+    },
+    "class_id": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Class Id"
+    },
+    "plan_version": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Plan Version"
+    },
+    "student_id": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Student Id"
+    }
+  },
+  "title": "EvidenceContext",
+  "type": "object"
+}

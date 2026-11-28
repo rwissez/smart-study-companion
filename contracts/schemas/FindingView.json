@@ -1,0 +1,41 @@
+{
+  "additionalProperties": false,
+  "properties": {
+    "description": {
+      "title": "Description",
+      "type": "string"
+    },
+    "evidence_status": {
+      "title": "Evidence Status",
+      "type": "string"
+    },
+    "finding_id": {
+      "title": "Finding Id",
+      "type": "string"
+    },
+    "indicator_id": {
+      "title": "Indicator Id",
+      "type": "string"
+    },
+    "limitations": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Limitations",
+      "type": "array"
+    },
+    "performance": {
+      "title": "Performance",
+      "type": "string"
+    }
+  },
+  "required": [
+    "finding_id",
+    "indicator_id",
+    "description",
+    "evidence_status",
+    "performance"
+  ],
+  "title": "FindingView",
+  "type": "object"
+}

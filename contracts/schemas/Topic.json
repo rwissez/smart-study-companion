@@ -1,6 +1,11 @@
 {
   "additionalProperties": false,
   "properties": {
+    "goal": {
+      "default": "",
+      "title": "Goal",
+      "type": "string"
+    },
     "title": {
       "title": "Title",
       "type": "string"

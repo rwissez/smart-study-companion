@@ -5,9 +5,33 @@
       "title": "Catalog Version",
       "type": "string"
     },
+    "dataset_family_id": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Dataset Family Id"
+    },
     "dataset_id": {
       "title": "Dataset Id",
       "type": "string"
+    },
+    "knowledge_version": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Knowledge Version"
     },
     "rule_version": {
       "title": "Rule Version",

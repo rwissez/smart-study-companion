@@ -1,0 +1,55 @@
+{
+  "additionalProperties": false,
+  "properties": {
+    "base_plan_version": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Base Plan Version"
+    },
+    "changes_summary": {
+      "default": "",
+      "title": "Changes Summary",
+      "type": "string"
+    },
+    "draft_hash": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Draft Hash"
+    },
+    "proposal_id": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Proposal Id"
+    },
+    "student_id": {
+      "title": "Student Id",
+      "type": "string"
+    }
+  },
+  "required": [
+    "student_id"
+  ],
+  "title": "ConfirmationTarget",
+  "type": "object"
+}

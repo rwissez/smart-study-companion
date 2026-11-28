@@ -1,0 +1,33 @@
+{
+  "additionalProperties": false,
+  "description": "分页响应：默认 50，最大 200（01 §9）。",
+  "properties": {
+    "items": {
+      "items": {},
+      "title": "Items",
+      "type": "array"
+    },
+    "page": {
+      "minimum": 1,
+      "title": "Page",
+      "type": "integer"
+    },
+    "page_size": {
+      "minimum": 1,
+      "title": "Page Size",
+      "type": "integer"
+    },
+    "total": {
+      "minimum": 0,
+      "title": "Total",
+      "type": "integer"
+    }
+  },
+  "required": [
+    "total",
+    "page",
+    "page_size"
+  ],
+  "title": "Page",
+  "type": "object"
+}

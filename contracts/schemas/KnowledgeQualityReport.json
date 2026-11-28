@@ -1,0 +1,406 @@
+{
+  "$defs": {
+    "AuditCounts": {
+      "additionalProperties": false,
+      "properties": {
+        "auto_repaired_pass": {
+          "default": 0,
+          "title": "Auto Repaired Pass",
+          "type": "integer"
+        },
+        "first_pass": {
+          "default": 0,
+          "title": "First Pass",
+          "type": "integer"
+        },
+        "human_pass": {
+          "default": 0,
+          "title": "Human Pass",
+          "type": "integer"
+        },
+        "needs_review": {
+          "default": 0,
+          "title": "Needs Review",
+          "type": "integer"
+        },
+        "not_processed": {
+          "default": 0,
+          "title": "Not Processed",
+          "type": "integer"
+        },
+        "rejected": {
+          "default": 0,
+          "title": "Rejected",
+          "type": "integer"
+        },
+        "reviewed_objects": {
+          "default": 0,
+          "title": "Reviewed Objects",
+          "type": "integer"
+        }
+      },
+      "title": "AuditCounts",
+      "type": "object"
+    },
+    "CoverageMetric": {
+      "additionalProperties": false,
+      "properties": {
+        "denominator": {
+          "default": 0,
+          "minimum": 0,
+          "title": "Denominator",
+          "type": "integer"
+        },
+        "detail_refs": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Detail Refs",
+          "type": "array"
+        },
+        "key": {
+          "title": "Key",
+          "type": "string"
+        },
+        "label": {
+          "title": "Label",
+          "type": "string"
+        },
+        "not_applicable_count": {
+          "default": 0,
+          "title": "Not Applicable Count",
+          "type": "integer"
+        },
+        "numerator": {
+          "default": 0,
+          "minimum": 0,
+          "title": "Numerator",
+          "type": "integer"
+        },
+        "partial_count": {
+          "default": 0,
+          "title": "Partial Count",
+          "type": "integer"
+        },
+        "scope_description": {
+          "default": "",
+          "title": "Scope Description",
+          "type": "string"
+        },
+        "unknown_count": {
+          "default": 0,
+          "title": "Unknown Count",
+          "type": "integer"
+        },
+        "value": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Value"
+        }
+      },
+      "required": [
+        "key",
+        "label"
+      ],
+      "title": "CoverageMetric",
+      "type": "object"
+    },
+    "KnowledgeCounts": {
+      "additionalProperties": false,
+      "properties": {
+        "formal_annotations": {
+          "default": 0,
+          "title": "Formal Annotations",
+          "type": "integer"
+        },
+        "formal_points": {
+          "default": 0,
+          "title": "Formal Points",
+          "type": "integer"
+        },
+        "formal_relations": {
+          "default": 0,
+          "title": "Formal Relations",
+          "type": "integer"
+        },
+        "recovered_pages": {
+          "default": 0,
+          "title": "Recovered Pages",
+          "type": "integer"
+        },
+        "relevant_pages": {
+          "default": 0,
+          "title": "Relevant Pages",
+          "type": "integer"
+        },
+        "source_files": {
+          "default": 0,
+          "title": "Source Files",
+          "type": "integer"
+        },
+        "total_pages": {
+          "default": 0,
+          "title": "Total Pages",
+          "type": "integer"
+        },
+        "unresolved_items": {
+          "default": 0,
+          "title": "Unresolved Items",
+          "type": "integer"
+        },
+        "usable_relevant_pages": {
+          "default": 0,
+          "title": "Usable Relevant Pages",
+          "type": "integer"
+        }
+      },
+      "title": "KnowledgeCounts",
+      "type": "object"
+    },
+    "KnowledgeIssueSummary": {
+      "additionalProperties": false,
+      "properties": {
+        "blocked_count": {
+          "default": 0,
+          "title": "Blocked Count",
+          "type": "integer"
+        },
+        "object_type": {
+          "title": "Object Type",
+          "type": "string"
+        },
+        "reason": {
+          "title": "Reason",
+          "type": "string"
+        },
+        "review_id": {
+          "title": "Review Id",
+          "type": "string"
+        },
+        "source_locators": {
+          "items": {
+            "$ref": "#/$defs/SourceLocator"
+          },
+          "title": "Source Locators",
+          "type": "array"
+        },
+        "status": {
+          "default": "needs_review",
+          "title": "Status",
+          "type": "string"
+        },
+        "title": {
+          "title": "Title",
+          "type": "string"
+        }
+      },
+      "required": [
+        "review_id",
+        "object_type",
+        "title",
+        "reason"
+      ],
+      "title": "KnowledgeIssueSummary",
+      "type": "object"
+    },
+    "SourceLocator": {
+      "additionalProperties": false,
+      "description": "材料出处。``source_file`` 只能是已登记文件或受控来源标记。",
+      "properties": {
+        "chapter": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Chapter"
+        },
+        "file_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "File Id"
+        },
+        "page_end": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Page End"
+        },
+        "pdf_page": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Pdf Page"
+        },
+        "printed_page": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Printed Page"
+        },
+        "section": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Section"
+        },
+        "source_file": {
+          "title": "Source File",
+          "type": "string"
+        },
+        "source_kind": {
+          "anyOf": [
+            {
+              "enum": [
+                "standard",
+                "textbook",
+                "competition_material",
+                "other_registered"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Source Kind"
+        },
+        "verification_status": {
+          "default": "unverified",
+          "enum": [
+            "verified",
+            "unverified"
+          ],
+          "title": "Verification Status",
+          "type": "string"
+        }
+      },
+      "required": [
+        "source_file"
+      ],
+      "title": "SourceLocator",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "audit": {
+      "$ref": "#/$defs/AuditCounts"
+    },
+    "candidate_version": {
+      "default": "",
+      "title": "Candidate Version",
+      "type": "string"
+    },
+    "catalog_version": {
+      "title": "Catalog Version",
+      "type": "string"
+    },
+    "counts": {
+      "$ref": "#/$defs/KnowledgeCounts"
+    },
+    "coverage": {
+      "items": {
+        "$ref": "#/$defs/CoverageMetric"
+      },
+      "title": "Coverage",
+      "type": "array"
+    },
+    "dataset_id": {
+      "title": "Dataset Id",
+      "type": "string"
+    },
+    "generated_at": {
+      "default": "",
+      "title": "Generated At",
+      "type": "string"
+    },
+    "issues": {
+      "items": {
+        "$ref": "#/$defs/KnowledgeIssueSummary"
+      },
+      "title": "Issues",
+      "type": "array"
+    },
+    "job_id": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Job Id"
+    },
+    "knowledge_version": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Knowledge Version"
+    },
+    "limitations": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Limitations",
+      "type": "array"
+    }
+  },
+  "required": [
+    "dataset_id",
+    "catalog_version"
+  ],
+  "title": "KnowledgeQualityReport",
+  "type": "object"
+}

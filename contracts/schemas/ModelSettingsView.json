@@ -1,0 +1,55 @@
+{
+  "additionalProperties": false,
+  "properties": {
+    "configured": {
+      "title": "Configured",
+      "type": "boolean"
+    },
+    "has_api_key": {
+      "default": false,
+      "title": "Has Api Key",
+      "type": "boolean"
+    },
+    "model_id": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Model Id"
+    },
+    "provider": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Provider"
+    },
+    "url": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Url"
+    }
+  },
+  "required": [
+    "configured"
+  ],
+  "title": "ModelSettingsView",
+  "type": "object"
+}

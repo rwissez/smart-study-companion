@@ -1,6 +1,18 @@
 {
   "additionalProperties": false,
   "properties": {
+    "detail_ref": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Detail Ref"
+    },
     "disposition": {
       "default": "include",
       "enum": [
@@ -58,6 +70,42 @@
       ],
       "default": null,
       "title": "Selected Record Id"
+    },
+    "selected_revision": {
+      "anyOf": [
+        {
+          "type": "integer"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Selected Revision"
+    },
+    "source_event_key": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Source Event Key"
+    },
+    "source_revision": {
+      "anyOf": [
+        {
+          "type": "integer"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Source Revision"
     },
     "status": {
       "enum": [

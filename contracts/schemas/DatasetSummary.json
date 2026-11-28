@@ -1,0 +1,94 @@
+{
+  "additionalProperties": false,
+  "properties": {
+    "catalog_version": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Catalog Version"
+    },
+    "class_count": {
+      "default": 0,
+      "title": "Class Count",
+      "type": "integer"
+    },
+    "created_at": {
+      "title": "Created At",
+      "type": "string"
+    },
+    "dataset_family_id": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Dataset Family Id"
+    },
+    "dataset_id": {
+      "title": "Dataset Id",
+      "type": "string"
+    },
+    "display_name": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Display Name"
+    },
+    "node_ids": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Node Ids",
+      "type": "array"
+    },
+    "parent_id": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Parent Id"
+    },
+    "status": {
+      "title": "Status",
+      "type": "string"
+    },
+    "student_count": {
+      "default": 0,
+      "title": "Student Count",
+      "type": "integer"
+    },
+    "synthetic": {
+      "default": false,
+      "title": "Synthetic",
+      "type": "boolean"
+    }
+  },
+  "required": [
+    "dataset_id",
+    "status",
+    "created_at"
+  ],
+  "title": "DatasetSummary",
+  "type": "object"
+}

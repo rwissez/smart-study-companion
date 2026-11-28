@@ -41,3 +41,4 @@ class AgentResult:
     state: AgentTaskState
     tool_trace: list[ToolTrace]
     stopped_reason: str
+    guard: dict[str, Any] | None = None

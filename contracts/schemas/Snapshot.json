@@ -1,0 +1,78 @@
+{
+  "additionalProperties": false,
+  "description": "C 生成输入指纹（04 §9 PlanSnapshot）。",
+  "properties": {
+    "analysis_version": {
+      "title": "Analysis Version",
+      "type": "string"
+    },
+    "base_plan_version": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Base Plan Version"
+    },
+    "catalog_version": {
+      "title": "Catalog Version",
+      "type": "string"
+    },
+    "config_hash": {
+      "default": "",
+      "title": "Config Hash",
+      "type": "string"
+    },
+    "dataset_family_id": {
+      "title": "Dataset Family Id",
+      "type": "string"
+    },
+    "dataset_id": {
+      "title": "Dataset Id",
+      "type": "string"
+    },
+    "event_cutoff": {
+      "minimum": 0,
+      "title": "Event Cutoff",
+      "type": "integer"
+    },
+    "knowledge_version": {
+      "title": "Knowledge Version",
+      "type": "string"
+    },
+    "node_id": {
+      "title": "Node Id",
+      "type": "string"
+    },
+    "rule_version": {
+      "default": "c-rules-1",
+      "title": "Rule Version",
+      "type": "string"
+    },
+    "run_id": {
+      "title": "Run Id",
+      "type": "string"
+    },
+    "student_id": {
+      "title": "Student Id",
+      "type": "string"
+    }
+  },
+  "required": [
+    "dataset_family_id",
+    "dataset_id",
+    "run_id",
+    "student_id",
+    "node_id",
+    "catalog_version",
+    "knowledge_version",
+    "analysis_version",
+    "event_cutoff"
+  ],
+  "title": "Snapshot",
+  "type": "object"
+}

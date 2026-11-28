@@ -1,0 +1,530 @@
+"""端到端合成用例：教师导入 → 任务 → 学生读方案/作答/提示 → 教师读画像。
+
+这些用例使用 tests/fixtures/six_tables 的**合成**六表数据，覆盖：
+* 导入 → A(基础目录) → B → C 的正式发布链（JOB-01/02、DB-04 的机制部分）；
+* 学生只能读本人（SEC-01）；
+* 选项题规则评分、提示事件、活动完成与事件账本（B-02、JOB-03 机制）；
+* 未提交前不下发答案（SEC-02 的路由层）。
+"""
+
+from __future__ import annotations
+
+from pathlib import Path
+
+import pytest
+from fastapi.testclient import TestClient
+from sqlalchemy import func, select
+from sqlalchemy.orm import Session
+
+from study_companion.contracts import RecommendationBundle, ValidationIssue
+from study_companion.db import models, version_repository as repo
+from study_companion.jobs.worker import drain
+from study_companion.pipeline import persist_plan
+from study_companion.recommendation import planner as c_planner
+
+FIXTURES = Path(__file__).parent / "fixtures" / "six_tables"
+TABLES = ("requirements", "materials", "students", "nodes", "records", "dictionary")
+
+
+def _teacher_token(client: TestClient, dataset_id: str | None = None) -> str:
+    payload = {"role": "teacher"}
+    if dataset_id:
+        payload["dataset_id"] = dataset_id
+    response = client.post("/api/v1/demo-sessions", json=payload)
+    assert response.status_code == 201, response.text
+    return response.json()["data"]["session_token"]
+
+
+def _student_token(client: TestClient, dataset_id: str, student_id: str) -> str:
+    response = client.post(
+        "/api/v1/demo-sessions",
+        json={"role": "student", "dataset_id": dataset_id, "student_id": student_id},
+    )
+    assert response.status_code == 201, response.text
+    return response.json()["data"]["session_token"]
+
+
+@pytest.fixture
+def imported(client: TestClient) -> dict:
+    headers = {"Authorization": f"Bearer {_teacher_token(client)}"}
+    files = [
+        ("files", (f"{name}.csv", (FIXTURES / f"{name}.csv").read_bytes(), "text/csv"))
+        for name in TABLES
+    ]
+    response = client.post(
+        "/api/v1/imports",
+        headers=headers,
+        files=files,
+        data={"metadata": '{"intent":"new_family"}'},
+    )
+    assert response.status_code == 202, response.text
+    receipt = response.json()["data"]
+    assert receipt["classification_status"] == "confirmed"
+    assert receipt["input_status"] == "ready"
+    assert receipt["dataset_id"]
+    drain()
+    return receipt
+
+
+def test_import_runs_pipeline_and_publishes_plans(client: TestClient, imported: dict) -> None:
+    headers = {"Authorization": f"Bearer {_teacher_token(client, imported['dataset_id'])}"}
+    job = client.get(f"/api/v1/jobs/{imported['job_id']}", headers=headers).json()["data"]
+    assert job["status"] == "succeeded"
+    assert [step["step_key"] for step in job["steps"]] == [
+        "load",
+        "knowledge",
+        "analysis",
+        "plans",
+    ]
+    assert all(step["status"] == "succeeded" for step in job["steps"])
+    assert job["result"]["published_plan_count"] >= 1
+
+    profile = client.get(
+        f"/api/v1/datasets/{imported['dataset_id']}/students/S01/profile", headers=headers
+    )
+    assert profile.status_code == 200, profile.text
+    result = profile.json()["data"]["result"]
+    assert result["student_id"] == "S01"
+    assert result["metrics"], "个人画像必须包含真实统计指标"
+    # B 的指标按 (学生, 节点, 指标) 发布：T01I1 = Q1 5/5，T01I2 = Q2 0/5。
+    by_indicator = {
+        item["scope"]["indicator_id"]: item
+        for item in result["metrics"]
+        if item["name"] == "valid_score_ratio"
+    }
+    assert by_indicator["T01I1"]["numerator"] == 5
+    assert by_indicator["T01I1"]["denominator"] == 5
+    assert by_indicator["T01I1"]["value"] == 1.0
+    assert by_indicator["T01I2"]["numerator"] == 0
+    assert by_indicator["T01I2"]["denominator"] == 5
+    assert by_indicator["T01I2"]["value"] == 0.0  # 真实 0 分，不是"缺失"
+    # 掌握程度只在证据充分时给；证据不足必须是 unknown，不能写成"未掌握"。
+    for finding in result["findings"]:
+        if finding["evidence_status"] == "sufficient":
+            assert finding["mastery_level"] in {"emerging", "developing", "mastered"}
+        else:
+            assert finding["mastery_level"] == "unknown"
+        assert set(finding["error_types"]) <= {
+            "foundation_gap",
+            "hint_dependency",
+            "transfer_difficulty",
+            "step_error",
+        }
+
+
+def test_knowledge_quality_lists_mapping_gaps(client: TestClient, imported: dict) -> None:
+    headers = {"Authorization": f"Bearer {_teacher_token(client, imported['dataset_id'])}"}
+    response = client.get(
+        f"/api/v1/datasets/{imported['dataset_id']}/knowledge/quality",
+        headers=headers,
+    )
+    assert response.status_code == 200, response.text
+    summary = response.json()["data"]
+    gaps = summary.get("mapping_gaps")
+    assert isinstance(gaps, dict) and gaps.get("limitations")
+    for key in (
+        "indicators_without_material",
+        "materials_without_indicator",
+        "materials_without_rubric",
+        "points_without_annotation",
+    ):
+        assert key in gaps
+
+
+def test_class_profile_keeps_roster_denominator(client: TestClient, imported: dict) -> None:
+    headers = {"Authorization": f"Bearer {_teacher_token(client, imported['dataset_id'])}"}
+    response = client.get(
+        f"/api/v1/datasets/{imported['dataset_id']}/classes/DC01/profile", headers=headers
+    )
+    assert response.status_code == 200, response.text
+    result = response.json()["data"]["result"]
+    assert result["roster_count"] == 2  # S01 + S03（S03 无记录也不能被剔除）
+    assert result["observed_student_count"] == 1
+    assert result["performance_distribution"], "班级要有表现分布，分母含未观测学生"
+    assert all(item["roster_count"] == 2 for item in result["performance_distribution"])
+    attention = {item["student_id"]: item["reason"] for item in result["attention_students"]}
+    assert "S01" in attention
+    assert "证据" in attention["S01"]
+
+
+def test_student_cannot_read_another_student(client: TestClient, imported: dict) -> None:
+    token = _student_token(client, imported["dataset_id"], "S01")
+    response = client.get(
+        f"/api/v1/datasets/{imported['dataset_id']}/students/S02/profile",
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert response.status_code == 403
+    assert response.json()["error"]["code"] == "FORBIDDEN"
+
+
+def test_student_learning_loop_grades_and_records_events(
+    client: TestClient, imported: dict
+) -> None:
+    dataset_id = imported["dataset_id"]
+    token = _student_token(client, dataset_id, "S01")
+    student = {"Authorization": f"Bearer {token}"}
+
+    plan_response = client.get(f"/api/v1/datasets/{dataset_id}/students/S01/plan", headers=student)
+    assert plan_response.status_code == 200, plan_response.text
+    plan = plan_response.json()["data"]
+    assert plan["plan"]["task_groups"], "正式方案必须至少有一个任务组"
+
+    activity_id = plan["plan"]["task_groups"][0]["activity_ids"][0]
+    start = client.post(
+        f"/api/v1/plans/{plan['plan_version']}/activities/{activity_id}/start", headers=student
+    )
+    assert start.status_code == 200, start.text
+    attempt = start.json()["data"]["attempt"]
+    assert attempt["status"] == "in_progress"
+
+    # 未提交前，材料接口不得返回答案字段
+    material = client.get(
+        f"/api/v1/materials/{attempt['material_id']}", headers=student
+    ).json()["data"]
+    assert "reference_answer" not in material
+    assert "rubric_points" not in material
+
+    hint = client.post(
+        f"/api/v1/attempts/{attempt['attempt_id']}/hints",
+        headers=student,
+        json={"level": 1},
+    )
+    assert hint.status_code == 200, hint.text
+    assert hint.json()["data"]["hint"]
+
+    submit = client.post(
+        f"/api/v1/attempts/{attempt['attempt_id']}/submit",
+        headers={**student, "Idempotency-Key": "it-submit-1"},
+        json={"final_answer": "B", "unanswered": False},
+    )
+    assert submit.status_code == 200, submit.text
+    data = submit.json()["data"]
+    assert data["attempt"]["status"] == "completed"
+    assert data["grade"]["status"] in {"graded", "needs_review", "pending"}
+    assert data["attempt"]["assistance_status"] == "assisted"
+
+    again = client.post(
+        f"/api/v1/attempts/{attempt['attempt_id']}/submit",
+        headers={**student, "Idempotency-Key": "it-submit-1"},
+        json={"final_answer": "B", "unanswered": False},
+    )
+    assert again.status_code == 200
+    assert again.json()["data"]["attempt"]["submission_no"] == data["attempt"]["submission_no"]
+
+    teacher = {"Authorization": f"Bearer {_teacher_token(client, dataset_id)}"}
+    events = client.get(
+        f"/api/v1/datasets/{dataset_id}/students/S01/learning-events", headers=teacher
+    ).json()["data"]
+    types = {item["event_type"] for item in events["items"]}
+    assert {"answer_submitted", "grading_completed", "hint_requested", "activity_completed"} <= types
+
+
+def test_job_retry_requires_failed_job(client: TestClient, imported: dict) -> None:
+    headers = {"Authorization": f"Bearer {_teacher_token(client, imported['dataset_id'])}"}
+    response = client.post(
+        f"/api/v1/jobs/{imported['job_id']}/retry",
+        headers={**headers, "Idempotency-Key": "retry-1"},
+    )
+    assert response.status_code == 409
+    assert response.json()["error"]["code"] == "JOB_RETRY_NOT_AVAILABLE"
+
+
+def test_import_publishes_dependency_edges(client: TestClient, imported: dict) -> None:
+    """一次真实导入必须产生可反查的依赖边（06 §3.1、§4.3）。
+
+    合成六表是 3 名学生（S01/S03 在 DC01、S02 在 DC02）、2 个节点：
+    * 学生学情 3×2=6 条，各自登记 catalog + knowledge；
+    * 班级学情 2×2=4 条，每个名册成员一条 member_analysis（DC01 2 人 + DC02 1 人，
+      两个节点共 6 条），并写 6 行 class_members；
+    * 知识版本登记 catalog 边；
+    * 微课堂版本登记 knowledge（以及个人学情）边。
+    """
+
+    from sqlalchemy import func, select
+
+    from study_companion.db import models, version_repository as repo
+    from study_companion.db.session import get_sessionmaker
+
+    dataset_id = imported["dataset_id"]
+    db = get_sessionmaker()()
+    try:
+        versions = db.scalars(
+            select(models.Version).where(models.Version.dataset_id == dataset_id)
+        ).all()
+        by_kind: dict[str, list] = {}
+        for version in versions:
+            by_kind.setdefault(version.kind, []).append(version)
+        assert len(by_kind["student_analysis"]) == 6
+        assert len(by_kind["class_analysis"]) == 4
+        assert len(by_kind["knowledge"]) == 1
+        assert by_kind["lesson"], "合成数据应生成微课堂"
+
+        def edge_count(kind: str, role: str) -> int:
+            return db.scalar(
+                select(func.count())
+                .select_from(models.ArtifactEdge)
+                .join(
+                    models.Version,
+                    models.Version.version_id == models.ArtifactEdge.version_id,
+                )
+                .where(
+                    models.Version.dataset_id == dataset_id,
+                    models.Version.kind == kind,
+                    models.ArtifactEdge.role == role,
+                )
+            )
+
+        # 知识版本 → 目录版本。
+        assert edge_count("knowledge", "catalog") == 1
+        # 学生学情 → 目录 / 知识版本。
+        assert edge_count("student_analysis", "catalog") == 6
+        assert edge_count("student_analysis", "knowledge") == 6
+        for version in by_kind["student_analysis"]:
+            roles = {edge.role for edge in repo.dependencies(db, version)}
+            assert roles == {"catalog", "knowledge"}
+            assert version.payload_json["analysis_input"]["knowledge_version"]
+        runs = db.scalars(
+            select(models.AnalysisRun).where(models.AnalysisRun.dataset_id == dataset_id)
+        ).all()
+        assert runs and all(run.knowledge_version for run in runs)
+        # 班级学情 → 成员学情版本（6 条）与目录版本。
+        assert edge_count("class_analysis", "member_analysis") == 6
+        assert edge_count("class_analysis", "catalog") == 4
+        member_rows = db.scalars(
+            select(models.ClassMember)
+            .join(
+                models.Version,
+                models.Version.version_id == models.ClassMember.class_version_id,
+            )
+            .where(models.Version.dataset_id == dataset_id)
+        ).all()
+        assert len(member_rows) == 6
+        assert {row.member_state for row in member_rows} <= {
+            "available",
+            "no_observation",
+            "not_ready",
+        }
+        for version in by_kind["class_analysis"]:
+            members = version.payload_json["member_analysis_versions"]
+            assert members, "班级版本必须列出成员学情版本"
+            assert {item["analysis_version"] for item in members} == {
+                edge.dep_version_id
+                for edge in repo.dependencies(db, version)
+                if edge.role == "member_analysis"
+            }
+        # 微课堂 → 知识版本 / 个人学情版本。
+        assert edge_count("lesson", "knowledge") == len(by_kind["lesson"])
+        assert edge_count("lesson", "student_analysis") == len(by_kind["lesson"])
+    finally:
+        db.close()
+
+
+# --------------------------------------------------------------------------- #
+# 正式发布的内容硬门：空方案只能留在候选/待审核
+# --------------------------------------------------------------------------- #
+
+
+def _formal_key(
+    session: Session, dataset_id: str, student_id: str = "S01", node_id: str = "N01"
+) -> repo.FormalKey:
+    dataset = session.get(models.Dataset, dataset_id)
+    assert dataset is not None and dataset.family_id
+    return repo.FormalKey(
+        family_id=dataset.family_id,
+        dataset_id=dataset_id,
+        kind="plan",
+        node_key=node_id,
+        target_key=student_id,
+    )
+
+
+def _original_plan_bundle(
+    session: Session, dataset_id: str, student_id: str = "S01", node_id: str = "N01"
+) -> RecommendationBundle:
+    """取该学生该节点最早的正式方案（导入时生成的父版本，不含微课堂子修订）。"""
+
+    row = session.scalars(
+        select(models.Version)
+        .where(
+            models.Version.kind == "plan",
+            models.Version.dataset_id == dataset_id,
+            models.Version.node_key == node_id,
+            models.Version.target_key == student_id,
+        )
+        .order_by(models.Version.created_at.asc())
+        .limit(1)
+    ).first()
+    assert row is not None and row.payload_json
+    bundle = RecommendationBundle.model_validate(row.payload_json)
+    assert bundle.publication_status == "published"
+    assert bundle.task_groups and bundle.recommendations
+    return bundle
+
+
+def _persist_variant(
+    session: Session,
+    dataset_id: str,
+    bundle: RecommendationBundle,
+    review,
+) -> dict:
+    dataset = session.get(models.Dataset, dataset_id)
+    assert dataset is not None
+    return persist_plan(
+        session,
+        bundle,
+        family_id=dataset.family_id or "",
+        analysis_version_id=bundle.analysis_version,
+        knowledge_version_id=bundle.knowledge_version,
+        job_id=None,
+        review=review,
+        student_uid=None,
+        publish=review.status == "validated",
+    )
+
+
+def test_empty_plan_is_not_published(client: TestClient, imported: dict, session: Session) -> None:
+    """零任务组/零推荐：规则审核会空过为 validated，但硬门必须拒绝发布。"""
+
+    dataset_id = imported["dataset_id"]
+    base = _original_plan_bundle(session, dataset_id)
+    empty = base.model_copy(
+        update={
+            "recommendations": [],
+            "task_groups": [],
+            "validation_issues": [
+                ValidationIssue(
+                    code="NO_FEASIBLE_GROUP",
+                    message="本轮没有可执行的任务组：材料不足或证据不允许安排练习",
+                    severity="error",
+                )
+            ],
+        }
+    )
+    review = c_planner.review_plan_rules(empty)
+    # 回归前提：规则审核对空列表全部空过，仍会把空方案判成 validated。
+    assert review.status == "validated"
+
+    key = _formal_key(session, dataset_id)
+    before_head = repo.read_head(session, key)
+    before_version = before_head.version_id if before_head else None
+    result = _persist_variant(session, dataset_id, empty, review)
+
+    assert result["publication_status"] == "unpublished"
+    assert result["publication_id"] is None
+    assert result["review_status"] == "needs_review"
+    assert "PLAN_EMPTY" in {item["code"] for item in result["publish_gate_issues"]}
+    session.expire_all()
+    assert repo.read_head(session, key).version_id == before_version
+
+    row = session.get(models.Version, result["plan_version"])
+    assert row is not None and row.payload_json
+    assert row.payload_json["publication_status"] == "unpublished"
+    assert session.scalar(
+        select(func.count())
+        .select_from(models.Publication)
+        .where(models.Publication.version_id == result["plan_version"])
+    ) == 0
+
+
+def test_group_without_activities_is_not_published(
+    client: TestClient, imported: dict, session: Session
+) -> None:
+    """有一个任务组没有任何活动时，整个方案不能切正式指针。"""
+
+    dataset_id = imported["dataset_id"]
+    base = _original_plan_bundle(session, dataset_id)
+    source_rec = base.recommendations[0]
+    source_activity = source_rec.activities[0]
+    empty_rec = source_rec.model_copy(update={"group_id": "grp-empty", "activities": []})
+    full_rec = source_rec.model_copy(
+        update={
+            "group_id": "grp-full",
+            "activities": [source_activity.model_copy(update={"group_id": "grp-full"})],
+        }
+    )
+    bundle = base.model_copy(
+        update={"recommendations": [empty_rec, full_rec], "task_groups": []}
+    )
+    review = c_planner.review_plan_rules(bundle)
+    assert review.status == "validated"
+
+    key = _formal_key(session, dataset_id)
+    before_head = repo.read_head(session, key)
+    before_version = before_head.version_id if before_head else None
+    result = _persist_variant(session, dataset_id, bundle, review)
+
+    assert result["publication_status"] == "unpublished"
+    assert result["review_status"] == "needs_review"
+    codes = {item["code"] for item in result["publish_gate_issues"]}
+    assert "GROUP_EMPTY" in codes
+    assert "PLAN_EMPTY" not in codes
+    session.expire_all()
+    assert repo.read_head(session, key).version_id == before_version
+
+
+def test_empty_plan_does_not_write_formal_head(
+    client: TestClient, imported: dict, session: Session
+) -> None:
+    """空方案落库只能作为候选版本：正式头与发布记录都不动。"""
+
+    dataset_id = imported["dataset_id"]
+    base = _original_plan_bundle(session, dataset_id)
+    empty = base.model_copy(
+        update={"recommendations": [], "task_groups": [], "validation_issues": []}
+    )
+    review = c_planner.review_plan_rules(empty)
+    key = _formal_key(session, dataset_id)
+    before_head = repo.read_head(session, key)
+    assert before_head is not None and before_head.version_id
+
+    result = _persist_variant(session, dataset_id, empty, review)
+
+    after_head = repo.read_head(session, key)
+    assert after_head.version_id == before_head.version_id
+    assert after_head.generation == before_head.generation
+    assert session.scalar(
+        select(func.count())
+        .select_from(models.PlanGroup)
+        .where(models.PlanGroup.plan_version == result["plan_version"])
+    ) == 0
+    assert session.scalar(
+        select(func.count())
+        .select_from(models.PlanActivity)
+        .where(models.PlanActivity.plan_version == result["plan_version"])
+    ) == 0
+
+
+def test_normal_plan_still_publishes(client: TestClient, imported: dict, session: Session) -> None:
+    """硬门不改变正常方案的发布流程：内容完整时照常切正式指针。"""
+
+    dataset_id = imported["dataset_id"]
+    base = _original_plan_bundle(session, dataset_id)
+    review = c_planner.review_plan_rules(base)
+    assert review.status == "validated"
+
+    key = _formal_key(session, dataset_id)
+    before_head = repo.read_head(session, key)
+    before_generation = before_head.generation if before_head else 0
+    result = _persist_variant(session, dataset_id, base, review)
+
+    assert result["publication_status"] == "published"
+    assert result["publication_id"] is not None
+    assert result["review_status"] == "validated"
+    assert result["publish_gate_issues"] == []
+
+    session.expire_all()
+    after_head = repo.read_head(session, key)
+    assert after_head.version_id == result["plan_version"]
+    assert after_head.generation == before_generation + 1
+    publication = session.get(models.Publication, result["publication_id"])
+    assert publication is not None and publication.path == "system_auto"
+    assert session.scalar(
+        select(func.count())
+        .select_from(models.PlanGroup)
+        .where(models.PlanGroup.plan_version == result["plan_version"])
+    ) >= 1
+    assert session.scalar(
+        select(func.count())
+        .select_from(models.PlanActivity)
+        .where(models.PlanActivity.plan_version == result["plan_version"])
+    ) >= 1

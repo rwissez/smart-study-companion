@@ -1,0 +1,49 @@
+{
+  "additionalProperties": false,
+  "description": "数学文本：保留规范原值，LaTeX 只作展示，未验证不得作为等价依据。",
+  "properties": {
+    "display_latex": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Display Latex"
+    },
+    "normalized": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Normalized"
+    },
+    "raw": {
+      "title": "Raw",
+      "type": "string"
+    },
+    "verification_status": {
+      "default": "unverified",
+      "enum": [
+        "unverified",
+        "verified",
+        "rejected"
+      ],
+      "title": "Verification Status",
+      "type": "string"
+    }
+  },
+  "required": [
+    "raw"
+  ],
+  "title": "MathText",
+  "type": "object"
+}

@@ -1,0 +1,61 @@
+{
+  "$defs": {
+    "DerivationStep": {
+      "additionalProperties": false,
+      "properties": {
+        "expr": {
+          "title": "Expr",
+          "type": "string"
+        },
+        "note": {
+          "title": "Note",
+          "type": "string"
+        }
+      },
+      "required": [
+        "expr",
+        "note"
+      ],
+      "title": "DerivationStep",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "id": {
+      "title": "Id",
+      "type": "string"
+    },
+    "mode": {
+      "enum": [
+        "expression",
+        "equation",
+        "inequality"
+      ],
+      "title": "Mode",
+      "type": "string"
+    },
+    "steps": {
+      "items": {
+        "$ref": "#/$defs/DerivationStep"
+      },
+      "maxItems": 6,
+      "minItems": 2,
+      "title": "Steps",
+      "type": "array"
+    },
+    "type": {
+      "const": "derivation",
+      "title": "Type",
+      "type": "string"
+    }
+  },
+  "required": [
+    "type",
+    "id",
+    "mode",
+    "steps"
+  ],
+  "title": "DerivationComponent",
+  "type": "object"
+}

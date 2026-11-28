@@ -1,0 +1,558 @@
+"""正式成果仓储：版本、版本头、依赖边与 CAS 发布。
+
+这是 A/B/C 读取"当前正式成果"的唯一入口。要点（06 §3—§4）：
+
+* 产物不可变；发布只移动 ``formal_heads`` 指针并追加 ``publications`` 证明；
+* 指针更新用 CAS（版本 + 代数 + 必需依赖代数），零行即 409，不产生半发布；
+* 依赖边记录实际使用的精确版本，历史依赖不因新版本出现而改写；
+* 查询只返回已发布版本，候选与草稿永不进入正式读取。
+"""
+
+from __future__ import annotations
+
+import hashlib
+import json
+import uuid
+from dataclasses import dataclass
+from datetime import UTC, datetime
+from typing import Any
+
+from sqlalchemy import select, update
+from sqlalchemy.orm import Session
+
+from study_companion.contracts import DomainError
+from study_companion.db import models
+
+
+def now_iso() -> str:
+    return datetime.now(UTC).isoformat(timespec="milliseconds")
+
+
+def new_id(prefix: str) -> str:
+    return f"{prefix}-{uuid.uuid4().hex[:20]}"
+
+
+def canonical(value: Any) -> str:
+    return json.dumps(value, ensure_ascii=False, sort_keys=True, separators=(",", ":"), default=str)
+
+
+def digest(value: Any) -> str:
+    return hashlib.sha256(canonical(value).encode("utf-8")).hexdigest()
+
+
+@dataclass(frozen=True)
+class FormalKey:
+    """正式成果的作用域键；不适用字段用空串，禁止用作用户 ID。"""
+
+    family_id: str
+    dataset_id: str
+    kind: str
+    run_key: str = ""
+    node_key: str = ""
+    target_key: str = ""
+
+    def as_dict(self) -> dict[str, str]:
+        return {
+            "family_id": self.family_id,
+            "dataset_id": self.dataset_id,
+            "kind": self.kind,
+            "run_key": self.run_key,
+            "node_key": self.node_key,
+            "target_key": self.target_key,
+        }
+
+
+# --------------------------------------------------------------------------- #
+# 版本
+# --------------------------------------------------------------------------- #
+
+
+def create_version(
+    db: Session,
+    *,
+    kind: str,
+    key: FormalKey,
+    payload: dict[str, Any] | None,
+    rule_version: str = "",
+    input_digest: str = "",
+    schema_version: str = "1.1",
+    run_id: str | None = None,
+    job_id: str | None = None,
+    origin_kind: str = "system",
+    version_id: str | None = None,
+    body_hash: str | None = None,
+) -> models.Version:
+    row = models.Version(
+        version_id=version_id or new_id(kind[:3] or "ver"),
+        kind=kind,
+        family_id=key.family_id,
+        dataset_id=key.dataset_id,
+        run_id=run_id,
+        node_key=key.node_key,
+        target_key=key.target_key,
+        schema_version=schema_version,
+        rule_version=rule_version,
+        config_hash="",
+        input_digest=input_digest,
+        body_hash=body_hash or digest(payload or {}),
+        payload_json=payload,
+        job_id=job_id,
+        created_at=now_iso(),
+        origin_kind=origin_kind,
+    )
+    db.add(row)
+    db.flush()
+    if kind == "knowledge":
+        # 知识体系必然依据某个目录版本构建；在唯一创建入口补齐目录边，
+        # 重建/导入两条路径都不会再漏写（06 §3.1）。尚无正式目录时返回 None。
+        register_catalog_edge(db, row)
+    return row
+
+
+def _depends_on(db: Session, start_version_id: str, target_version_id: str) -> bool:
+    """沿已有出边判断 ``start`` 是否直接或间接依赖 ``target``。
+
+    边的方向是"派生版本 → 依赖版本"，因此从候选依赖出发能走到当前版本时，
+    再插入反向边就构成环。逐层遍历即可，正式成果的依赖闭包很小。
+    """
+
+    frontier = [start_version_id]
+    seen = {start_version_id}
+    while frontier:
+        current = frontier.pop()
+        if current == target_version_id:
+            return True
+        rows = db.scalars(
+            select(models.ArtifactEdge.dep_version_id).where(
+                models.ArtifactEdge.version_id == current
+            )
+        ).all()
+        for dep_id in rows:
+            if dep_id in seen:
+                continue
+            seen.add(dep_id)
+            frontier.append(dep_id)
+    return False
+
+
+def register_edge(
+    db: Session, version: models.Version, dep: models.Version, role: str, object_key: str = ""
+) -> None:
+    """登记"派生版本实际使用了哪个精确版本"（06 §3.1）。
+
+    插入前校验：禁止自环、禁止重复边、禁止让依赖图出现环。依赖不可变，
+    重复登记同一 (version, role, object_key, dep) 按幂等处理。
+    """
+
+    if version.version_id == dep.version_id:
+        raise DomainError("UNPROCESSABLE", "版本不能依赖自身")
+    if version.family_id != dep.family_id or version.dataset_id != dep.dataset_id:
+        raise DomainError(
+            "CONTEXT_MISMATCH",
+            "依赖边两端必须属于同一数据集系列与同一数据集快照",
+        )
+    existing = db.get(
+        models.ArtifactEdge, (version.version_id, dep.version_id, role, object_key)
+    )
+    if existing is not None:
+        return
+    if _depends_on(db, dep.version_id, version.version_id):
+        raise DomainError(
+            "UNPROCESSABLE",
+            f"依赖边会形成环：{dep.version_id} 已经直接或间接依赖 {version.version_id}",
+        )
+    db.add(
+        models.ArtifactEdge(
+            version_id=version.version_id,
+            dep_version_id=dep.version_id,
+            role=role,
+            object_key=object_key,
+        )
+    )
+
+
+def register_catalog_edge(
+    db: Session,
+    version: models.Version,
+    *,
+    catalog_version: models.Version | None = None,
+) -> models.Version | None:
+    """确保版本登记了目录依赖（06 §3.1 的必需角色）。
+
+    知识版本由 A 构建、目录版本由导入流程发布；两者分开落库时容易漏写边。
+    这里按作用域解析正式目录版本，缺目录时返回 ``None`` 由调用方记录限制。
+
+    解析顺序：调用方显式指定的目录版本 → 知识 payload 声明的
+    ``catalog_version`` 在同一数据集唯一对应的版本 → 当前目录指针。前者能
+    避免"知识按旧目录构建、边却指向新目录头"的历史错配。
+    """
+
+    if catalog_version is None:
+        declared = (version.payload_json or {}).get("catalog_version")
+        if declared:
+            candidates = db.scalars(
+                select(models.Version).where(
+                    models.Version.kind == "catalog",
+                    models.Version.family_id == version.family_id,
+                    models.Version.dataset_id == version.dataset_id,
+                )
+            ).all()
+            matches = [
+                candidate
+                for candidate in candidates
+                if (candidate.payload_json or {}).get("catalog_version") == declared
+            ]
+            if len(matches) == 1:
+                catalog_version = matches[0]
+    if catalog_version is None:
+        head = read_head(
+            db,
+            FormalKey(
+                family_id=version.family_id,
+                dataset_id=version.dataset_id,
+                kind="catalog",
+            ),
+        )
+        if head is not None and head.version_id:
+            catalog_version = db.get(models.Version, head.version_id)
+    if catalog_version is None:
+        return None
+    register_edge(db, version, catalog_version, role="catalog")
+    return catalog_version
+
+
+def dependencies(db: Session, version: models.Version) -> list[models.ArtifactEdge]:
+    return list(
+        db.scalars(
+            select(models.ArtifactEdge).where(
+                models.ArtifactEdge.version_id == version.version_id
+            )
+        ).all()
+    )
+
+
+def load_version(db: Session, version_id: str) -> models.Version:
+    row = db.get(models.Version, version_id)
+    if row is None:
+        raise DomainError("NOT_FOUND", "正式版本不存在")
+    return row
+
+
+# --------------------------------------------------------------------------- #
+# 版本头与 CAS 发布
+# --------------------------------------------------------------------------- #
+
+
+def ensure_head(db: Session, key: FormalKey) -> models.FormalHead:
+    row = db.get(
+        models.FormalHead,
+        (
+            key.family_id,
+            key.dataset_id,
+            key.kind,
+            key.run_key,
+            key.node_key,
+            key.target_key,
+        ),
+    )
+    if row is not None:
+        return row
+    row = models.FormalHead(
+        family_id=key.family_id,
+        dataset_id=key.dataset_id,
+        kind=key.kind,
+        run_key=key.run_key,
+        node_key=key.node_key,
+        target_key=key.target_key,
+        version_id=None,
+        generation=0,
+        required_generation=0,
+        freshness="current",
+        updated_at=now_iso(),
+    )
+    db.add(row)
+    db.flush()
+    return row
+
+
+def read_head(db: Session, key: FormalKey) -> models.FormalHead | None:
+    return db.get(
+        models.FormalHead,
+        (
+            key.family_id,
+            key.dataset_id,
+            key.kind,
+            key.run_key,
+            key.node_key,
+            key.target_key,
+        ),
+    )
+
+
+def read_formal(db: Session, key: FormalKey) -> models.Version | None:
+    head = read_head(db, key)
+    if head is None or head.version_id is None:
+        return None
+    return db.get(models.Version, head.version_id)
+
+
+def publish(
+    db: Session,
+    *,
+    key: FormalKey,
+    version: models.Version,
+    path: str,
+    basis: str,
+    review_id: str = "",
+    job_id: str | None = None,
+    actor_ref: str | None = None,
+    expected_version_id: str | None = None,
+    expected_generation: int | None = None,
+) -> models.Publication:
+    """CAS 切换正式指针；失败抛 409，不产生半发布。"""
+
+    head = ensure_head(db, key)
+    expected_version = expected_version_id if expected_version_id is not None else head.version_id
+    expected_generation = expected_generation if expected_generation is not None else head.generation
+
+    conditions = [
+        models.FormalHead.family_id == key.family_id,
+        models.FormalHead.dataset_id == key.dataset_id,
+        models.FormalHead.kind == key.kind,
+        models.FormalHead.run_key == key.run_key,
+        models.FormalHead.node_key == key.node_key,
+        models.FormalHead.target_key == key.target_key,
+        models.FormalHead.generation == expected_generation,
+    ]
+    if expected_version is None:
+        conditions.append(models.FormalHead.version_id.is_(None))
+    else:
+        conditions.append(models.FormalHead.version_id == expected_version)
+
+    result = db.execute(
+        update(models.FormalHead)
+        .where(*conditions)
+        .values(
+            version_id=version.version_id,
+            generation=models.FormalHead.generation + 1,
+            freshness="current",
+            updated_at=now_iso(),
+        )
+    )
+    if result.rowcount != 1:
+        raise DomainError(
+            "REVISION_CONFLICT",
+            "当前正式版本已被其他操作更新，请重新读取后再提交",
+        )
+
+    previous = expected_version
+    publication = models.Publication(
+        publication_id=new_id("pub"),
+        version_id=version.version_id,
+        previous_version_id=previous,
+        review_id=review_id,
+        path=path,
+        basis=basis,
+        published_at=now_iso(),
+        job_id=job_id,
+        actor_ref=actor_ref,
+    )
+    db.add(publication)
+    db.flush()
+    return publication
+
+
+def mark_superseded(db: Session, version_id: str) -> None:
+    """旧版本仍可作为历史读取，只在需要时记录状态投影。"""
+
+    row = db.get(models.Version, version_id)
+    if row is None:
+        return
+    row.origin_kind = row.origin_kind or "system"
+
+
+def bump_required_generation(db: Session, key: FormalKey) -> int:
+    head = ensure_head(db, key)
+    head.required_generation = (head.required_generation or 0) + 1
+    head.updated_at = now_iso()
+    db.flush()
+    return head.required_generation
+
+
+def published_history(db: Session, kind: str, dataset_id: str, limit: int = 50) -> list[models.Publication]:
+    return list(
+        db.scalars(
+            select(models.Publication)
+            .join(models.Version, models.Version.version_id == models.Publication.version_id)
+            .where(models.Version.kind == kind, models.Version.dataset_id == dataset_id)
+            .order_by(models.Publication.published_at.desc())
+            .limit(limit)
+        ).all()
+    )
+
+
+# --------------------------------------------------------------------------- #
+# 当前运行指针
+# --------------------------------------------------------------------------- #
+
+
+def set_active_run(db: Session, *, dataset_id: str, node_key: str, run_id: str) -> models.ActiveRun:
+    row = db.get(models.ActiveRun, (dataset_id, node_key))
+    if row is None:
+        row = models.ActiveRun(
+            dataset_id=dataset_id,
+            node_key=node_key,
+            run_id=run_id,
+            generation=1,
+            updated_at=now_iso(),
+        )
+        db.add(row)
+    else:
+        row.run_id = run_id
+        row.generation = (row.generation or 0) + 1
+        row.updated_at = now_iso()
+    db.flush()
+    return row
+
+
+def active_run_id(db: Session, dataset_id: str, node_key: str) -> str | None:
+    row = db.get(models.ActiveRun, (dataset_id, node_key))
+    return row.run_id if row else None
+
+
+def latest_run_id(db: Session, dataset_id: str) -> str | None:
+    return db.scalar(
+        select(models.AnalysisRun.id)
+        .where(models.AnalysisRun.dataset_id == dataset_id, models.AnalysisRun.status == "succeeded")
+        .order_by(models.AnalysisRun.created_at.desc())
+        .limit(1)
+    )
+
+
+# --------------------------------------------------------------------------- #
+# 便捷读取（B/C 共用）
+# --------------------------------------------------------------------------- #
+
+
+def read_payload(db: Session, key: FormalKey) -> dict[str, Any] | None:
+    version = read_formal(db, key)
+    if version is None or version.payload_json is None:
+        return None
+    return dict(version.payload_json)
+
+
+def student_key(family_id: str, dataset_id: str, node_key: str, student_id: str, kind: str = "student_analysis") -> FormalKey:
+    return FormalKey(
+        family_id=family_id,
+        dataset_id=dataset_id,
+        kind=kind,
+        node_key=node_key,
+        target_key=student_id,
+    )
+
+
+def class_key(family_id: str, dataset_id: str, node_key: str, class_id: str, kind: str = "class_analysis") -> FormalKey:
+    return FormalKey(
+        family_id=family_id,
+        dataset_id=dataset_id,
+        kind=kind,
+        node_key=node_key,
+        target_key=class_id,
+    )
+
+
+def plan_key(family_id: str, dataset_id: str, node_key: str, student_id: str) -> FormalKey:
+    return FormalKey(
+        family_id=family_id,
+        dataset_id=dataset_id,
+        kind="plan",
+        node_key=node_key,
+        target_key=student_id,
+    )
+
+
+def knowledge_key(family_id: str, dataset_id: str, catalog_version: str) -> FormalKey:
+    return FormalKey(
+        family_id=family_id,
+        dataset_id=dataset_id,
+        kind="knowledge",
+        target_key=catalog_version,
+    )
+
+
+def catalog_key(family_id: str, dataset_id: str) -> FormalKey:
+    return FormalKey(family_id=family_id, dataset_id=dataset_id, kind="catalog")
+
+
+def record_artifact_use(
+    db: Session,
+    *,
+    version_id: str,
+    family_id: str,
+    inputs: list[tuple[str, str, dict[str, Any], str]],
+) -> int:
+    """登记版本实际引用了哪些输入（06 §4.3）。
+
+    ``inputs`` 是 ``(kind, key, exact_ref, usage)`` 四元组；同一版本同一输入同一用途只写一次。
+    """
+
+    written = 0
+    for kind, key, ref, usage in inputs:
+        ref_hash = digest(ref)
+        existing = db.scalar(
+            select(models.ArtifactUse).where(
+                models.ArtifactUse.version_id == version_id,
+                models.ArtifactUse.input_kind == kind,
+                models.ArtifactUse.input_key == key,
+                models.ArtifactUse.usage == usage,
+            )
+        )
+        if existing is not None:
+            continue
+        db.add(
+            models.ArtifactUse(
+                version_id=version_id,
+                family_id=family_id,
+                input_kind=kind,
+                input_key=key,
+                exact_ref_json=ref,
+                ref_hash=ref_hash,
+                usage=usage,
+            )
+        )
+        written += 1
+    if written:
+        db.flush()
+    return written
+
+def record_evidence_index(
+    db: Session,
+    *,
+    version_id: str,
+    entries: list[tuple[str, str, dict[str, Any], str]],
+) -> int:
+    """登记"这个版本里，某个对象对应哪条证据"（06 §4.3）。
+
+    ``entries`` 是 ``(kind, object_id, locator, visibility)``；同版本同对象只保留一条。
+    """
+
+    written = 0
+    for kind, object_id, locator, visibility in entries:
+        if not object_id:
+            continue
+        existing = db.get(models.EvidenceIndex, (version_id, kind, object_id))
+        if existing is not None:
+            continue
+        db.add(
+            models.EvidenceIndex(
+                version_id=version_id,
+                kind=kind,
+                object_id=object_id,
+                locator_json=locator,
+                visibility=visibility,
+            )
+        )
+        written += 1
+    if written:
+        db.flush()
+    return written
