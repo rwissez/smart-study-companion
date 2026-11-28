@@ -48,6 +48,20 @@ RULE_VERSION = "b-rules-1"
 C_RULE_VERSION = "c-rules-1"
 PLAN_SCHEMA_VERSION = "1.1"
 
+#: 微课堂学生可见来源文案。必须按正文的实际生成方式取值，不能把规则模板写成模型生成。
+LESSON_SOURCE_LABELS = {
+    "model": "模型生成，已通过八项复核",
+    "rule": "规则模板生成，已审核",
+}
+
+
+def lesson_activity_source_label(creation_method: str | None) -> str:
+    """返回微课堂活动的来源标签；未知生成方式按规则模板如实标注。"""
+
+    if creation_method == "model":
+        return LESSON_SOURCE_LABELS["model"]
+    return LESSON_SOURCE_LABELS["rule"]
+
 
 # --------------------------------------------------------------------------- #
 # 注册
@@ -1749,16 +1763,15 @@ def attach_lessons(
                 student_id=student_id,
             )
             issues = lesson_service.validate_lesson(draft, protected_texts=protected_texts)
-            review = lesson_service.review_info_for(
-                draft, issues, method="model" if model_draft is not None else "rule"
-            )
+            creation_method = "model" if model_draft is not None else "rule"
+            review = lesson_service.review_info_for(draft, issues, method=creation_method)
             payload = lesson_service.lesson_payload(
                 draft,
                 review=review,
                 origin_plan_version=new_version_id,
                 content_id=content_id,
                 content_version=content_version,
-                creation_method="model" if model_draft is not None else "rule",
+                creation_method=creation_method,
             )
             if model_limitations:
                 payload["limitations"] = list(payload.get("limitations") or []) + model_limitations
@@ -1830,7 +1843,7 @@ def attach_lessons(
                     },
                     content_version=content_version,
                     knowledge_ids=[kp_id],
-                    source_label="规则模板生成，已审核",
+                    source_label=lesson_activity_source_label(creation_method),
                 )
             )
             lessons_created.append(
@@ -1911,6 +1924,18 @@ def attach_lessons(
         expected_version_id=head.version_id if head else None,
         expected_generation=head.generation if head else 0,
     )
+    # 子修订同样要落任务组查找行：导出、学习事件和分组进度都按 plan_version+group_id
+    # 反查，只写 PlanActivity 会让当前方案在派生表里“有活动、无任务组”。
+    for group in groups:
+        if db.get(models.PlanGroup, (new_version_id, group.group_id)) is None:
+            db.add(
+                models.PlanGroup(
+                    plan_version=new_version_id,
+                    group_id=group.group_id,
+                    position=group.order,
+                    goal_key=group.goal_target_key or group.group_id,
+                )
+            )
     for group in groups:
         rec = next((item for item in child.recommendations if item.group_id == group.group_id), None)
         if rec is None:
